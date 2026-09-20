@@ -3,9 +3,9 @@
 import type { ReactNode } from 'react'
 import * as React from 'react'
 import { Component } from 'react'
-import { getClientComponents } from '@/runtime/shared/rari-global'
-import { clearTimer } from '@/shared/utils/timer'
-import { isComponentType, isRecord } from '@/shared/utils/type-guards'
+import { clearTimer } from '../../shared/utils/timer'
+import { isComponentType, isRecord } from '../../shared/utils/type-guards'
+import { getClientComponents } from '../shared/rari-global'
 
 interface ErrorBoundaryWrapperProps {
   readonly errorComponentId: string

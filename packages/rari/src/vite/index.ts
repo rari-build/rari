@@ -85,6 +85,7 @@ import {
   scanDirectory,
   ServerComponentBuilder,
 } from './server/build'
+import { clearViteEmitBuilder, getOrCreateViteEmitBuilder } from './server/rsc-vite-build'
 import {
   buildClientReferenceReplacementFromImport,
   ensureNamedImportFromModule,
@@ -535,6 +536,16 @@ export function rari(
     return componentTypeCache.get(resolveModuleCachePath(filePath))
   }
 
+  function clientReferenceIdForPath(absolutePath: string): string {
+    const projectRoot =
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd()
+    const relative = toPosixPath(path.relative(projectRoot, absolutePath))
+    if (relative.startsWith('..') || path.isAbsolute(relative)) return toPosixPath(absolutePath)
+    return relative
+  }
+
   function setComponentType(filePath: string, type: 'client' | 'server' | 'unknown'): void {
     componentTypeCache.set(resolveModuleCachePath(filePath), type)
   }
@@ -900,25 +911,44 @@ if (import.meta.hot) {
       config.environments ??= {}
 
       config.environments.rsc = {
+        consumer: 'server',
         resolve: {
           conditions: ['react-server', 'node', 'import'],
+        },
+        build: {
+          outDir: 'dist/server',
+          write: false,
+          copyPublicDir: false,
+          emitAssets: true,
         },
         ...config.environments.rsc,
       }
 
       config.environments.ssr = {
+        consumer: 'server',
         resolve: {
           conditions: ['node', 'import'],
+        },
+        build: {
+          outDir: 'dist/ssr',
+          write: false,
+          copyPublicDir: false,
+          emitAssets: true,
         },
         ...config.environments.ssr,
       }
 
       config.environments.client = {
+        consumer: 'client',
         resolve: {
           conditions: ['browser', 'import'],
         },
         ...config.environments.client,
       }
+
+      config.builder ??= {}
+      config.builder.sharedPlugins = true
+      config.builder.sharedConfigBuild = false
 
       config.optimizeDeps ??= {}
       config.optimizeDeps.include ??= []
@@ -1130,14 +1160,82 @@ if (import.meta.hot) {
         return transformClientModuleForClient(code, id, moduleAnalysis)
       }
 
-      if (getComponentType(id) === 'client' || hasTrackedClientComponent(id))
+      if (
+        environment.name !== 'rsc' &&
+        environment.name !== 'ssr' &&
+        (getComponentType(id) === 'client' || hasTrackedClientComponent(id))
+      ) {
         return transformClientModuleForClient(code, id, moduleAnalysis)
+      }
+
+      function isClientBoundaryModule(filePath: string): boolean {
+        if (!fs.existsSync(filePath)) return false
+        try {
+          return moduleAnalysisCache.get(filePath).topLevelUseClient
+        } catch {
+          return false
+        }
+      }
+
+      function rewriteClientImportsForServerEnvironment(source: string, fileId: string): string {
+        let modifiedCode = source
+        const replacements: Array<{ start: number; end: number; replacement: string }> = []
+        const clientRefHelpers = new Set<string>()
+
+        for (const imp of scanImportStatements(modifiedCode)) {
+          if (imp.typeOnly || imp.sideEffectOnly) continue
+          if (
+            !LOCAL_IMPORT_SOURCE_REGEX.test(imp.source) &&
+            !matchesAliasImport(imp.source, resolvedAlias)
+          ) {
+            continue
+          }
+
+          const resolvedImportPath = resolveImportToFilePath(imp.source, fileId, resolvedAlias)
+
+          if (!isClientBoundaryModule(resolvedImportPath)) continue
+
+          setComponentType(resolvedImportPath, 'client')
+          addTrackedClientComponent(resolvedImportPath)
+
+          const clientRefReplacement = buildClientReferenceReplacementFromImport(
+            imp,
+            clientReferenceIdForPath(resolvedImportPath),
+          )
+          if (clientRefReplacement.code === '') continue
+
+          for (const helper of clientRefReplacement.helpers) clientRefHelpers.add(helper)
+
+          replacements.push({
+            start: imp.start,
+            end: imp.end,
+            replacement: clientRefReplacement.code,
+          })
+        }
+
+        if (replacements.length === 0) return modifiedCode
+
+        for (const { start, end, replacement } of [...replacements].sort(
+          (a, b) => b.start - a.start,
+        )) {
+          modifiedCode = modifiedCode.slice(0, start) + replacement + modifiedCode.slice(end)
+        }
+
+        if (clientRefHelpers.size > 0) {
+          modifiedCode = ensureNamedImportFromModule(modifiedCode, 'react-server-dom-rari/server', [
+            ...clientRefHelpers,
+          ])
+        }
+
+        return modifiedCode
+      }
 
       if (isServerComponent(id)) {
         setComponentType(id, 'server')
 
         if (environment.name === 'rsc' || environment.name === 'ssr') {
-          return transformServerModule(code, id, moduleAnalysis)
+          const serverTransformed = transformServerModule(code, id, moduleAnalysis)
+          return rewriteClientImportsForServerEnvironment(serverTransformed, id)
         } else {
           let clientTransformedCode = transformClientModule(code, id, moduleAnalysis)
 
@@ -1160,7 +1258,8 @@ ${clientTransformedCode}`
       const cachedType = getComponentType(id)
       if (cachedType === 'server') {
         if (environment.name === 'rsc' || environment.name === 'ssr') {
-          return transformServerModule(code, id, moduleAnalysis)
+          const serverTransformed = transformServerModule(code, id, moduleAnalysis)
+          return rewriteClientImportsForServerEnvironment(serverTransformed, id)
         } else {
           return transformClientModule(code, id, moduleAnalysis)
         }
@@ -1187,10 +1286,7 @@ ${clientTransformedCode}`
 
         const resolvedImportPath = resolveImportToFilePath(imp.source, id, resolvedAlias)
 
-        const isClientComponent =
-          getComponentType(resolvedImportPath) === 'client' ||
-          (fs.existsSync(resolvedImportPath) &&
-            moduleAnalysisCache.get(resolvedImportPath).topLevelUseClient)
+        const isClientComponent = isClientBoundaryModule(resolvedImportPath)
 
         if (isClientComponent) {
           setComponentType(resolvedImportPath, 'client')
@@ -1207,7 +1303,7 @@ ${clientTransformedCode}`
 
         const clientRefReplacement = buildClientReferenceReplacementFromImport(
           imp,
-          resolvedImportPath,
+          clientReferenceIdForPath(resolvedImportPath),
         )
         if (clientRefReplacement.code === '') continue
 
@@ -1306,6 +1402,15 @@ ${clientTransformedCode}`
             experimental: options.experimental,
             moduleAnalysisCache,
           })
+
+          builder.setViteBuilder(
+            await getOrCreateViteEmitBuilder({
+              root: server.config.root,
+              configFile: server.config.configFile,
+              mode: server.config.mode,
+              logLevel: 'error',
+            }),
+          )
 
           devServerComponentBuilder = builder
 
@@ -1742,6 +1847,12 @@ ${clientTransformedCode}`
       })
 
       server.httpServer?.on('close', () => {
+        clearViteEmitBuilder(server.config.root)
+        if (devServerComponentBuilder != null) {
+          devServerComponentBuilder.setViteBuilder(null)
+          devServerComponentBuilder = null
+        }
+
         if (hmrCoordinator) {
           hmrCoordinator.dispose()
           hmrCoordinator = null
@@ -2169,11 +2280,15 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
             !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)
           const isInNodeModules = realId.includes(`${path.sep}node_modules${path.sep}`)
 
-          const isInRariPackage =
+          const isInAllowedWorkspacePackage =
             realId.includes(`${path.sep}packages${path.sep}rari${path.sep}`) ||
-            realId.includes(`${path.sep}node_modules${path.sep}rari${path.sep}`)
+            realId.includes(`${path.sep}packages${path.sep}use-cache${path.sep}`) ||
+            realId.includes(`${path.sep}node_modules${path.sep}rari${path.sep}`) ||
+            realId.includes(
+              `${path.sep}node_modules${path.sep}@rari${path.sep}use-cache${path.sep}`,
+            )
 
-          if (isInProjectRoot || isInNodeModules || isInRariPackage)
+          if (isInProjectRoot || isInNodeModules || isInAllowedWorkspacePackage)
             return fs.readFileSync(id, 'utf-8')
 
           console.warn(
@@ -2238,6 +2353,8 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     },
 
     generateBundle(_options, bundle) {
+      if (this.environment.name !== 'client') return
+
       const head = buildClientHeadFromBundle(bundle)
 
       this.emitFile({

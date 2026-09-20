@@ -1,4 +1,3 @@
-import process from 'node:process'
 import { BACKSLASH_REGEX, MULTIPLE_SLASHES_REGEX } from '../regex-constants'
 
 export interface NormalizePathOptions {
@@ -36,10 +35,15 @@ export function toPosixPath(value: string): string {
   return value.replace(BACKSLASH_REGEX, '/')
 }
 
+function isWin32Platform(): boolean {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  return globalThis.process?.platform === 'win32'
+}
+
 export function isPathInside(filePath: string, dirPath: string): boolean {
   let file = toPosixPath(filePath)
   let dir = toPosixPath(dirPath).replace(/\/+$/, '')
-  if (process.platform === 'win32') {
+  if (isWin32Platform()) {
     file = file.toLowerCase()
     dir = dir.toLowerCase()
   }

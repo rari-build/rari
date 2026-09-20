@@ -1,12 +1,57 @@
 import type { Dirent, PathLike, Stats } from 'node:fs'
+import type { ViteBuilder } from 'vite-plus'
 import fsSync from 'node:fs'
 import path from 'node:path'
 import { hasComponentExport, ServerComponentBuilder } from '@rari/vite/server/build'
+import { buildRscEntriesWithViteEnvironment } from '@rari/vite/server/rsc-vite-build'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { castMock } from '../../helpers/mock-cast'
 
 vi.mock('node:fs')
-vi.mock('rolldown')
+vi.mock('@rari/vite/server/rsc-vite-build', () => ({
+  rscBundlePathForComponent: (rscDir: string, componentId: string) => `${rscDir}/${componentId}.js`,
+  buildMetadataModuleWithViteEnvironment: vi.fn(async () => {
+    await Promise.resolve()
+    return { code: 'export default {}' }
+  }),
+  clearViteEmitBuilder: vi.fn(),
+  getOrCreateViteEmitBuilder: vi.fn(async () => {
+    await Promise.resolve()
+    return {}
+  }),
+  buildRscEntriesWithViteEnvironment: vi.fn(
+    async (options: {
+      readonly entries: ReadonlyArray<{ readonly componentId: string; readonly filePath: string }>
+    }) => {
+      await Promise.resolve()
+      return {
+        outputs: new Map(
+          options.entries.map(entry => [
+            entry.componentId,
+            { code: 'export default function MockComponent() {}', cssAssetSources: [] },
+          ]),
+        ),
+        extraFiles: [],
+      }
+    },
+  ),
+  buildSsrEntriesWithViteEnvironment: vi.fn(
+    async (options: {
+      readonly entries: ReadonlyArray<{ readonly entryName: string; readonly filePath: string }>
+    }) => {
+      await Promise.resolve()
+      return {
+        outputs: new Map(
+          options.entries.map(entry => [
+            entry.entryName,
+            { code: 'export default function MockClient() {}', cssAssetSources: [] },
+          ]),
+        ),
+        extraFiles: [],
+      }
+    },
+  ),
+}))
 
 const FILE_STAT = castMock<Stats>({
   isFile: () => true,
@@ -115,6 +160,7 @@ describe('server component builder', () => {
     })
 
     builder = new ServerComponentBuilder(mockProjectRoot, mockOptions)
+    builder.setViteBuilder(castMock<ViteBuilder>({ environments: {} }))
   })
 
   afterEach(() => {
@@ -267,7 +313,8 @@ export default function Client() {
 import { z } from 'zod'
 
 export default function WithDeps() {
-  return <div>Test</div>
+  const _schema = z.string()
+  return <div>{String(_schema)}</div>
 }`
 
       vi.mocked(fsSync.existsSync).mockReturnValue(true)
@@ -483,19 +530,19 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
-      // @ts-expect-error spying on internal build method
-      const buildSpy = vi.spyOn(builder, 'buildSingleComponent')
+      // @ts-expect-error spying on internal emit method
+      const emitSpy = vi.spyOn(builder, 'emitRscEntries')
 
       await builder.rebuildComponent(filePath)
-      expect(buildSpy).toHaveBeenCalledTimes(1)
+      expect(emitSpy).toHaveBeenCalledTimes(1)
 
       await builder.rebuildComponent(filePath)
-      expect(buildSpy).toHaveBeenCalledTimes(1)
+      expect(emitSpy).toHaveBeenCalledTimes(1)
 
       builder.clearCache()
 
       await builder.rebuildComponent(filePath)
-      expect(buildSpy).toHaveBeenCalledTimes(2)
+      expect(emitSpy).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -531,6 +578,39 @@ export async function action() { return {} }`)
       expect(components).toHaveLength(1)
       expect(components[0]).toHaveProperty('id')
       expect(components[0]).toHaveProperty('code')
+    })
+
+    it('emits registered components through the Vite RSC environment', async () => {
+      const filePath = '/test/project/src/app/page.tsx'
+      const code = `export default function Page() { return <div /> }`
+
+      vi.mocked(fsSync.existsSync).mockReturnValue(true)
+      vi.mocked(fsSync.readFileSync).mockReturnValue(code)
+      vi.mocked(fsSync.promises.readFile).mockImplementation(
+        mockReadFile(target => {
+          if (target.includes('manifest.json')) {
+            return JSON.stringify({
+              components: {},
+              actions: {},
+              importMap: { imports: {} },
+              buildTime: new Date().toISOString(),
+            })
+          }
+
+          if (target.includes('routes.json')) return mockRoutesManifest()
+
+          return code
+        }),
+      )
+
+      builder.addServerComponent(filePath)
+      await builder.getTransformedComponentsForDevelopment()
+
+      expect(buildRscEntriesWithViteEnvironment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entries: [expect.objectContaining({ filePath })],
+        }),
+      )
     })
 
     it('should handle empty component list', async () => {
@@ -598,21 +678,21 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
-      // @ts-expect-error spying on internal build method
-      const buildSpy = vi.spyOn(builder, 'buildSingleComponent')
+      // @ts-expect-error spying on internal emit method
+      const emitSpy = vi.spyOn(builder, 'emitRscEntries')
 
       await builder.rebuildComponent(filePath)
 
-      expect(buildSpy).toHaveBeenCalledTimes(1)
+      expect(emitSpy).toHaveBeenCalledTimes(1)
 
       vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
       const result = await builder.rebuildComponent(filePath)
 
-      expect(buildSpy).toHaveBeenCalledTimes(1)
+      expect(emitSpy).toHaveBeenCalledTimes(1)
       expect(result.success).toBe(true)
 
-      buildSpy.mockRestore()
+      emitSpy.mockRestore()
     })
   })
 
@@ -660,6 +740,7 @@ export async function action() { return {} }`)
         jsPoolSize: 2,
         htmlLimitedBots: 'OnlyMyBot',
       })
+      builderWithConfig.setViteBuilder(castMock<ViteBuilder>({ environments: {} }))
 
       await builderWithConfig.buildServerComponents()
 
