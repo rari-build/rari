@@ -13,7 +13,7 @@ import Github from './icons/Github'
 import Heart from './icons/Heart'
 import Menu from './icons/Menu'
 import Rari from './icons/Rari'
-import SearchBar from './SearchBar'
+import SearchBar from './search/SearchBar'
 import ThemeSwitcher from './ThemeSwitcher'
 
 interface TopNavItem {

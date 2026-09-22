@@ -1,12 +1,12 @@
 'use client'
 
-import type { SearchResult } from '@/actions/search'
+import type { SearchResult } from '@/lib/search'
 import { useRouter } from 'rari/router'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
-import { searchDocumentation } from '@/actions/search'
-import Close from './icons/Close'
-import Search from './icons/Search'
+import Close from '../icons/Close'
+import Search from '../icons/Search'
+import { searchDocumentation } from './actions'
 
 const highlightRegex = /[.*+?^${}()|[\]\\]/g
 
