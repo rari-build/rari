@@ -1,15 +1,15 @@
 'use client'
 
-import type { Todo } from '@/actions/todo-actions'
+import type { Todo } from './types'
 import { useState, useTransition } from 'react'
-import { clearCompleted, deleteTodo, toggleTodo } from '@/actions/todo-actions'
+import { clearCompleted, deleteTodo, toggleTodo } from './actions'
 
 interface TodoListProps {
   readonly initialTodos: readonly Todo[]
   readonly onUpdate?: (todos: readonly Todo[]) => void
 }
 
-export default function TodoListWithActions({ initialTodos, onUpdate }: TodoListProps) {
+export default function TodoList({ initialTodos, onUpdate }: TodoListProps) {
   const [todos, setTodos] = useState<readonly Todo[]>(initialTodos)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)

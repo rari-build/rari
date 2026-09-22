@@ -1,8 +1,8 @@
 'use client'
 
-import type { Todo, TodoActionState } from '@/actions/todo-actions'
+import type { Todo, TodoActionState } from './types'
 import { useActionState, useEffect, useId, useRef } from 'react'
-import { addTodo } from '@/actions/todo-actions'
+import { addTodo } from './actions'
 
 interface TodoFormProps {
   readonly onSuccess?: (todos: readonly Todo[]) => void
@@ -10,7 +10,7 @@ interface TodoFormProps {
 
 const initialState: TodoActionState = { success: false, todos: [] }
 
-export default function TodoFormWithActions({ onSuccess }: TodoFormProps) {
+export default function TodoForm({ onSuccess }: TodoFormProps) {
   const formId = useId()
   const [state, formAction, isPending] = useActionState(addTodo, initialState)
   const handledSuccessKeyRef = useRef<string | null>(null)
