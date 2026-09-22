@@ -45,6 +45,7 @@ body {
 }
 
 ::view-transition-old(.rari-page-vt),
+::view-transition-old(.rari-reveal-enter),
 ::view-transition-old(.rari-reveal-exit) {
   animation-name: rari-page-exit !important;
   animation-duration: var(--rari-vt-exit) !important;
@@ -52,6 +53,7 @@ body {
   animation-fill-mode: both !important;
 }
 
+::view-transition-old(.rari-reveal-enter),
 ::view-transition-old(.rari-reveal-exit) {
   animation-duration: var(--rari-reveal-exit) !important;
 }

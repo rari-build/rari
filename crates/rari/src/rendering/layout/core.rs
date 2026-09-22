@@ -1300,7 +1300,7 @@ impl LayoutRenderer {
         let nav_vt_props = r"{
                   name: 'rari-page',
                   default: 'none',
-                  update: 'none',
+                  update: 'rari-reveal-enter',
                   exit: 'none',
                   share: {
                     'nav-forward': 'rari-page-vt',
@@ -1336,30 +1336,17 @@ impl LayoutRenderer {
         } else if let Some(loading_id) = loading_component_id {
             let loading_file_path =
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
-            let page_settled = wrap_nav_vt(
-                r"React.createElement(
-                        React.ViewTransition,
-                        { enter: 'rari-reveal-enter', default: 'none' },
-                        React.createElement(PageComponent, pageProps)
-                      )",
-            );
-            let loading_with_reveal = r"React.createElement(
-                        React.ViewTransition,
-                        { exit: 'rari-reveal-exit', default: 'none' },
-                        React.createElement(LoadingComponent, {})
-                      )"
-            .to_string();
-            let suspense_or_page = format!(
-                r"(useSuspense
+            let suspense_or_page = r"(useSuspense
                     ? React.createElement(
                         React.Suspense,
-                        {{
-                          fallback: {loading_with_reveal},
-                        }},
-                        {page_settled}
+                        {
+                          fallback: React.createElement(LoadingComponent, {}),
+                        },
+                        React.createElement(PageComponent, pageProps)
                       )
-                    : {page_settled})"
-            );
+                    : React.createElement(PageComponent, pageProps))"
+                .to_string();
+            let page_with_nav = wrap_nav_vt(&suspense_or_page);
 
             format!(
                 r#"
@@ -1387,7 +1374,7 @@ impl LayoutRenderer {
                 loading_file_path,
                 page_props_json,
                 if use_suspense { "true" } else { "false" },
-                suspense_or_page,
+                page_with_nav,
             )
         } else {
             let wrapped = wrap_nav_vt("React.createElement(PageComponent, pageProps)");

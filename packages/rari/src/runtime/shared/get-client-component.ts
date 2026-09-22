@@ -227,13 +227,6 @@ function toLoadError(error: unknown): Error {
   return toError(error)
 }
 
-function createSuspenseThrowable(promise: Promise<any>, id: string): Error {
-  return Object.assign(new Error(`[rari] Lazy component "${id}" is loading`), {
-    // oxlint-disable-next-line unicorn/no-thenable React Suspense requires a thenable Error
-    then: promise.then.bind(promise),
-  })
-}
-
 function startComponentLoad(componentInfo: LazyComponentInfo): Promise<any> | undefined {
   if (componentInfo.component != null || componentInfo.loader == null)
     return componentInfo.loadPromise
@@ -296,7 +289,8 @@ function createSuspenseModule(
 
       return React.createElement(Component, props)
     }
-    throw createSuspenseThrowable(loadPromise, id)
+    // oxlint-disable-next-line typescript/only-throw-error
+    throw loadPromise
   }
   SuspendingComponent.displayName = `Lazy(${componentInfo.displayName ?? componentInfo.exportName ?? id})`
 

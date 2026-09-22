@@ -143,22 +143,22 @@ mod tests {
         assert!(script.contains("React.ViewTransition"));
         assert!(script.contains("name: 'rari-page'"));
         assert!(script.contains("rari-page-vt"));
-        assert!(script.contains("rari-reveal-enter"));
-        assert!(script.contains("rari-reveal-exit"));
+        assert!(script.contains("update: 'rari-reveal-enter'"));
+        assert!(!script.contains("rari-reveal-exit"));
         assert!(script.contains("const pageElement = "));
         assert!(
             !script.contains("virtual:page-view-transition"),
             "nav VT must be React.ViewTransition in the server tree, not a client ref"
         );
         assert!(
-            script.contains("fallback:") && script.contains("enter: 'rari-reveal-enter'"),
-            "Suspense fallback is loading; reveal enter wraps the page inside Suspense"
+            script.contains("fallback: React.createElement(LoadingComponent"),
+            "Suspense fallback is the loading component"
         );
         let suspense_pos = script.find("React.Suspense");
         let name_pos = script.find("name: 'rari-page'");
         assert!(
-            suspense_pos.is_some_and(|s| name_pos.is_some_and(|n| s < n)),
-            "anti-flicker: Suspense wraps named page VT so loading is not a morph target"
+            name_pos.is_some_and(|n| suspense_pos.is_some_and(|s| n < s)),
+            "React 19.3: named ViewTransition wraps Suspense for reveal-as-update"
         );
     }
 
@@ -208,8 +208,8 @@ mod tests {
         assert!(script.contains("name: 'rari-page'"));
         assert!(script.contains("rari-page-vt"));
         assert!(!script.contains("virtual:page-view-transition"));
-        assert!(script.contains("const pageElement = "));
-        assert!(script.contains("enter: 'rari-reveal-enter'"));
+        assert!(script.contains("enter:"));
+        assert!(script.contains("update: 'rari-reveal-enter'"));
     }
 
     #[test]

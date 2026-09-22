@@ -168,11 +168,8 @@ describe('requireClientComponent lazy load errors', () => {
       thrown = error
     }
 
-    expect(thrown).toBeInstanceOf(Error)
-    expect(thrown).toMatchObject({
-      message: '[rari] Lazy component "PendingWidget" is loading',
-    })
     expect(isThenable(thrown)).toBe(true)
+    expect(thrown).toBe(componentInfo.loadPromise)
     expect(componentInfo.loadPromise).toBeDefined()
 
     resolveLoad({ default: () => null })

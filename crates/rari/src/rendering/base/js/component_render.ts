@@ -1,13 +1,6 @@
 /// <reference path="../../types.d.ts" />
 
-interface SuspenseError {
-  $$typeof: symbol
-  promise: Promise<unknown>
-}
-
 void (async function () {
-  const REACT_SUSPENSE_PENDING = Symbol.for('react.suspense.pending')
-
   let Component: (props: unknown) => unknown
   let componentSource = 'not found'
 
@@ -31,15 +24,6 @@ void (async function () {
     return Deno.core.ops.op_sanitize_html(html, componentId)
   }
 
-  const isSuspensePending = (error: unknown): error is SuspenseError => {
-    return (
-      error != null &&
-      typeof error === 'object' &&
-      '$$typeof' in error &&
-      error.$$typeof === REACT_SUSPENSE_PENDING
-    )
-  }
-
   const elementToHtml = async (element: unknown, componentId: string): Promise<string | null> => {
     try {
       if (!g.renderToHtmlFizz) return null
@@ -50,8 +34,6 @@ void (async function () {
 
       return sanitized
     } catch (htmlError) {
-      if (isSuspensePending(htmlError)) throw htmlError
-
       console.warn('HTML generation failed:', htmlError)
       return null
     }
@@ -63,10 +45,7 @@ void (async function () {
     return result
   }
 
-  const renderOutputs = async (
-    element: unknown,
-    options?: Readonly<{ resolvedFromSuspense?: boolean }>,
-  ) => {
+  const renderOutputs = async (element: unknown) => {
     const htmlResult = await elementToHtml(element, '{component_id}')
 
     if (htmlResult == null) {
@@ -83,11 +62,10 @@ void (async function () {
 
     return storeResult({
       html: htmlResult,
-      hasSuspense: options?.resolvedFromSuspense ?? false,
+      hasSuspense: false,
       debug: {
         component_id: componentSource,
         success: true,
-        resolvedFromSuspense: options?.resolvedFromSuspense ?? false,
         htmlLength: htmlResult.length,
       },
     })
@@ -122,29 +100,6 @@ void (async function () {
   try {
     return await renderOutputs(element)
   } catch (error: unknown) {
-    if (isSuspensePending(error)) {
-      if (typeof error.promise.then === 'function') {
-        try {
-          await error.promise
-          const newElement = isAsyncComponent ? await Component(props) : Component(props)
-          return await renderOutputs(newElement, { resolvedFromSuspense: true })
-        } catch (resolveError: unknown) {
-          const errorMessage =
-            resolveError instanceof Error ? resolveError.message : String(resolveError)
-          console.error(`[rari] Error rendering ${componentSource} after suspense:`, resolveError)
-          return storeResult({
-            html: '',
-            hasSuspense: false,
-            debug: {
-              component_id: componentSource,
-              success: false,
-              error: errorMessage,
-            },
-          })
-        }
-      }
-    }
-
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[rari] Error rendering ${componentSource}:`, error)
     return storeResult({
