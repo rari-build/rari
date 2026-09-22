@@ -121,7 +121,14 @@ describe('buildRscEntriesWithViteEnvironment', () => {
   })
 
   it('emits one entry at a time when codeSplitting is false with multiple inputs', async () => {
-    const buildConfig = {
+    const buildConfig: {
+      write: boolean
+      emptyOutDir: boolean
+      copyPublicDir: boolean
+      minify: boolean
+      emitAssets: boolean
+      rolldownOptions: { input?: Record<string, string> }
+    } = {
       write: false,
       emptyOutDir: false,
       copyPublicDir: false,
@@ -129,11 +136,12 @@ describe('buildRscEntriesWithViteEnvironment', () => {
       emitAssets: true,
       rolldownOptions: {},
     }
-    const build = vi.fn().mockImplementation(async () => {
-      const input = (buildConfig.rolldownOptions as { input?: Record<string, string> }).input
+    const build = vi.fn().mockImplementation(() => {
+      const input = buildConfig.rolldownOptions.input
       const names = Object.keys(input ?? {})
       expect(names).toHaveLength(1)
-      const name = names[0]!
+      const name = names[0]
+      expect(name).toBeTypeOf('string')
       return {
         output: [
           {

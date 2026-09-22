@@ -186,7 +186,7 @@ describe('hmr coordinator', () => {
           }),
         }),
       )
-      expect(mockServer.hot.send).toHaveBeenCalledWith('rari:server-component-updated', {
+      expect(hotSendMock).toHaveBeenCalledWith('rari:server-component-updated', {
         id: 'app/page',
         t: expect.any(Number),
       })
