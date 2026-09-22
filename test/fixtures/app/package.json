@@ -9,12 +9,10 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@rari/use-cache": "workspace:*",
     "rari": "workspace:*",
     "react": "catalog:react",
     "react-dom": "catalog:react"
-  },
-  "optionalDependencies": {
-    "@rari/use-cache": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:tailwind",

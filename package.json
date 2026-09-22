@@ -26,8 +26,8 @@
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
     "@vitest/coverage-v8": "catalog:testing",
-    "eslint": "catalog:eslint",
-    "knip": "catalog:eslint",
+    "eslint": "catalog:lint",
+    "knip": "catalog:lint",
     "react": "catalog:react",
     "typescript": "catalog:typescript",
     "vite-plus": "catalog:build"

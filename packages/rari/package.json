@@ -148,6 +148,7 @@
   },
   "peerDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
+    "@rari/use-cache": "catalog:rari",
     "oxc-transform-react": "catalog:build",
     "react": "catalog:react",
     "react-dom": "catalog:react"
@@ -156,17 +157,19 @@
     "@mdx-js/mdx": {
       "optional": true
     },
+    "@rari/use-cache": {
+      "optional": true
+    },
     "oxc-transform-react": {
       "optional": true
     }
   },
   "dependencies": {
-    "@capsizecss/metrics": "catalog:",
-    "@capsizecss/unpack": "catalog:",
+    "@capsizecss/metrics": "catalog:font",
+    "@capsizecss/unpack": "catalog:font",
     "react-server-dom-webpack": "catalog:react"
   },
   "optionalDependencies": {
-    "@rari/use-cache": "0.15.17",
     "rari-darwin-arm64": "0.15.17",
     "rari-darwin-x64": "0.15.17",
     "rari-linux-arm64": "0.15.17",
@@ -178,6 +181,7 @@
     "@mdx-js/mdx": "catalog:mdx",
     "@rari/deploy": "workspace:*",
     "@rari/logger": "workspace:*",
+    "@rari/use-cache": "workspace:*",
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",

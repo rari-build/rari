@@ -17,8 +17,10 @@ export async function getUseCacheTransform(): Promise<UseCacheTransform | null> 
     const transform = module.transformUseCacheModule
     useCacheTransform = typeof transform === 'function' ? transform : null
     return useCacheTransform
-  } catch {
-    useCacheTransform = null
-    return null
+  } catch (error) {
+    const detail = error instanceof Error && error.message !== '' ? ` ${error.message}` : ''
+    throw new Error(
+      `\`experimental.useCache\` requires the optional \`@rari/use-cache\` package. Install it before enabling the option.${detail}`,
+    )
   }
 }
