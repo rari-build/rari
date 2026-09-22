@@ -142,8 +142,11 @@ mod tests {
         assert!(script.contains("LoadingComponent"));
         assert!(script.contains("React.ViewTransition"));
         assert!(script.contains("name: 'rari-page'"));
-        assert!(script.contains("rari-page-vt"));
-        assert!(script.contains("update: 'rari-reveal-enter'"));
+        assert!(script.contains("update: 'none'"));
+        assert!(script.contains("share: 'none'"));
+        assert!(script.contains("enter: 'none'"));
+        assert!(!script.contains("rari-page-vt"));
+        assert!(!script.contains("rari-reveal-enter"));
         assert!(!script.contains("rari-reveal-exit"));
         assert!(script.contains("const pageElement = "));
         assert!(
@@ -206,10 +209,12 @@ mod tests {
         assert!(!script.contains("AsyncFunction"));
         assert!(script.contains("React.ViewTransition"));
         assert!(script.contains("name: 'rari-page'"));
-        assert!(script.contains("rari-page-vt"));
+        assert!(script.contains("update: 'none'"));
+        assert!(script.contains("share: 'none'"));
+        assert!(script.contains("enter: 'none'"));
+        assert!(!script.contains("rari-page-vt"));
         assert!(!script.contains("virtual:page-view-transition"));
-        assert!(script.contains("enter:"));
-        assert!(script.contains("update: 'rari-reveal-enter'"));
+        assert!(!script.contains("rari-reveal-enter"));
     }
 
     #[test]
@@ -364,14 +369,16 @@ mod tests {
         assert!(!script_ssr.contains("AsyncFunction"));
         assert!(script_ssr.contains("React.ViewTransition"));
         assert!(script_ssr.contains("name: 'rari-page'"));
-        assert!(script_ssr.contains("rari-page-vt"));
+        assert!(script_ssr.contains("share: 'none'"));
+        assert!(!script_ssr.contains("rari-page-vt"));
         assert!(script_ssr.contains("const pageElement = "));
 
         assert!(script_rsc.contains("const useSuspense = false"));
         assert!(!script_rsc.contains("AsyncFunction"));
         assert!(script_rsc.contains("React.ViewTransition"));
         assert!(script_rsc.contains("name: 'rari-page'"));
-        assert!(script_rsc.contains("rari-page-vt"));
+        assert!(script_rsc.contains("share: 'none'"));
+        assert!(!script_rsc.contains("rari-page-vt"));
         assert!(script_rsc.contains("const pageElement = "));
     }
 
