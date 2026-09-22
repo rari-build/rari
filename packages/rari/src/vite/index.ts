@@ -1071,8 +1071,15 @@ if (import.meta.hot) {
       return config
     },
 
-    buildStart() {
+    async buildStart() {
       resetClientHeadExtras()
+      if (options.experimental?.useCache || options.experimental?.useCacheRemote) {
+        try {
+          await getUseCacheTransform()
+        } catch (error) {
+          this.error(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
     },
 
     configResolved(config) {
