@@ -1,6 +1,6 @@
 import { getLatestCommitHash, getRepoStars } from '@/lib/github'
-import { container } from '@/lib/site'
-import { formatCompactNumber } from '@/lib/utils'
+import { container } from '@/lib/site/styles'
+import { formatCompactNumber } from '@/lib/utils/format'
 import Bluesky from './icons/Bluesky'
 import Discord from './icons/Discord'
 import Github from './icons/Github'

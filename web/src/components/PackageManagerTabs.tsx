@@ -1,9 +1,9 @@
 'use client'
 
 import type { PackageManager } from '@/providers/PackageManagerProvider'
-import { highlightCommand } from '@/lib/mdx'
-import { code } from '@/lib/site'
-import { useClipboard } from '@/lib/utils'
+import { highlightCommand } from '@/lib/mdx/highlight-command'
+import { code } from '@/lib/site/styles'
+import { useClipboard } from '@/lib/utils/use-clipboard'
 import { usePackageManager } from '@/providers/PackageManagerProvider'
 import Bun from './icons/Bun'
 import Check from './icons/Check'

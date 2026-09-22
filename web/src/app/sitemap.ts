@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getBlogPostsMinimal, getDocsDir } from '@/lib/content'
 import { siteUrl } from '@/lib/site'
-import { parseDate } from '@/lib/utils'
+import { parseDate } from '@/lib/utils/date'
 
 interface DocPage {
   slug: string

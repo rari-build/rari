@@ -3,7 +3,7 @@ import FeatureCard from '@/components/FeatureCard'
 import HeroSection from '@/components/HeroSection'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PackageManagerTabs from '@/components/PackageManagerTabs'
-import { container, text } from '@/lib/site'
+import { container, text } from '@/lib/site/styles'
 
 export default function HomePage() {
   return (

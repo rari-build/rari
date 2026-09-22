@@ -108,6 +108,14 @@ function isNavigationStartDetail(detail: unknown): detail is {
   )
 }
 
+function peekFulfilledFlightContent(
+  content: React.ReactNode | PromiseLike<React.ReactNode>,
+): React.ReactNode | undefined {
+  if (!isFlightThenable<React.ReactNode>(content)) return content
+  if (!isRecord(content) || content.status !== 'fulfilled') return undefined
+  return isReactNode(content.value) ? content.value : undefined
+}
+
 export function AppRouterProvider({
   children,
   initialPayload,
@@ -697,11 +705,15 @@ export function AppRouterProvider({
     readonly raw: React.ReactNode | PromiseLike<React.ReactNode>
     readonly content: React.ReactNode
   } | null>(null)
+  const fulfilledContent = peekFulfilledFlightContent(contentToRender)
   if (
-    !isFlightThenable(contentToRender) &&
+    fulfilledContent !== undefined &&
     (committedSnapshot == null || !Object.is(rawContent, committedSnapshot.raw))
   ) {
-    setCommittedSnapshot({ raw: rawContent, content: contentToRender })
+    const snapshotContent = normalizeFlightContent(fulfilledContent)
+    if (!isFlightThenable(snapshotContent)) {
+      setCommittedSnapshot({ raw: rawContent, content: snapshotContent })
+    }
   }
   const committedContent = committedSnapshot?.content ?? null
 
@@ -720,13 +732,9 @@ export function AppRouterProvider({
         />
       )}
 
-      {isFlightThenable(contentToRender) ? (
-        <Suspense fallback={committedContent}>
-          <FlightOutlet content={contentToRender} />
-        </Suspense>
-      ) : (
-        contentToRender
-      )}
+      <Suspense fallback={committedContent}>
+        <FlightOutlet content={contentToRender} />
+      </Suspense>
     </>
   )
 }

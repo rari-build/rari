@@ -4,7 +4,7 @@ import {
   DESCRIPTION_EXPORT_REGEX,
   HEADING_REGEX,
   TITLE_EXPORT_REGEX,
-} from '@/lib/utils'
+} from '@/lib/utils/regex-constants'
 
 export interface BlogMetadata {
   readonly title?: string

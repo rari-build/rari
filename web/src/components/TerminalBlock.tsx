@@ -1,8 +1,8 @@
 'use client'
 
-import { highlightCommand } from '@/lib/mdx'
-import { code } from '@/lib/site'
-import { useClipboard } from '@/lib/utils'
+import { highlightCommand } from '@/lib/mdx/highlight-command'
+import { code } from '@/lib/site/styles'
+import { useClipboard } from '@/lib/utils/use-clipboard'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
 import Terminal2 from './icons/Terminal2'

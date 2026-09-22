@@ -1,6 +1,6 @@
 'use client'
 
-import type { SearchResult } from '@/lib/search'
+import type { SearchResult } from '@/lib/search/types'
 import { useRouter } from 'rari/router'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
