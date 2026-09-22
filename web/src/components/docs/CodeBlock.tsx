@@ -2,12 +2,12 @@
 
 import { code } from '@/lib/site/styles'
 import { useClipboard } from '@/lib/utils/use-clipboard'
-import Check from './icons/Check'
-import Copy from './icons/Copy'
-import File from './icons/File'
-import React from './icons/React'
-import TypeScript from './icons/TypeScript'
-import Vite from './icons/Vite'
+import Check from '../icons/Check'
+import Copy from '../icons/Copy'
+import File from '../icons/File'
+import React from '../icons/React'
+import TypeScript from '../icons/TypeScript'
+import Vite from '../icons/Vite'
 
 interface CodeBlockProps {
   readonly children: string

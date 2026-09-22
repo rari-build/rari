@@ -2,7 +2,7 @@
 
 import type { PostHog } from 'posthog-js'
 import { useEffect, useState } from 'react'
-import { PostHogPageView } from '@/components/PostHogPageView'
+import { PostHogPageView } from '@/components/analytics/PostHogPageView'
 
 async function loadPostHog() {
   return import('posthog-js')
