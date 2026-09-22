@@ -1,26 +1,7 @@
-'use server'
-
+import type { SearchIndexEntry } from './types'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import { getDocsDir } from '@/lib/content'
 import { TITLE_EXPORT_REGEX, WHITESPACE_REGEX } from '@/lib/regex-constants'
-
-export interface SearchResult {
-  title: string
-  href: string
-  category: string
-  excerpt?: string
-}
-
-interface SearchIndexEntry {
-  file: string
-  title: string
-  lowerTitle: string
-  content: string
-  originalContent: string
-  href: string
-  category: string
-}
 
 interface SearchCache {
   index: SearchIndexEntry[]
@@ -152,23 +133,6 @@ function pathToCategory(path: string): string {
   return 'Documentation'
 }
 
-function extractExcerpt(content: string, query: string, maxLength = 150): string {
-  const lowerContent = content.toLowerCase()
-  const lowerQuery = query.toLowerCase()
-  const index = lowerContent.indexOf(lowerQuery)
-
-  if (index === -1) return content.slice(0, maxLength)
-
-  const start = Math.max(0, index - 50)
-  const end = Math.min(content.length, index + query.length + 100)
-  let excerpt = content.slice(start, end)
-
-  if (start > 0) excerpt = `...${excerpt}`
-  if (end < content.length) excerpt = `${excerpt}...`
-
-  return excerpt
-}
-
 async function buildSearchIndex(
   contentDir: string,
 ): Promise<{ index: SearchIndexEntry[]; complete: boolean }> {
@@ -225,7 +189,7 @@ async function buildSearchIndex(
   return { index, complete }
 }
 
-async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
+export async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
   const now = Date.now()
 
   if (searchCache && now - searchCache.timestamp < CACHE_TTL_MS) return searchCache.index
@@ -242,53 +206,21 @@ async function getSearchIndex(contentDir: string): Promise<SearchIndexEntry[]> {
   return complete ? index : searchCache.index
 }
 
-export async function searchDocumentation(query: string): Promise<SearchResult[]> {
-  const normalizedQuery = query
-    .trim()
-    .toLowerCase()
-    .replace(inlineCodeRegex, '$1')
-    .replace(markdownFormattingRegex, '')
-    .replace(angleBracketRegex, ' ')
-    .replace(WHITESPACE_REGEX, ' ')
-    .trim()
-  if (!normalizedQuery) return []
+export function extractExcerpt(content: string, query: string, maxLength = 150): string {
+  const lowerContent = content.toLowerCase()
+  const lowerQuery = query.toLowerCase()
+  const index = lowerContent.indexOf(lowerQuery)
 
-  const contentDir = getDocsDir()
+  if (index === -1) return content.slice(0, maxLength)
 
-  const index = await getSearchIndex(contentDir)
+  const start = Math.max(0, index - 50)
+  const end = Math.min(content.length, index + query.length + 100)
+  let excerpt = content.slice(start, end)
 
-  const lowerQuery = normalizedQuery
-  const words = lowerQuery.split(WHITESPACE_REGEX).filter(Boolean)
+  if (start > 0) excerpt = `...${excerpt}`
+  if (end < content.length) excerpt = `${excerpt}...`
 
-  const results: Array<SearchResult & { score: number }> = []
-
-  for (const entry of index) {
-    let score = 0
-
-    if (entry.lowerTitle === lowerQuery) score += 100
-    else if (entry.lowerTitle.startsWith(lowerQuery)) score += 50
-    else if (entry.lowerTitle.includes(lowerQuery)) score += 25
-
-    if (entry.content.includes(lowerQuery)) score += 15
-
-    for (const word of words) {
-      if (entry.lowerTitle.includes(word)) score += 10
-      if (entry.content.includes(word)) score += 3
-    }
-
-    if (score > 0) {
-      results.push({
-        title: entry.title,
-        href: entry.href,
-        category: entry.category,
-        excerpt: extractExcerpt(entry.originalContent, lowerQuery),
-        score,
-      })
-    }
-  }
-
-  return results
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
-    .map(({ score, ...result }) => result)
+  return excerpt
 }
+
+export { angleBracketRegex, inlineCodeRegex, markdownFormattingRegex }
