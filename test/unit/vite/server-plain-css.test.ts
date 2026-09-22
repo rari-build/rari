@@ -182,7 +182,7 @@ describe('server plain css imports', () => {
     const result = await builder.rebuildComponent(pagePath)
     expect(result.success).toBe(true)
 
-    const bundle = fs.readFileSync(result.bundlePath, 'utf-8')
+    const bundle = fs.readFileSync(path.join(dir, result.bundlePath), 'utf-8')
     expect(bundle).toContain('.theme { color: green; }')
 
     const urlMatch = /\/assets\/theme-[a-z0-9]+\.css/.exec(bundle)
@@ -467,7 +467,7 @@ describe('server plain css imports', () => {
 
     const result = await builder.rebuildComponent(pagePath)
     expect(result.success).toBe(true)
-    expect(fs.existsSync(result.bundlePath)).toBe(true)
+    expect(fs.existsSync(path.join(dir, result.bundlePath))).toBe(true)
 
     const cssHrefs = readManifestCssHrefs(path.join(outDir, 'server', 'manifest.json'))
     expect(cssHrefs.length).toBeGreaterThan(0)

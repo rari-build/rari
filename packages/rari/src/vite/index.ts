@@ -1407,7 +1407,6 @@ ${clientTransformedCode}`
             await getOrCreateViteEmitBuilder({
               root: server.config.root,
               configFile: server.config.configFile,
-              mode: server.config.mode,
               logLevel: 'error',
             }),
           )
@@ -2339,7 +2338,20 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
       ] as const
       const isSpecialRouteFile = SPECIAL_ROUTE_FILE_BASES.some(base => hasExtension(file, base))
 
-      if (isAppRouterFile && isSpecialRouteFile) return undefined
+      if (isAppRouterFile && isSpecialRouteFile) {
+        if (hmrCoordinator) {
+          try {
+            await hmrCoordinator.rebuildAndNotifyNow(file, server)
+          } catch (error) {
+            console.error(
+              '[rari] HMR: Failed to rebuild app router file',
+              `${file}:`,
+              errorMessage(error, String(error)),
+            )
+          }
+        }
+        return undefined
+      }
 
       if (componentType === 'client') return undefined
 
