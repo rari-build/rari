@@ -140,28 +140,18 @@ mod tests {
         assert!(!script.contains("AsyncFunction"));
         assert!(script.contains("React.Suspense"));
         assert!(script.contains("LoadingComponent"));
-        assert!(script.contains("React.ViewTransition"));
-        assert!(script.contains("name: 'rari-page'"));
-        assert!(script.contains("update: 'none'"));
-        assert!(script.contains("share: 'none'"));
-        assert!(script.contains("enter: 'none'"));
-        assert!(!script.contains("rari-page-vt"));
-        assert!(!script.contains("rari-reveal-enter"));
-        assert!(!script.contains("rari-reveal-exit"));
-        assert!(script.contains("const pageElement = "));
         assert!(
-            !script.contains("virtual:page-view-transition"),
-            "nav VT must be React.ViewTransition in the server tree, not a client ref"
+            !script.contains("React.ViewTransition"),
+            "page ViewTransition is app-owned (TSX), not injected by the layout composer"
         );
+        assert!(script.contains("const pageElement = "));
         assert!(
             script.contains("fallback: React.createElement(LoadingComponent"),
             "Suspense fallback is the loading component"
         );
-        let suspense_pos = script.find("React.Suspense");
-        let name_pos = script.find("name: 'rari-page'");
         assert!(
-            name_pos.is_some_and(|n| suspense_pos.is_some_and(|s| n < s)),
-            "React 19.3: named ViewTransition wraps Suspense for reveal-as-update"
+            !script.contains("const pageWithLoading ="),
+            "Suspense wraps the page inside templates (Next order), not outside"
         );
     }
 
@@ -207,14 +197,8 @@ mod tests {
 
         assert!(script.contains("const useSuspense = false"));
         assert!(!script.contains("AsyncFunction"));
-        assert!(script.contains("React.ViewTransition"));
-        assert!(script.contains("name: 'rari-page'"));
-        assert!(script.contains("update: 'none'"));
-        assert!(script.contains("share: 'none'"));
-        assert!(script.contains("enter: 'none'"));
-        assert!(!script.contains("rari-page-vt"));
-        assert!(!script.contains("virtual:page-view-transition"));
-        assert!(!script.contains("rari-reveal-enter"));
+        assert!(!script.contains("React.ViewTransition"));
+        assert!(script.contains("React.createElement(PageComponent, pageProps)"));
     }
 
     #[test]
@@ -367,18 +351,12 @@ mod tests {
 
         assert!(script_ssr.contains("const useSuspense = true"));
         assert!(!script_ssr.contains("AsyncFunction"));
-        assert!(script_ssr.contains("React.ViewTransition"));
-        assert!(script_ssr.contains("name: 'rari-page'"));
-        assert!(script_ssr.contains("share: 'none'"));
-        assert!(!script_ssr.contains("rari-page-vt"));
+        assert!(!script_ssr.contains("React.ViewTransition"));
         assert!(script_ssr.contains("const pageElement = "));
 
         assert!(script_rsc.contains("const useSuspense = false"));
         assert!(!script_rsc.contains("AsyncFunction"));
-        assert!(script_rsc.contains("React.ViewTransition"));
-        assert!(script_rsc.contains("name: 'rari-page'"));
-        assert!(script_rsc.contains("share: 'none'"));
-        assert!(!script_rsc.contains("rari-page-vt"));
+        assert!(!script_rsc.contains("React.ViewTransition"));
         assert!(script_rsc.contains("const pageElement = "));
     }
 

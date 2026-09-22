@@ -1,3 +1,9 @@
+import { LoadingReveal } from '../page-transition'
+
 export default function ParallelPageLoading() {
-  return <div />
+  return (
+    <LoadingReveal>
+      <div />
+    </LoadingReveal>
+  )
 }

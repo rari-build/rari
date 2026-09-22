@@ -1,27 +1,30 @@
 import type { Metadata } from 'rari'
+import { PageTransition } from './page-transition'
 
 export default function HomePage() {
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Test App Home</h1>
-        <p className="text-gray-600 mb-6">This is the test fixture app for rari e2e tests.</p>
-        <nav className="space-y-2">
-          <a href="/about" className="block text-blue-600 hover:underline">
-            About Page
-          </a>
-          <a href="/nested" className="block text-blue-600 hover:underline">
-            Nested Routes
-          </a>
-          <a href="/contact" className="block text-blue-600 hover:underline">
-            Contact (in (_public) group)
-          </a>
-          <a href="/login" className="block text-blue-600 hover:underline">
-            Login (in (auth) group)
-          </a>
-        </nav>
+    <PageTransition>
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Test App Home</h1>
+          <p className="text-gray-600 mb-6">This is the test fixture app for rari e2e tests.</p>
+          <nav className="space-y-2">
+            <a href="/about" className="block text-blue-600 hover:underline">
+              About Page
+            </a>
+            <a href="/nested" className="block text-blue-600 hover:underline">
+              Nested Routes
+            </a>
+            <a href="/contact" className="block text-blue-600 hover:underline">
+              Contact (in (_public) group)
+            </a>
+            <a href="/login" className="block text-blue-600 hover:underline">
+              Login (in (auth) group)
+            </a>
+          </nav>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   )
 }
 
