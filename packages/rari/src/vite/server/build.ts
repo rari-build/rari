@@ -302,6 +302,10 @@ export class ServerComponentBuilder {
     this.viteBuilder = viteBuilder
   }
 
+  getProjectRoot(): string {
+    return this.projectRoot
+  }
+
   private async getEmitBuilder(): Promise<ViteBuilder> {
     if (this.viteBuilder != null) return this.viteBuilder
     this.viteBuilder = await getOrCreateViteEmitBuilder({
@@ -468,15 +472,15 @@ export class ServerComponentBuilder {
   }
 
   constructor(projectRoot: string, options: ServerBuildOptions = {}) {
-    this.projectRoot = projectRoot
+    this.projectRoot = path.resolve(projectRoot)
     this.moduleAnalysisCache = options.moduleAnalysisCache ?? new ModuleAnalysisCache()
     const rscDir = options.rscDir != null && options.rscDir !== '' ? options.rscDir : 'server'
     const rawOutDir =
       options.outDir != null && options.outDir !== ''
         ? options.outDir
-        : path.join(projectRoot, 'dist')
+        : path.join(this.projectRoot, 'dist')
     this.options = {
-      outDir: path.isAbsolute(rawOutDir) ? rawOutDir : path.resolve(projectRoot, rawOutDir),
+      outDir: path.isAbsolute(rawOutDir) ? rawOutDir : path.resolve(this.projectRoot, rawOutDir),
       rscDir,
       manifestPath:
         options.manifestPath != null && options.manifestPath !== ''

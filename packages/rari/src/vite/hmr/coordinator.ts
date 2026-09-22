@@ -265,7 +265,9 @@ export class HMRCoordinator {
   private async notifyRustServer(componentId: string, bundlePath: string): Promise<void> {
     let relativeBundlePath = toPosixPath(bundlePath)
     if (path.isAbsolute(bundlePath)) {
-      const relative = toPosixPath(path.relative(process.cwd(), bundlePath))
+      const relative = toPosixPath(
+        path.relative(this.serverComponentBuilder.getProjectRoot(), bundlePath),
+      )
       if (relative.startsWith('..') || path.isAbsolute(relative)) {
         throw new Error(`Bundle path must be inside the project root: ${bundlePath}`)
       }
