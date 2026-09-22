@@ -43,11 +43,10 @@ catalogs:
     vite-plus: ^0.3.1
   cli:
     '@clack/prompts': ^1.8.1
-  default:
+  font:
     '@capsizecss/metrics': ^4.2.0
     '@capsizecss/unpack': ^4.0.1
-    # rari: ^0.15.17
-  eslint:
+  lint:
     '@e18e/eslint-plugin': ^0.8.0
     '@eslint-community/eslint-plugin-eslint-comments': ^4.8.1
     '@eslint-react/eslint-plugin': ^5.19.0
@@ -79,6 +78,9 @@ catalogs:
     remark-gfm: ^4.0.1
   monitoring:
     '@sentry/react': ^10.74.0
+  rari:
+    '@rari/use-cache': ^0.15.17
+    # rari: ^0.15.17
   react:
     '@types/react': ^19.3.0
     '@types/react-dom': ^19.3.0

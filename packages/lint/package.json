@@ -42,31 +42,31 @@
     "typecheck": "tsc"
   },
   "peerDependencies": {
-    "eslint": "catalog:eslint"
+    "eslint": "catalog:lint"
   },
   "dependencies": {
-    "@e18e/eslint-plugin": "catalog:eslint",
-    "@eslint-community/eslint-plugin-eslint-comments": "catalog:eslint",
-    "@eslint-react/eslint-plugin": "catalog:eslint",
-    "@typescript-eslint/parser": "catalog:eslint",
-    "eslint-config-flat-gitignore": "catalog:eslint",
-    "eslint-plugin-antfu": "catalog:eslint",
-    "eslint-plugin-command": "catalog:eslint",
-    "eslint-plugin-de-morgan": "catalog:eslint",
-    "eslint-plugin-jsonc": "catalog:eslint",
-    "eslint-plugin-oxlint": "catalog:eslint",
-    "eslint-plugin-perfectionist": "catalog:eslint",
-    "eslint-plugin-pnpm": "catalog:eslint",
-    "eslint-plugin-react-refresh": "catalog:eslint",
-    "eslint-plugin-regexp": "catalog:eslint",
-    "eslint-plugin-unused-imports": "catalog:eslint",
-    "eslint-plugin-yml": "catalog:eslint",
-    "jsonc-eslint-parser": "catalog:eslint",
-    "yaml-eslint-parser": "catalog:eslint"
+    "@e18e/eslint-plugin": "catalog:lint",
+    "@eslint-community/eslint-plugin-eslint-comments": "catalog:lint",
+    "@eslint-react/eslint-plugin": "catalog:lint",
+    "@typescript-eslint/parser": "catalog:lint",
+    "eslint-config-flat-gitignore": "catalog:lint",
+    "eslint-plugin-antfu": "catalog:lint",
+    "eslint-plugin-command": "catalog:lint",
+    "eslint-plugin-de-morgan": "catalog:lint",
+    "eslint-plugin-jsonc": "catalog:lint",
+    "eslint-plugin-oxlint": "catalog:lint",
+    "eslint-plugin-perfectionist": "catalog:lint",
+    "eslint-plugin-pnpm": "catalog:lint",
+    "eslint-plugin-react-refresh": "catalog:lint",
+    "eslint-plugin-regexp": "catalog:lint",
+    "eslint-plugin-unused-imports": "catalog:lint",
+    "eslint-plugin-yml": "catalog:lint",
+    "jsonc-eslint-parser": "catalog:lint",
+    "yaml-eslint-parser": "catalog:lint"
   },
   "devDependencies": {
     "@types/node": "catalog:typescript",
-    "eslint": "catalog:eslint",
+    "eslint": "catalog:lint",
     "typescript": "catalog:typescript",
     "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"

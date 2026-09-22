@@ -6,7 +6,7 @@ High-performance `"use cache"` support for React Server Components, powered by a
 
 ## Installation
 
-Usually installed automatically with [rari](https://www.npmjs.com/package/rari). To install directly:
+Optional peer of [rari](https://www.npmjs.com/package/rari). Install when enabling `experimental.useCache`:
 
 ```bash
 npm install @rari/use-cache

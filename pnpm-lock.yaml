@@ -187,14 +187,14 @@ catalogs:
     '@clack/prompts':
       specifier: ^1.8.1
       version: 1.8.1
-  default:
+  font:
     '@capsizecss/metrics':
       specifier: ^4.2.0
       version: 4.2.0
     '@capsizecss/unpack':
       specifier: ^4.0.1
       version: 4.0.1
-  eslint:
+  lint:
     '@e18e/eslint-plugin':
       specifier: ^0.8.0
       version: 0.8.0
@@ -348,10 +348,10 @@ importers:
         specifier: catalog:testing
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
       eslint:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 10.10.0(jiti@2.7.0)(supports-color@8.1.1)
       knip:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 6.35.1
       react:
         specifier: catalog:react
@@ -434,65 +434,65 @@ importers:
   packages/lint:
     dependencies:
       '@e18e/eslint-plugin':
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 0.8.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.82.0(oxlint-tsgolint@7.0.2001)(vite-plus@0.3.1(@types/node@26.5.1)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@4.1.11)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))
       '@eslint-community/eslint-plugin-eslint-comments':
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 4.8.1(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       '@eslint-react/eslint-plugin':
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 5.19.0(@typescript/typescript6@6.0.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
       '@typescript-eslint/parser':
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 8.70.0(@typescript/typescript6@6.0.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
       eslint-config-flat-gitignore:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 2.4.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-antfu:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 3.2.3(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-command:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 4.0.0(@typescript-eslint/typescript-estree@8.70.0(@typescript/typescript6@6.0.2)(supports-color@8.1.1))(@typescript-eslint/utils@8.70.0(@typescript/typescript6@6.0.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1))(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-de-morgan:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 2.1.3(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-jsonc:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 3.4.2(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-oxlint:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 1.82.0(oxlint@1.82.0(oxlint-tsgolint@7.0.2001)(vite-plus@0.3.1(@types/node@26.5.1)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@4.1.11)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))
       eslint-plugin-perfectionist:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 5.11.0(@typescript/typescript6@6.0.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
       eslint-plugin-pnpm:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 1.9.1(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-react-refresh:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 0.5.6(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-regexp:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 3.3.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-unused-imports:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 4.4.1(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-yml:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 3.8.1(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
       jsonc-eslint-parser:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 3.3.0
       yaml-eslint-parser:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 2.1.0
     devDependencies:
       '@types/node':
         specifier: catalog:typescript
         version: 26.5.1
       eslint:
-        specifier: catalog:eslint
+        specifier: catalog:lint
         version: 10.10.0(jiti@2.7.0)(supports-color@8.1.1)
       typescript:
         specifier: catalog:typescript
@@ -522,10 +522,10 @@ importers:
   packages/rari:
     dependencies:
       '@capsizecss/metrics':
-        specifier: 'catalog:'
+        specifier: catalog:font
         version: 4.2.0
       '@capsizecss/unpack':
-        specifier: 'catalog:'
+        specifier: catalog:font
         version: 4.0.1
       react:
         specifier: catalog:react
@@ -546,6 +546,9 @@ importers:
       '@rari/logger':
         specifier: workspace:*
         version: link:../logger
+      '@rari/use-cache':
+        specifier: workspace:*
+        version: link:../use-cache
       '@types/node':
         specifier: catalog:typescript
         version: 26.5.1
@@ -568,9 +571,6 @@ importers:
         specifier: catalog:build
         version: 0.3.1(@types/node@26.5.1)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@4.1.11)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
     optionalDependencies:
-      '@rari/use-cache':
-        specifier: 0.15.17
-        version: 0.15.17(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))
       rari-darwin-arm64:
         specifier: 0.15.17
         version: 0.15.17
@@ -630,6 +630,9 @@ importers:
 
   test/fixtures/app:
     dependencies:
+      '@rari/use-cache':
+        specifier: workspace:*
+        version: link:../../../packages/use-cache
       rari:
         specifier: workspace:*
         version: link:../../../packages/rari
@@ -658,10 +661,6 @@ importers:
       vite:
         specifier: catalog:build
         version: 8.3.0(@types/node@26.5.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
-    optionalDependencies:
-      '@rari/use-cache':
-        specifier: workspace:*
-        version: link:../../../packages/use-cache
 
   tools/bundle-react-esm:
     devDependencies:
@@ -2365,12 +2364,6 @@ packages:
     engines: {node: '>=22.18.0'}
     cpu: [x64]
     os: [win32]
-
-  '@rari/use-cache@0.15.17':
-    resolution: {integrity: sha512-fAKZo/ly6cqQ7xicLfrx13fLqmzNm1Isk99eR26gymQxvG5U71UAG6kxYolF5TNHN2H8o4hGqBoch6g5EfH9Ew==}
-    engines: {node: '>=22.18.0'}
-    peerDependencies:
-      react-server-dom-webpack: ^19.2.8
 
   '@rolldown/binding-android-arm-eabi@1.2.8':
     resolution: {integrity: sha512-tN5aztYkKCte4i5SIrrz5yK/HMjEuCqCSCJa418jOV8tZ1cBY3YF2otxB1ktPxzsLA1BeTqwapK0bfjxNvHJVw==}
@@ -6511,18 +6504,6 @@ snapshots:
     optional: true
 
   '@rari/use-cache-win32-x64@0.15.17':
-    optional: true
-
-  '@rari/use-cache@0.15.17(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28)))':
-    dependencies:
-      react-server-dom-webpack: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.110.3(lightningcss@1.33.0)(postcss@8.5.28))
-    optionalDependencies:
-      '@rari/use-cache-darwin-arm64': 0.15.17
-      '@rari/use-cache-darwin-x64': 0.15.17
-      '@rari/use-cache-linux-arm64': 0.15.17
-      '@rari/use-cache-linux-x64': 0.15.17
-      '@rari/use-cache-win32-arm64': 0.15.17
-      '@rari/use-cache-win32-x64': 0.15.17
     optional: true
 
   '@rolldown/binding-android-arm-eabi@1.2.8':
