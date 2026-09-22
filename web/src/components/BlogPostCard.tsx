@@ -1,4 +1,4 @@
-import { formatDate, toDateOnly } from '@/lib/date'
+import { formatDate, toDateOnly } from '@/lib/utils'
 
 interface BlogPostCardProps {
   readonly slug: string

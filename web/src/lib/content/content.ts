@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import { parseDate } from '@/lib/date'
-import { extractBlogMetadata } from '@/lib/metadata'
+import { parseDate } from '@/lib/utils'
+import { extractBlogMetadata } from './metadata'
 
 export function isValidSlug(slug: unknown): slug is string {
   return typeof slug === 'string' && !slug.includes('..') && !slug.includes('/')

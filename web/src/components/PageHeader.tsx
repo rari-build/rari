@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { formatBlogDate, formatDate, toDateOnly } from '@/lib/date'
+import { formatBlogDate, formatDate, toDateOnly } from '@/lib/utils'
 import LastUpdated from './LastUpdated'
 
 interface PageHeaderProps {

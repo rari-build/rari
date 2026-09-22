@@ -2,7 +2,7 @@ import type { Metadata } from 'rari'
 import BlogPostCard from '@/components/BlogPostCard'
 import News from '@/components/icons/News'
 import { getAllBlogPosts, isValidSlug } from '@/lib/content'
-import { container } from '@/lib/styles'
+import { container } from '@/lib/site'
 
 export default function BlogIndexPage() {
   const posts = getAllBlogPosts()

@@ -1,5 +1,5 @@
 import type { ComponentProps, ComponentType } from 'react'
-import type { BlogMetadata } from '@/lib/metadata'
+import type { BlogMetadata } from '@/lib/content'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { evaluate } from 'rari/mdx'
@@ -9,10 +9,8 @@ import NotFoundPage from '@/app/not-found'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import Heading from '@/components/Heading'
 import PageHeader from '@/components/PageHeader'
-import { getContentRoot } from '@/lib/content'
-import { extractBlogMetadata } from '@/lib/metadata'
-import { remarkCodeBlock } from '@/lib/remark-codeblock'
-import { getHighlighter, SHIKI_THEMES } from '@/lib/shiki'
+import { extractBlogMetadata, getContentRoot } from '@/lib/content'
+import { getHighlighter, remarkCodeBlock, SHIKI_THEMES } from '@/lib/mdx'
 
 interface MdxRendererProps {
   readonly filePath: string

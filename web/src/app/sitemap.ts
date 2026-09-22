@@ -2,8 +2,8 @@ import type { Sitemap } from 'rari'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getBlogPostsMinimal, getDocsDir } from '@/lib/content'
-import { parseDate } from '@/lib/date'
 import { siteUrl } from '@/lib/site'
+import { parseDate } from '@/lib/utils'
 
 interface DocPage {
   slug: string

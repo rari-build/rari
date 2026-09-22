@@ -2,9 +2,13 @@ import type { PageProps } from 'rari'
 import { accessSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import MdxRenderer from '@/components/MdxRenderer'
-import { getDocsDir, getDocsFilePath, isValidSlugArray } from '@/lib/content'
-import { extractMetadataWithFallback } from '@/lib/metadata'
-import { container } from '@/lib/styles'
+import {
+  extractMetadataWithFallback,
+  getDocsDir,
+  getDocsFilePath,
+  isValidSlugArray,
+} from '@/lib/content'
+import { container } from '@/lib/site'
 
 const DEFAULT_METADATA = {
   title: 'rari Docs',
