@@ -1294,20 +1294,72 @@ impl LayoutRenderer {
             utils::create_component_id(&route_match.route.file_path)
         };
 
+        let pathname_json =
+            serde_json::to_string(&context.pathname).unwrap_or_else(|_| "\"/\"".to_string());
+
+        let nav_vt_props = r"{
+                  name: 'rari-page',
+                  default: 'none',
+                  update: 'none',
+                  exit: 'none',
+                  share: {
+                    'nav-forward': 'rari-page-vt',
+                    'nav-traverse': 'rari-page-vt',
+                    'nav-replace': 'rari-page-vt',
+                    default: 'none',
+                  },
+                  enter: {
+                    'nav-forward': 'rari-page-vt',
+                    'nav-traverse': 'rari-page-vt',
+                    'nav-replace': 'rari-page-vt',
+                    default: 'none',
+                  },
+                }"
+        .to_string();
+
+        let wrap_nav_vt = |inner: &str| -> String {
+            format!("React.createElement(React.ViewTransition, {nav_vt_props}, {inner})")
+        };
+
         let page_render_script = if route_match.not_found.is_some() {
+            let wrapped = wrap_nav_vt("React.createElement(PageComponent, {})");
             format!(
                 r#"
                 const PageComponent = globalThis["{page_component_id}"];
                 if (!PageComponent || typeof PageComponent !== 'function') {{
                     throw new Error('Page component {page_component_id} not found');
                 }}
-                const pageElement = React.createElement(PageComponent, {{}});
+                const pageElement = {wrapped};
                 timings.pageRender = performance.now() - startPageRender;
                 "#
             )
         } else if let Some(loading_id) = loading_component_id {
             let loading_file_path =
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
+            let page_settled = wrap_nav_vt(
+                r"React.createElement(
+                        React.ViewTransition,
+                        { enter: 'rari-reveal-enter', default: 'none' },
+                        React.createElement(PageComponent, pageProps)
+                      )",
+            );
+            let loading_with_reveal = r"React.createElement(
+                        React.ViewTransition,
+                        { exit: 'rari-reveal-exit', default: 'none' },
+                        React.createElement(LoadingComponent, {})
+                      )"
+            .to_string();
+            let suspense_or_page = format!(
+                r"(useSuspense
+                    ? React.createElement(
+                        React.Suspense,
+                        {{
+                          fallback: {loading_with_reveal},
+                        }},
+                        {page_settled}
+                      )
+                    : {page_settled})"
+            );
 
             format!(
                 r#"
@@ -1323,16 +1375,7 @@ impl LayoutRenderer {
 
                 const pageProps = {};
                 const useSuspense = {};
-
-                const pageElement = useSuspense
-                    ? React.createElement(
-                        React.Suspense,
-                        {{
-                          fallback: React.createElement(LoadingComponent, {{}}),
-                        }},
-                        React.createElement(PageComponent, pageProps)
-                      )
-                    : React.createElement(PageComponent, pageProps);
+                const pageElement = {};
 
                 timings.pageRender = performance.now() - startPageRender;
                 "#,
@@ -1343,9 +1386,11 @@ impl LayoutRenderer {
                 loading_id,
                 loading_file_path,
                 page_props_json,
-                if use_suspense { "true" } else { "false" }
+                if use_suspense { "true" } else { "false" },
+                suspense_or_page,
             )
         } else {
+            let wrapped = wrap_nav_vt("React.createElement(PageComponent, pageProps)");
             format!(
                 r#"
                 const PageComponent = globalThis["{page_component_id}"];
@@ -1353,14 +1398,12 @@ impl LayoutRenderer {
                     throw new Error('Page component {page_component_id} not found');
                 }}
                 const pageProps = {page_props_json};
-                const pageElement = React.createElement(PageComponent, pageProps);
+                const pageElement = {wrapped};
                 timings.pageRender = performance.now() - startPageRender;
                 "#
             )
         };
 
-        let pathname_json =
-            serde_json::to_string(&context.pathname).unwrap_or_else(|_| "null".to_string());
         let template_key_json = utils::template_key_json(context);
         let action_post_url =
             utils::format_action_post_url(&context.pathname, &context.search_params);

@@ -4,7 +4,6 @@ import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
-import { NavigationTransition } from 'virtual:navigation-transition'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-state'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
@@ -253,8 +252,8 @@ export function AppRouterProvider({
     return false
   }
 
-  const parseRscFlightProtocol = async (flightProtocol: string) => {
-    await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
+  const parseRscFlightProtocol = (flightProtocol: string): RscPayload => {
+    void preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
 
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -263,9 +262,7 @@ export function AppRouterProvider({
       },
     })
 
-    const elementPromise = createFromReadableStream<React.ReactNode>(stream)
-
-    const element = await elementPromise
+    const element = createFromReadableStream<React.ReactNode>(stream)
 
     return {
       element,
@@ -279,16 +276,20 @@ export function AppRouterProvider({
 
     if (!response.body) throw new Error('Response has no body stream')
 
-    const clonedResponse = response.clone()
-    const flightProtocol = await clonedResponse.text()
-    await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
+    const protocolClone = response.clone()
+    const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
 
-    const element = await createFromFetch<React.ReactNode>(Promise.resolve(response))
+    void protocolClone
+      .text()
+      .then(async flightProtocol =>
+        preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current),
+      )
+      .catch(() => {})
 
     return {
       element,
       rawElement: element,
-      flightProtocol,
+      flightProtocol: '',
     }
   }
 
@@ -335,23 +336,25 @@ export function AppRouterProvider({
           failure = error
         } else {
           let parsedPayload: RscPayload | undefined
-          let rscFlightProtocol = ''
 
           try {
-            const clonedResponse = response.clone()
-            rscFlightProtocol = await clonedResponse.text()
+            const protocolClone = response.clone()
+            const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
+            parsedPayload = { element, rawElement: element, flightProtocol: '' }
 
-            if (isStaleContent(rscFlightProtocol)) {
-              if (rscPayload) {
-                pendingFetchesRef.current.delete(requestKey)
-                return rscPayload
-              }
-            }
-
-            await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
-
-            const element = await createFromFetch<React.ReactNode>(Promise.resolve(response))
-            parsedPayload = { element, rawElement: element, flightProtocol: rscFlightProtocol }
+            void protocolClone
+              .text()
+              .then(async flightProtocol => {
+                if (isStaleContent(flightProtocol)) return
+                await preloadModulesFromFlightProtocol(
+                  flightProtocol,
+                  preloadedModuleIdsRef.current,
+                )
+                if (currentNavigationIdRef.current === navigationId && flightProtocol !== '') {
+                  lastSuccessfulPayloadRef.current = flightProtocol
+                }
+              })
+              .catch(() => {})
           } catch (parseError) {
             const error = toError(parseError)
             trackHMRFailure(
@@ -366,7 +369,6 @@ export function AppRouterProvider({
           if (failure == null) {
             if (currentNavigationIdRef.current === navigationId) {
               setRscPayload(parsedPayload)
-              lastSuccessfulPayloadRef.current = rscFlightProtocol
               resetFailureTracking()
             }
 
@@ -404,7 +406,7 @@ export function AppRouterProvider({
   }
 
   const parseRscFlightProtocolRef =
-    useRef<(flightProtocol: string) => Promise<RscPayload>>(parseRscFlightProtocol)
+    useRef<(flightProtocol: string) => RscPayload | Promise<RscPayload>>(parseRscFlightProtocol)
   const parseRscResponseRef =
     useRef<(responsePromise: Promise<Response>) => Promise<RscPayload>>(parseRscResponse)
   const refetchRscPayloadRef =
@@ -716,7 +718,6 @@ export function AppRouterProvider({
         />
       )}
 
-      <NavigationTransition key={renderKey} />
       {isFlightThenable(contentToRender) ? (
         <Suspense fallback={committedContent}>
           <FlightOutlet content={contentToRender} />

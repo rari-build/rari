@@ -14,10 +14,11 @@ export default function React19Page() {
           waiting inside <code>&lt;ViewTransition&gt;</code>.
         </p>
         <p className="text-sm text-gray-500 mt-4">
-          Soft navigations call <code>addTransitionType</code> and remount{' '}
-          <code>app/navigation-transition.tsx</code> (VT sentinel outside Flight so layout
-          persists). Page motion uses typed <code>rari-page-vt</code> enter/exit; nav stays frozen
-          via <code>rari-site-nav</code>.
+          Soft navigations run inside <code>startTransition</code> with{' '}
+          <code>addTransitionType</code>. The framework nests a named <code>ViewTransition</code> (
+          <code>rari-page</code>) around Suspense; <code>loading.tsx</code> gets reveal{' '}
+          <code>exit</code> and the page gets reveal <code>enter</code>. Style those classes in CSS.
+          Nav stays frozen via <code>rari-site-nav</code>.
         </p>
       </div>
 
