@@ -33,7 +33,7 @@ declare module 'virtual:react-flight-client' {
       readonly callServer?: (id: string, args: readonly unknown[]) => Promise<unknown>
       readonly temporaryReferences?: Map<string, unknown>
     }>,
-  ): Promise<T>
+  ): Thenable<T>
 
   export function createTemporaryReferenceSet(): Map<string, unknown>
 
@@ -55,14 +55,6 @@ declare module 'virtual:client-router' {
   }
 
   export function ClientRouter(props: ClientRouterProps): React.ReactNode
-}
-
-declare module 'virtual:navigation-transition' {
-  import type * as React from 'react'
-
-  export function NavigationTransition(_props?: {
-    readonly children?: React.ReactNode
-  }): React.ReactNode
 }
 
 declare module 'virtual:app-router-provider' {

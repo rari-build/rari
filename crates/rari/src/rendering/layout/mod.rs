@@ -140,9 +140,26 @@ mod tests {
         assert!(!script.contains("AsyncFunction"));
         assert!(script.contains("React.Suspense"));
         assert!(script.contains("LoadingComponent"));
-        assert!(!script.contains("React.ViewTransition"));
-        assert!(!script.contains("rari-content-enter"));
-        assert!(script.contains("const pageElement = useSuspense"));
+        assert!(script.contains("React.ViewTransition"));
+        assert!(script.contains("name: 'rari-page'"));
+        assert!(script.contains("rari-page-vt"));
+        assert!(script.contains("rari-reveal-enter"));
+        assert!(script.contains("rari-reveal-exit"));
+        assert!(script.contains("const pageElement = "));
+        assert!(
+            !script.contains("virtual:page-view-transition"),
+            "nav VT must be React.ViewTransition in the server tree, not a client ref"
+        );
+        assert!(
+            script.contains("fallback:") && script.contains("enter: 'rari-reveal-enter'"),
+            "Suspense fallback is loading; reveal enter wraps the page inside Suspense"
+        );
+        let suspense_pos = script.find("React.Suspense");
+        let name_pos = script.find("name: 'rari-page'");
+        assert!(
+            suspense_pos.is_some_and(|s| name_pos.is_some_and(|n| s < n)),
+            "anti-flicker: Suspense wraps named page VT so loading is not a morph target"
+        );
     }
 
     #[test]
@@ -187,7 +204,12 @@ mod tests {
 
         assert!(script.contains("const useSuspense = false"));
         assert!(!script.contains("AsyncFunction"));
-        assert!(script.contains("const pageElement = useSuspense"));
+        assert!(script.contains("React.ViewTransition"));
+        assert!(script.contains("name: 'rari-page'"));
+        assert!(script.contains("rari-page-vt"));
+        assert!(!script.contains("virtual:page-view-transition"));
+        assert!(script.contains("const pageElement = "));
+        assert!(script.contains("enter: 'rari-reveal-enter'"));
     }
 
     #[test]
@@ -340,11 +362,17 @@ mod tests {
 
         assert!(script_ssr.contains("const useSuspense = true"));
         assert!(!script_ssr.contains("AsyncFunction"));
-        assert!(script_ssr.contains("const pageElement = useSuspense"));
+        assert!(script_ssr.contains("React.ViewTransition"));
+        assert!(script_ssr.contains("name: 'rari-page'"));
+        assert!(script_ssr.contains("rari-page-vt"));
+        assert!(script_ssr.contains("const pageElement = "));
 
         assert!(script_rsc.contains("const useSuspense = false"));
         assert!(!script_rsc.contains("AsyncFunction"));
-        assert!(script_rsc.contains("const pageElement = useSuspense"));
+        assert!(script_rsc.contains("React.ViewTransition"));
+        assert!(script_rsc.contains("name: 'rari-page'"));
+        assert!(script_rsc.contains("rari-page-vt"));
+        assert!(script_rsc.contains("const pageElement = "));
     }
 
     #[test]
