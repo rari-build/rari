@@ -175,6 +175,7 @@ export interface ServerBuildOptions {
   readonly jsPoolSize?: number
   readonly origin?: string
   readonly htmlLimitedBots?: string
+  readonly viewTransitions?: boolean
   readonly moduleAnalysisCache?: ModuleAnalysisCache
   readonly experimental?: {
     readonly useCache?: boolean
@@ -200,6 +201,7 @@ type ResolvedServerBuildOptions = Required<
     | 'jsPoolSize'
     | 'origin'
     | 'htmlLimitedBots'
+    | 'viewTransitions'
     | 'define'
     | 'serverConfigPath'
     | 'experimental'
@@ -215,6 +217,7 @@ type ResolvedServerBuildOptions = Required<
   jsPoolSize?: ServerBuildOptions['jsPoolSize']
   origin?: ServerBuildOptions['origin']
   htmlLimitedBots?: ServerBuildOptions['htmlLimitedBots']
+  viewTransitions?: ServerBuildOptions['viewTransitions']
   define?: ServerBuildOptions['define']
   experimental?: ServerBuildOptions['experimental']
   moduleAnalysisCache?: ModuleAnalysisCache
@@ -504,6 +507,7 @@ export class ServerComponentBuilder {
       jsPoolSize: options.jsPoolSize,
       origin: options.origin,
       htmlLimitedBots: options.htmlLimitedBots,
+      viewTransitions: options.viewTransitions,
       experimental: options.experimental,
       mdx: options.mdx,
     }
@@ -789,6 +793,7 @@ export class ServerComponentBuilder {
     if (origin != null && origin !== '') serverConfig.origin = origin
     if (this.options.htmlLimitedBots != null)
       serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
+    if (this.options.viewTransitions === true) serverConfig.viewTransitions = true
     if (
       this.options.experimental?.useCacheRemote != null ||
       (this.useCacheBuildId != null && this.useCacheBuildId !== '')

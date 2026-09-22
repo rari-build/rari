@@ -1,10 +1,10 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
+import type { NavItem } from '@/lib/content/docs-navigation'
 import { usePathname } from 'rari/router'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { docsNavigation } from '@/lib/content/docs-navigation';
-import type { NavItem } from '@/lib/content/docs-navigation';
+import { docsNavigation } from '@/lib/content/docs-navigation'
 import Bluesky from './icons/Bluesky'
 import ChevronRight from './icons/ChevronRight'
 import Close from './icons/Close'

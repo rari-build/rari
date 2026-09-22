@@ -1,4 +1,5 @@
 import type { ComponentProps, ComponentType } from 'react'
+import type { BlogMetadata } from '@/lib/content/metadata'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { evaluate } from 'rari/mdx'
@@ -9,8 +10,7 @@ import Breadcrumbs from '@/components/Breadcrumbs'
 import Heading from '@/components/Heading'
 import PageHeader from '@/components/PageHeader'
 import { getContentRoot } from '@/lib/content'
-import { extractBlogMetadata } from '@/lib/content/metadata';
-import type { BlogMetadata } from '@/lib/content/metadata';
+import { extractBlogMetadata } from '@/lib/content/metadata'
 import { remarkCodeBlock } from '@/lib/mdx/remark-codeblock'
 import { getHighlighter, SHIKI_THEMES } from '@/lib/mdx/shiki'
 

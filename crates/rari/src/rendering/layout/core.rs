@@ -1297,7 +1297,11 @@ impl LayoutRenderer {
         let pathname_json =
             serde_json::to_string(&context.pathname).unwrap_or_else(|_| "\"/\"".to_string());
 
-        let nav_vt_props = r"{
+        let view_transitions_enabled =
+            Config::get().map(|config| config.view_transitions.enabled).unwrap_or(false);
+
+        let nav_vt_props = if view_transitions_enabled {
+            r"{
                   name: 'rari-page',
                   default: 'none',
                   update: 'rari-reveal-enter',
@@ -1315,7 +1319,18 @@ impl LayoutRenderer {
                     default: 'none',
                   },
                 }"
-        .to_string();
+            .to_string()
+        } else {
+            r"{
+                  name: 'rari-page',
+                  default: 'none',
+                  update: 'none',
+                  exit: 'none',
+                  share: 'none',
+                  enter: 'none',
+                }"
+            .to_string()
+        };
 
         let wrap_nav_vt = |inner: &str| -> String {
             format!("React.createElement(React.ViewTransition, {nav_vt_props}, {inner})")
