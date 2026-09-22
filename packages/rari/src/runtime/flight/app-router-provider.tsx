@@ -344,9 +344,8 @@ export function AppRouterProvider({
             rscFlightProtocol = await protocolClone.text()
 
             if (isStaleContent(rscFlightProtocol)) {
-              const current = rscPayloadRef.current
               pendingFetchesRef.current.delete(requestKey)
-              return current
+              return undefined
             }
 
             await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
