@@ -13,7 +13,6 @@ const emitBuilderByRoot = new Map<string, Promise<ViteBuilder>>()
 export type ViteEmitBuilderOptions = Readonly<{
   readonly root: string
   readonly configFile?: string | false
-  readonly mode?: string
   readonly logLevel?: InlineConfig['logLevel']
 }>
 
@@ -22,7 +21,6 @@ function emitBuilderKey(options: ViteEmitBuilderOptions): string {
   return JSON.stringify({
     root,
     configFile: options.configFile ?? null,
-    mode: options.mode ?? null,
     logLevel: options.logLevel ?? null,
   })
 }
@@ -39,8 +37,12 @@ export async function getOrCreateViteEmitBuilder(
     pending = createBuilder({
       root,
       ...(options.configFile !== undefined ? { configFile: options.configFile } : {}),
-      ...(options.mode != null && options.mode !== '' ? { mode: options.mode } : {}),
       ...(options.logLevel != null ? { logLevel: options.logLevel } : {}),
+      oxc: {
+        jsx: {
+          development: false,
+        },
+      },
     }).catch((error: unknown) => {
       emitBuilderByRoot.delete(key)
       throw error
@@ -217,6 +219,23 @@ export async function buildEntriesWithViteEnvironment(
 ): Promise<EnvViteBuildResult | null> {
   if (options.entries.length === 0) return { outputs: new Map(), extraFiles: [] }
 
+  if (options.codeSplitting === false && options.entries.length > 1) {
+    const outputs = new Map<string, EnvViteBuiltEntry>()
+    const extraFiles: EnvViteExtraFile[] = []
+    for (const entry of options.entries) {
+      const result = await buildEntriesWithViteEnvironment({
+        ...options,
+        entries: [entry],
+      })
+      if (result == null) return null
+      for (const [entryName, built] of result.outputs) {
+        outputs.set(entryName, built)
+      }
+      extraFiles.push(...result.extraFiles)
+    }
+    return { outputs, extraFiles }
+  }
+
   const environments = options.viteBuilder.environments as Partial<
     Record<'rsc' | 'ssr' | 'client', (typeof options.viteBuilder.environments)[string]>
   >
@@ -288,7 +307,10 @@ export async function buildEntriesWithViteEnvironment(
         continue
       }
 
-      extraFiles.push({ fileName, code: item.code })
+      extraFiles.push({
+        fileName,
+        code: item.code,
+      })
     }
 
     for (const [entryName, built] of entryOutputs) {

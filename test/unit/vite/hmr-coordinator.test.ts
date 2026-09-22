@@ -153,6 +153,45 @@ describe('hmr coordinator', () => {
     })
   })
 
+  describe('rebuildAndNotifyNow', () => {
+    it('rebuilds immediately and notifies the Rust server', async () => {
+      const filePath = '/test/src/app/page.tsx'
+
+      vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
+        success: true,
+        componentId: 'app/page',
+        bundlePath: 'dist/server/app/page_73d7a23e.js',
+      })
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => Promise.resolve({ success: true }),
+        text: async () => Promise.resolve(JSON.stringify({ success: true })),
+      })
+
+      const result = await coordinator.rebuildAndNotifyNow(filePath, mockServer)
+
+      expect(mockBuilder.invalidateBuildCacheFor).toHaveBeenCalledWith(filePath)
+      expect(mockBuilder.rebuildComponent).toHaveBeenCalledWith(filePath)
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/_rari/hmr'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'reload-component',
+            component_id: 'app/page',
+            bundle_path: 'dist/server/app/page_73d7a23e.js',
+          }),
+        }),
+      )
+      expect(mockServer.hot.send).toHaveBeenCalledWith('rari:server-component-updated', {
+        id: 'app/page',
+        t: expect.any(Number),
+      })
+      expect(result.componentId).toBe('app/page')
+    })
+  })
+
   describe('handleServerComponentUpdate', () => {
     it('should rebuild server component', async () => {
       const filePath1 = '/test/src/components/Server1.tsx'
@@ -161,7 +200,7 @@ describe('hmr coordinator', () => {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'server-component',
-        bundlePath: '/dist/server.js',
+        bundlePath: 'dist/server.js',
       })
 
       mockFetch.mockResolvedValue({
@@ -181,7 +220,7 @@ describe('hmr coordinator', () => {
     it('should notify rust server on successful rebuild', async () => {
       const filePath = '/test/src/components/Test.tsx'
       const componentId = 'test-component'
-      const bundlePath = '/dist/test.js'
+      const bundlePath = 'dist/test.js'
 
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
@@ -220,7 +259,7 @@ describe('hmr coordinator', () => {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId,
-        bundlePath: '/dist/success.js',
+        bundlePath: 'dist/success.js',
       })
 
       mockFetch.mockResolvedValue({
@@ -273,7 +312,7 @@ describe('hmr coordinator', () => {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'test',
-        bundlePath: '/dist/test.js',
+        bundlePath: 'dist/test.js',
       })
 
       mockFetch.mockRejectedValue(new Error('Server not available'))
@@ -317,7 +356,7 @@ describe('hmr coordinator', () => {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'recovery',
-        bundlePath: '/dist/recovery.js',
+        bundlePath: 'dist/recovery.js',
       })
 
       mockFetch.mockResolvedValue({
@@ -462,7 +501,7 @@ export default function Component() {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'pending',
-        bundlePath: '/dist/pending.js',
+        bundlePath: 'dist/pending.js',
       })
 
       mockFetch.mockResolvedValue({
@@ -533,7 +572,7 @@ export default function Component() {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'test',
-        bundlePath: '/dist/test.js',
+        bundlePath: 'dist/test.js',
       })
 
       mockFetch.mockResolvedValue({
@@ -558,7 +597,7 @@ export default function Component() {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'test',
-        bundlePath: '/dist/test.js',
+        bundlePath: 'dist/test.js',
       })
 
       mockFetch.mockResolvedValue({
@@ -582,7 +621,7 @@ export default function Component() {
       vi.mocked(mockBuilder.rebuildComponent).mockResolvedValue({
         success: true,
         componentId: 'test',
-        bundlePath: '/dist/test.js',
+        bundlePath: 'dist/test.js',
       })
 
       mockFetch.mockResolvedValue({

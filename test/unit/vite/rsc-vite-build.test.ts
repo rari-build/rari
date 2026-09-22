@@ -120,6 +120,93 @@ describe('buildRscEntriesWithViteEnvironment', () => {
     expect(result?.extraFiles[0]?.code).toBe(binary)
   })
 
+  it('emits one entry at a time when codeSplitting is false with multiple inputs', async () => {
+    const buildConfig = {
+      write: false,
+      emptyOutDir: false,
+      copyPublicDir: false,
+      minify: false,
+      emitAssets: true,
+      rolldownOptions: {},
+    }
+    const build = vi.fn().mockImplementation(async () => {
+      const input = (buildConfig.rolldownOptions as { input?: Record<string, string> }).input
+      const names = Object.keys(input ?? {})
+      expect(names).toHaveLength(1)
+      const name = names[0]!
+      return {
+        output: [
+          {
+            type: 'chunk',
+            isEntry: true,
+            name,
+            fileName: `${name}.js`,
+            code: `export default function ${name}() {}`,
+          },
+        ],
+      }
+    })
+
+    const result = await buildRscEntriesWithViteEnvironment({
+      viteBuilder: castMock<ViteBuilder>({
+        environments: {
+          rsc: {
+            init: async () => {},
+            config: { build: buildConfig },
+          },
+        },
+        build,
+      }),
+      entries: [
+        { componentId: 'Home', filePath: '/src/Home.tsx' },
+        { componentId: 'About', filePath: '/src/About.tsx' },
+      ],
+      codeSplitting: false,
+    })
+
+    expect(build).toHaveBeenCalledTimes(2)
+    expect(result?.outputs.get('Home')?.code).toContain('Home')
+    expect(result?.outputs.get('About')?.code).toContain('About')
+  })
+
+  it('passes through entry chunk code without jsx-dev-runtime rewrite', async () => {
+    const buildConfig = {
+      write: false,
+      emptyOutDir: false,
+      copyPublicDir: false,
+      minify: false,
+      emitAssets: true,
+      rolldownOptions: {},
+    }
+    const code = `import { jsx } from "react/jsx-runtime";\nexport default function App() { return jsx("div", {}); }`
+    const build = vi.fn().mockResolvedValue({
+      output: [
+        {
+          type: 'chunk',
+          isEntry: true,
+          name: 'App',
+          fileName: 'App.js',
+          code,
+        },
+      ],
+    })
+
+    const result = await buildRscEntriesWithViteEnvironment({
+      viteBuilder: castMock<ViteBuilder>({
+        environments: {
+          rsc: {
+            init: async () => {},
+            config: { build: buildConfig },
+          },
+        },
+        build,
+      }),
+      entries: [{ componentId: 'App', filePath: '/src/App.tsx' }],
+    })
+
+    expect(result?.outputs.get('App')?.code).toBe(code)
+  })
+
   it('returns null and restores config when build throws', async () => {
     const previousOptions = { keep: true }
     const buildConfig = {

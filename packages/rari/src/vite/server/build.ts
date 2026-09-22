@@ -304,7 +304,10 @@ export class ServerComponentBuilder {
 
   private async getEmitBuilder(): Promise<ViteBuilder> {
     if (this.viteBuilder != null) return this.viteBuilder
-    this.viteBuilder = await getOrCreateViteEmitBuilder(this.projectRoot)
+    this.viteBuilder = await getOrCreateViteEmitBuilder({
+      root: this.projectRoot,
+      logLevel: 'error',
+    })
     return this.viteBuilder
   }
 
@@ -1185,7 +1188,7 @@ export class ServerComponentBuilder {
       await this.updateManifestForComponent(componentId, filePath, relativeBundlePath, cached.css)
       return {
         componentId,
-        bundlePath: path.join(this.options.outDir, relativeBundlePath),
+        bundlePath: this.bundlePathForRuntime(fullBundlePath),
         success: true,
       }
     }
@@ -1230,9 +1233,13 @@ export class ServerComponentBuilder {
 
     return {
       componentId,
-      bundlePath: path.join(this.options.outDir, relativeBundlePath),
+      bundlePath: this.bundlePathForRuntime(fullBundlePath),
       success: true,
     }
+  }
+
+  private bundlePathForRuntime(absoluteBundlePath: string): string {
+    return toPosixPath(path.relative(this.projectRoot, absoluteBundlePath))
   }
 
   private manifestCache: ServerComponentManifest | null = null

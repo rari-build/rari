@@ -579,6 +579,15 @@ async fn handle_reload_component(
         Ok(()) => {
             invalidate_component_cache(&state.response_cache, &component_id).await;
 
+            state.response_cache.clear().await;
+            if let Err(e) = state.layout_html_cache.clear().await {
+                tracing::warn!(
+                    component_id = %component_id,
+                    error = %e,
+                    "Failed to clear layout_html_cache during reload-component"
+                );
+            }
+
             Ok(Json(serde_json::json!({
                 "success": true,
                 "message": format!("Component {} reloaded successfully", component_id)

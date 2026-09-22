@@ -3,6 +3,7 @@ import type { ServerComponentBuilder } from '../server/build'
 import path from 'node:path'
 import process from 'node:process'
 import { throwIfNotOk } from '@/shared/utils/http'
+import { toPosixPath } from '@/shared/utils/path'
 import { getRariServerPort } from '@/shared/utils/server-port'
 import { errorMessage, isError, isRecord, toError } from '@/shared/utils/type-guards'
 import { HMRErrorHandler } from './error-handler'
@@ -104,6 +105,29 @@ export class HMRCoordinator {
     }
 
     return Promise.resolve()
+  }
+
+  async rebuildAndNotifyNow(
+    filePath: string,
+    server?: ViteDevServer,
+  ): Promise<ComponentRebuildResult> {
+    this.serverComponentBuilder.invalidateBuildCacheFor(filePath)
+    const result = await this.serverComponentBuilder.rebuildComponent(filePath)
+
+    if (!result.success) {
+      throw new Error(result.error != null && result.error !== '' ? result.error : 'Build failed')
+    }
+
+    await this.notifyRustServer(result.componentId, result.bundlePath)
+
+    if (server != null) {
+      server.hot.send('rari:server-component-updated', {
+        id: result.componentId,
+        t: Date.now(),
+      })
+    }
+
+    return result
   }
 
   async handleServerComponentUpdate(filePath: string, server: ViteDevServer): Promise<void> {
@@ -239,6 +263,15 @@ export class HMRCoordinator {
   }
 
   private async notifyRustServer(componentId: string, bundlePath: string): Promise<void> {
+    let relativeBundlePath = toPosixPath(bundlePath)
+    if (path.isAbsolute(bundlePath)) {
+      const relative = toPosixPath(path.relative(process.cwd(), bundlePath))
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`Bundle path must be inside the project root: ${bundlePath}`)
+      }
+      relativeBundlePath = relative
+    }
+
     try {
       const response = await fetch(`${this.rustServerUrl}/_rari/hmr`, {
         method: 'POST',
@@ -248,7 +281,7 @@ export class HMRCoordinator {
         body: JSON.stringify({
           action: 'reload-component',
           component_id: componentId,
-          bundle_path: bundlePath,
+          bundle_path: relativeBundlePath,
         }),
       })
 
