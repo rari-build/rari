@@ -1,7 +1,7 @@
 'use client'
 
-import { code } from '@/lib/site'
-import { useClipboard } from '@/lib/utils'
+import { code } from '@/lib/site/styles'
+import { useClipboard } from '@/lib/utils/use-clipboard'
 import Check from './icons/Check'
 import Copy from './icons/Copy'
 import File from './icons/File'

@@ -2,7 +2,7 @@ import type { Metadata } from 'rari'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import PageHeader from '@/components/PageHeader'
-import { container, text } from '@/lib/site'
+import { container, text } from '@/lib/site/styles'
 
 export default function FunctionsPage() {
   return (

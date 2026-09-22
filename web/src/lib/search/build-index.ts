@@ -1,7 +1,7 @@
 import type { SearchIndexEntry } from './types'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import { TITLE_EXPORT_REGEX, WHITESPACE_REGEX } from '@/lib/utils'
+import { TITLE_EXPORT_REGEX, WHITESPACE_REGEX } from '@/lib/utils/regex-constants'
 
 interface SearchCache {
   index: SearchIndexEntry[]

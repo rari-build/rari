@@ -1,6 +1,6 @@
 import type { RariRequest } from 'rari'
 import { RariResponse } from 'rari'
-import { TRAILING_SLASH_REGEX } from '@/lib/utils'
+import { TRAILING_SLASH_REGEX } from '@/lib/utils/regex-constants'
 
 export function proxy(request: RariRequest) {
   const { pathname } = request.rariUrl

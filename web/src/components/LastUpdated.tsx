@@ -1,5 +1,5 @@
 import { getGitHubEditUrl, getLastCommitDate } from '@/lib/github'
-import { formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils/date'
 import Github from './icons/Github'
 
 interface LastUpdatedProps {

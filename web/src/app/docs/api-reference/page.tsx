@@ -1,7 +1,7 @@
 import type { Metadata } from 'rari'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import PageHeader from '@/components/PageHeader'
-import { container } from '@/lib/site'
+import { container } from '@/lib/site/styles'
 
 export default function ApiReferencePage() {
   return (

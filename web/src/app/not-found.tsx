@@ -1,4 +1,4 @@
-import { container } from '@/lib/site'
+import { container } from '@/lib/site/styles'
 
 export default function NotFound() {
   return (

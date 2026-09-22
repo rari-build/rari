@@ -1,7 +1,11 @@
 import type { JSX, ReactNode } from 'react'
 import { isValidElement } from 'react'
 import LinkIcon from '@/components/icons/Link'
-import { MULTIPLE_DASHES_REGEX, NON_WORD_REGEX, WHITESPACE_REGEX } from '@/lib/utils'
+import {
+  MULTIPLE_DASHES_REGEX,
+  NON_WORD_REGEX,
+  WHITESPACE_REGEX,
+} from '@/lib/utils/regex-constants'
 
 interface HeadingProps {
   readonly level: 1 | 2 | 3 | 4 | 5 | 6

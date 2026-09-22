@@ -8,8 +8,8 @@ import Neon from '@/components/icons/sponsors/Neon'
 import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
 import Socket from '@/components/icons/sponsors/Socket'
-import { container } from '@/lib/site'
-import { HEX_REGEX } from '@/lib/utils'
+import { container } from '@/lib/site/styles'
+import { HEX_REGEX } from '@/lib/utils/regex-constants'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
