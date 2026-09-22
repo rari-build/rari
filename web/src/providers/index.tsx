@@ -1,10 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { PostHogInit } from '@/components/PostHogInit'
-import { SentryInit } from '@/components/SentryInit'
-import { PackageManagerProvider } from '@/providers/PackageManagerProvider'
-import { ThemeProvider } from '@/providers/ThemeProvider'
+import { PostHogInit } from '@/components/analytics/PostHogInit'
+import { SentryInit } from '@/components/analytics/SentryInit'
+import { PackageManagerProvider } from './PackageManagerProvider'
+import { ThemeProvider } from './ThemeProvider'
 
 export function Providers({
   children,

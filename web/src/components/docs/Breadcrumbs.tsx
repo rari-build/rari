@@ -1,5 +1,5 @@
 import { getBreadcrumbs } from '@/lib/content/docs-navigation'
-import ChevronRight from './icons/ChevronRight'
+import ChevronRight from '../icons/ChevronRight'
 
 interface BreadcrumbsProps {
   readonly pathname: string

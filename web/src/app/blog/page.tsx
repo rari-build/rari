@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
-import BlogPostCard from '@/components/BlogPostCard'
 import News from '@/components/icons/News'
+import BlogPostCard from '@/components/marketing/BlogPostCard'
 import { getAllBlogPosts, isValidSlug } from '@/lib/content'
 import { container } from '@/lib/site/styles'
 

@@ -1,6 +1,6 @@
-import ArrowNarrowRight from './icons/ArrowNarrowRight'
-import Rari from './icons/Rari'
-import Terminal from './icons/Terminal'
+import ArrowNarrowRight from '../icons/ArrowNarrowRight'
+import Rari from '../icons/Rari'
+import Terminal from '../icons/Terminal'
 
 export default function HeroSection() {
   return (

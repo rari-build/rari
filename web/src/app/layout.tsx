@@ -1,10 +1,10 @@
 import type { LayoutProps, Metadata } from 'rari'
 import type { CSSProperties } from 'react'
-import Footer from '@/components/Footer'
-import { Providers } from '@/components/Providers'
-import Sidebar from '@/components/Sidebar'
+import Sidebar from '@/components/docs/Sidebar'
+import Footer from '@/components/marketing/Footer'
 import { getLatestRariVersion } from '@/lib/github'
 import { siteUrl } from '@/lib/site'
+import { Providers } from '@/providers'
 import './globals.css'
 
 export default async function Layout({ children, pathname }: LayoutProps) {

@@ -1,7 +1,7 @@
 import type { Metadata } from 'rari'
-import Breadcrumbs from '@/components/Breadcrumbs'
+import Breadcrumbs from '@/components/docs/Breadcrumbs'
+import PageHeader from '@/components/docs/PageHeader'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
-import PageHeader from '@/components/PageHeader'
 import { container, text } from '@/lib/site/styles'
 
 export default function ComponentsPage() {
