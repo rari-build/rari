@@ -15,11 +15,6 @@ body {
   min-height: calc(100vh - 5rem);
 }
 
-html.rari-nav-pending .rari-page-shell {
-  opacity: 0.72;
-  transition: opacity 120ms ease;
-}
-
 ::view-transition {
   pointer-events: none;
   background-color: var(--rari-page-bg);
@@ -37,32 +32,30 @@ html.rari-nav-pending .rari-page-shell {
   animation: none !important;
 }
 
-::view-transition-old(rari-site-nav),
-::view-transition-new(rari-site-nav) {
+::view-transition-group(rari-site-nav) {
+  z-index: 100;
+}
+
+::view-transition-old(rari-site-nav) {
   display: none !important;
+}
+
+::view-transition-new(rari-site-nav) {
   animation: none !important;
 }
 
 ::view-transition-old(.rari-page-vt) {
   animation-name: rari-page-exit !important;
-  animation-duration: var(--rari-vt-exit, 280ms) !important;
+  animation-duration: var(--rari-vt-exit) !important;
   animation-timing-function: ease-in !important;
   animation-fill-mode: both !important;
-  animation-delay: 0s !important;
-  animation-iteration-count: 1 !important;
-  height: 100%;
-  overflow: clip;
 }
 
 ::view-transition-new(.rari-page-vt) {
   animation-name: rari-page-enter !important;
-  animation-duration: var(--rari-vt-enter, 420ms) !important;
+  animation-duration: var(--rari-vt-enter) !important;
   animation-timing-function: ease-out !important;
   animation-fill-mode: both !important;
-  animation-delay: 0s !important;
-  animation-iteration-count: 1 !important;
-  height: 100%;
-  overflow: clip;
 }
 
 @keyframes rari-page-exit {
@@ -84,14 +77,9 @@ html.rari-nav-pending .rari-page-shell {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html.rari-nav-pending .rari-page-shell {
-    transition: none;
-  }
-
   ::view-transition-old(*),
   ::view-transition-new(*),
   ::view-transition-group(*) {
     animation-duration: 0s !important;
-    animation-delay: 0s !important;
   }
 }

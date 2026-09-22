@@ -32,22 +32,28 @@ body {
   animation: none !important;
 }
 
-::view-transition-old(rari-site-nav),
-::view-transition-new(rari-site-nav) {
+::view-transition-group(rari-site-nav) {
+  z-index: 100;
+}
+
+::view-transition-old(rari-site-nav) {
   display: none !important;
+}
+
+::view-transition-new(rari-site-nav) {
   animation: none !important;
 }
 
 ::view-transition-old(.rari-page-vt) {
   animation-name: rari-page-exit !important;
-  animation-duration: var(--rari-vt-exit, 240ms) !important;
+  animation-duration: var(--rari-vt-exit) !important;
   animation-timing-function: ease-in !important;
   animation-fill-mode: both !important;
 }
 
 ::view-transition-new(.rari-page-vt) {
   animation-name: rari-page-enter !important;
-  animation-duration: var(--rari-vt-enter, 240ms) !important;
+  animation-duration: var(--rari-vt-enter) !important;
   animation-timing-function: ease-out !important;
   animation-fill-mode: both !important;
 }
@@ -67,5 +73,13 @@ body {
   }
   to {
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
   }
 }
