@@ -473,12 +473,6 @@ impl Default for LoadingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[non_exhaustive]
-pub struct ViewTransitionsConfig {
-    pub enabled: bool,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct RscConfig {
@@ -502,8 +496,6 @@ pub struct Config {
     pub rsc_html: RscHtmlConfig,
     pub caching: CacheControlConfig,
     pub loading: LoadingConfig,
-    #[serde(default)]
-    pub view_transitions: ViewTransitionsConfig,
     #[serde(default)]
     pub cors: CorsConfig,
     #[serde(default)]
@@ -824,12 +816,6 @@ impl Config {
                     }
                 }
 
-                if let Some(enabled) =
-                    config_data.get("viewTransitions").and_then(serde_json::Value::as_bool)
-                {
-                    config.view_transitions.enabled = enabled;
-                }
-
                 if let Some(pattern) =
                     config_data.get("htmlLimitedBots").and_then(serde_json::Value::as_str)
                 {
@@ -972,12 +958,6 @@ impl Config {
                 return Err(ConfigError::Config("RARI_JS_POOL_SIZE must be >= 1".to_string()));
             }
             config.server.js_pool_size = pool_size;
-        }
-
-        if let Ok(view_transitions_str) = env::var("RARI_VIEW_TRANSITIONS") {
-            config.view_transitions.enabled = view_transitions_str.cow_to_lowercase() == "true"
-                || view_transitions_str == "1"
-                || view_transitions_str.cow_to_lowercase() == "yes";
         }
 
         if let Ok(pattern) = env::var("RARI_HTML_LIMITED_BOTS") {

@@ -1,5 +1,6 @@
 import type { PageProps } from 'rari'
 import { getBlogPost } from '@/data/blog-posts'
+import { PageTransition } from '../../page-transition'
 
 export default function BlogPostPage({ params }: PageProps<{ readonly slug: string }>) {
   const { slug } = params
@@ -11,30 +12,32 @@ export default function BlogPostPage({ params }: PageProps<{ readonly slug: stri
   }
 
   return (
-    <div className="bg-white rounded-xl p-12 shadow-2xl">
-      <a
-        href="/blog"
-        className="text-indigo-600 no-underline text-sm mb-4 inline-block hover:text-indigo-700 transition-colors"
-      >
-        ← Back to Blog
-      </a>
+    <PageTransition>
+      <div className="bg-white rounded-xl p-12 shadow-2xl">
+        <a
+          href="/blog"
+          className="text-indigo-600 no-underline text-sm mb-4 inline-block hover:text-indigo-700 transition-colors"
+        >
+          ← Back to Blog
+        </a>
 
-      <h1 className="text-4xl mb-2 text-gray-900 font-bold">{post.title}</h1>
+        <h1 className="text-4xl mb-2 text-gray-900 font-bold">{post.title}</h1>
 
-      {post.date && (
-        <p className="text-gray-400 text-sm mb-8">
-          Published on
-          {post.date}
-        </p>
-      )}
+        {post.date && (
+          <p className="text-gray-400 text-sm mb-8">
+            Published on
+            {post.date}
+          </p>
+        )}
 
-      <div className="text-lg text-gray-600 leading-loose mb-8">{post.content}</div>
+        <div className="text-lg text-gray-600 leading-loose mb-8">{post.content}</div>
 
-      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mt-8">
-        <h3 className="mb-2 text-gray-900 font-semibold">Route Info:</h3>
-        <pre className="text-sm text-gray-700">{JSON.stringify({ slug }, null, 2)}</pre>
+        <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mt-8">
+          <h3 className="mb-2 text-gray-900 font-semibold">Route Info:</h3>
+          <pre className="text-sm text-gray-700">{JSON.stringify({ slug }, null, 2)}</pre>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   )
 }
 

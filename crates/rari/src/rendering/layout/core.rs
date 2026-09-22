@@ -1297,54 +1297,14 @@ impl LayoutRenderer {
         let pathname_json =
             serde_json::to_string(&context.pathname).unwrap_or_else(|_| "\"/\"".to_string());
 
-        let view_transitions_enabled =
-            Config::get().map(|config| config.view_transitions.enabled).unwrap_or(false);
-
-        let nav_vt_props = if view_transitions_enabled {
-            r"{
-                  name: 'rari-page',
-                  default: 'none',
-                  update: 'rari-reveal-enter',
-                  exit: 'none',
-                  share: {
-                    'nav-forward': 'rari-page-vt',
-                    'nav-traverse': 'rari-page-vt',
-                    'nav-replace': 'rari-page-vt',
-                    default: 'none',
-                  },
-                  enter: {
-                    'nav-forward': 'rari-page-vt',
-                    'nav-traverse': 'rari-page-vt',
-                    'nav-replace': 'rari-page-vt',
-                    default: 'none',
-                  },
-                }"
-            .to_string()
-        } else {
-            r"{
-                  name: 'rari-page',
-                  default: 'none',
-                  update: 'none',
-                  exit: 'none',
-                  share: 'none',
-                  enter: 'none',
-                }"
-            .to_string()
-        };
-
-        let wrap_nav_vt = |inner: &str| -> String {
-            format!("React.createElement(React.ViewTransition, {nav_vt_props}, {inner})")
-        };
-
         let page_render_script = if route_match.not_found.is_some() {
-            let wrapped = wrap_nav_vt("React.createElement(PageComponent, {})");
             format!(
                 r#"
                 const PageComponent = globalThis["{page_component_id}"];
                 if (!PageComponent || typeof PageComponent !== 'function') {{
                     throw new Error('Page component {page_component_id} not found');
                 }}
-                const pageElement = {wrapped};
+                const pageElement = React.createElement(PageComponent, {{}});
                 timings.pageRender = performance.now() - startPageRender;
                 "#
             )
@@ -1361,7 +1321,6 @@ impl LayoutRenderer {
                       )
                     : React.createElement(PageComponent, pageProps))"
                 .to_string();
-            let page_with_nav = wrap_nav_vt(&suspense_or_page);
 
             format!(
                 r#"
@@ -1389,10 +1348,9 @@ impl LayoutRenderer {
                 loading_file_path,
                 page_props_json,
                 if use_suspense { "true" } else { "false" },
-                page_with_nav,
+                suspense_or_page,
             )
         } else {
-            let wrapped = wrap_nav_vt("React.createElement(PageComponent, pageProps)");
             format!(
                 r#"
                 const PageComponent = globalThis["{page_component_id}"];
@@ -1400,7 +1358,7 @@ impl LayoutRenderer {
                     throw new Error('Page component {page_component_id} not found');
                 }}
                 const pageProps = {page_props_json};
-                const pageElement = {wrapped};
+                const pageElement = React.createElement(PageComponent, pageProps);
                 timings.pageRender = performance.now() - startPageRender;
                 "#
             )

@@ -49,5 +49,4 @@ export interface ServerConfig {
   jsPoolSize?: number
   origin?: string
   htmlLimitedBots?: string
-  viewTransitions?: boolean
 }

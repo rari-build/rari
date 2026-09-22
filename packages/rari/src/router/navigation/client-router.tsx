@@ -624,6 +624,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
             'Accept': 'text/x-component',
             'rari-navigation-id': String(navigationId),
           },
+          cache: 'no-store',
           signal: abortController.signal,
         })
 

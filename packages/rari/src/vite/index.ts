@@ -98,7 +98,6 @@ import { transformDefineMdxComponents } from './transform/mdx-components'
 import { createReactCompilerPlugin } from './transform/react-compiler'
 import { createReactRefreshPlugins } from './transform/react-refresh'
 import { getUseCacheTransform } from './transform/use-cache'
-import { detectViewTransitions } from './view-transitions'
 
 const DIST_NOT_BUILT_ERROR =
   '[rari] Runtime dist not built. Run `pnpm build` in the rari package first.'
@@ -462,11 +461,6 @@ export function rari(
   // oxlint-disable-next-line typescript/prefer-readonly-parameter-types RariOptions embeds optional peer option bags (oxc/mdx) that are not deeply readonly
   options: RariOptions = {},
 ): RariPlugin[] {
-  const projectRootForVt = path.resolve(
-    options.projectRoot != null && options.projectRoot !== '' ? options.projectRoot : process.cwd(),
-  )
-  const viewTransitionsEnabled = detectViewTransitions(projectRootForVt)
-
   if (options.jsPoolSize != null) {
     const size = options.jsPoolSize
     if (!Number.isInteger(size) || size < 1 || !Number.isFinite(size)) {
@@ -1384,7 +1378,6 @@ ${clientTransformedCode}`
             jsPoolSize: options.jsPoolSize,
             origin: options.origin,
             htmlLimitedBots: options.htmlLimitedBots,
-            viewTransitions: viewTransitionsEnabled,
             experimental: options.experimental,
             moduleAnalysisCache,
           })
@@ -1540,10 +1533,6 @@ ${clientTransformedCode}`
             (process.env.RARI_HTML_LIMITED_BOTS == null ||
               process.env.RARI_HTML_LIMITED_BOTS === '')
               ? { RARI_HTML_LIMITED_BOTS: options.htmlLimitedBots }
-              : {}),
-            ...(viewTransitionsEnabled &&
-            (process.env.RARI_VIEW_TRANSITIONS == null || process.env.RARI_VIEW_TRANSITIONS === '')
-              ? { RARI_VIEW_TRANSITIONS: 'true' }
               : {}),
           },
         })
@@ -2372,7 +2361,6 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     jsPoolSize: options.jsPoolSize,
     origin: options.origin,
     htmlLimitedBots: options.htmlLimitedBots,
-    viewTransitions: viewTransitionsEnabled,
     experimental: options.experimental,
     moduleAnalysisCache,
     mdx: options.mdx,
