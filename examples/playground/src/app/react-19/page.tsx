@@ -15,9 +15,9 @@ export default function React19Page() {
         </p>
         <p className="text-sm text-gray-500 mt-4">
           Soft navigations run inside <code>startTransition</code> with{' '}
-          <code>addTransitionType</code>. The framework nests a named <code>ViewTransition</code> (
-          <code>rari-page</code>) around Suspense; <code>loading.tsx</code> gets reveal{' '}
-          <code>exit</code> and the page gets reveal <code>enter</code>. Style those classes in CSS.
+          <code>addTransitionType</code>. A named <code>ViewTransition</code> (
+          <code>rari-page</code>) wraps Suspense so loading→content is a React <code>update</code> (
+          <code>rari-reveal-enter</code>); nav types drive share/enter. Style those classes in CSS.
           Nav stays frozen via <code>rari-site-nav</code>.
         </p>
       </div>
