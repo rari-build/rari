@@ -20,7 +20,6 @@ import {
   EXPORTED_CONST_FUNCTION_REGEX,
   EXPORTED_DEFAULT_ARROW_REGEX,
   EXPORTED_FUNCTION_REGEX,
-  TSX_EXT_REGEX,
 } from '@/shared/regex-constants'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
 import { contentHash } from '@/shared/utils/content-hash'
@@ -1058,6 +1057,7 @@ export class ServerComponentBuilder {
       const result = await buildSsrEntriesWithViteEnvironment({
         viteBuilder,
         entries: viteEntries,
+        minify: this.options.minify,
       })
       if (result == null) {
         throw new Error('Vite SSR environment build failed')
@@ -1421,7 +1421,6 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
   let builder: ServerComponentBuilder | null = null
   let projectRoot: string
   let resolvedViteOutDir: string
-  let isDev = false
   let resolvedAliases: Record<string, string> = {}
   let serverArtifactsEmitted = false
 
@@ -1508,7 +1507,6 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
     configResolved(config) {
       projectRoot = config.root
       resolvedViteOutDir = path.resolve(config.root, config.build.outDir)
-      isDev = config.command === 'serve'
       serverArtifactsEmitted = false
 
       const alias = readViteAliases(config)
@@ -1566,33 +1564,6 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
       serverArtifactsEmitted = true
       await emitPostBuildArtifacts()
-    },
-
-    async handleHotUpdate({ file }) {
-      if (!builder || !isDev) return
-
-      const relativePath = toPosixPath(path.relative(projectRoot, file))
-      if (!relativePath.startsWith('src/') || !TSX_EXT_REGEX.test(relativePath)) return
-
-      try {
-        const content = await fs.promises.readFile(file, 'utf-8')
-        const analysis = builder.getModuleAnalysis(file, content)
-        const isTracked = builder.hasComponent(file)
-        const eligible = isEligibleServerComponent(file, content, builder, analysis)
-
-        if (!eligible) {
-          if (isTracked) builder.removeComponent(file)
-
-          return
-        }
-
-        if (!isTracked) builder.addServerComponent(file, content, analysis)
-
-        builder.invalidateBuildCacheFor(file)
-        await builder.rebuildComponent(file)
-      } catch (error) {
-        console.error(`[rari] Build: Error rebuilding ${relativePath}:`, error)
-      }
     },
   }
 }
