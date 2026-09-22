@@ -1,8 +1,7 @@
 import type { PageProps } from 'rari'
 import { readFile } from 'node:fs/promises'
-import { getBlogFilePath, isValidSlug } from '@/lib/content'
-import { extractBasicMetadata } from '@/lib/metadata'
-import { generateOGImage } from '@/lib/og-image'
+import { extractBasicMetadata, getBlogFilePath, isValidSlug } from '@/lib/content'
+import { generateOGImage } from '@/lib/site'
 
 export default async function Image({ params }: PageProps) {
   const slug = params.slug

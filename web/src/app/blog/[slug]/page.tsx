@@ -1,9 +1,8 @@
 import type { PageProps } from 'rari'
 import { accessSync, readdirSync, readFileSync } from 'node:fs'
 import MdxRenderer from '@/components/MdxRenderer'
-import { getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
-import { extractBasicMetadata } from '@/lib/metadata'
-import { container } from '@/lib/styles'
+import { extractBasicMetadata, getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
+import { container } from '@/lib/site'
 
 const DEFAULT_METADATA = {
   title: 'rari Blog',

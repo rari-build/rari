@@ -1,4 +1,4 @@
-import { getBreadcrumbs } from '@/lib/docs-navigation'
+import { getBreadcrumbs } from '@/lib/content'
 import ChevronRight from './icons/ChevronRight'
 
 interface BreadcrumbsProps {

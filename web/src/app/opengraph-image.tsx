@@ -1,4 +1,4 @@
-import { generateOGImage } from '@/lib/og-image'
+import { generateOGImage } from '@/lib/site'
 
 export default function Image() {
   return generateOGImage({

@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
-import { container } from '@/lib/styles'
+import { container } from '@/lib/site'
 
 export default function EnterprisePage() {
   return (
