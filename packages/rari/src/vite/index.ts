@@ -1376,10 +1376,11 @@ ${clientTransformedCode}`
     },
 
     async configureServer(server) {
-      const projectRoot =
+      const projectRoot = path.resolve(
         options.projectRoot != null && options.projectRoot !== ''
           ? options.projectRoot
-          : process.cwd()
+          : process.cwd(),
+      )
       const srcDir = path.join(projectRoot, 'src')
       await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedOutDir)
 
@@ -1533,7 +1534,7 @@ ${clientTransformedCode}`
 
         rustServerProcess = spawn(binaryPath, args, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          cwd: process.cwd(),
+          cwd: projectRoot,
           env: {
             ...process.env,
             RUST_LOG:

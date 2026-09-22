@@ -1,8 +1,6 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 
 use std::{
-    env,
-    path::PathBuf,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -498,9 +496,7 @@ async fn handle_reload_component(
     component_id: String,
     bundle_path: String,
 ) -> Result<Json<Value>, StatusCode> {
-    let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    let bundle_full_path = match validate_safe_path(&project_root, &bundle_path).await {
+    let bundle_full_path = match validate_safe_path(&state.project_root, &bundle_path).await {
         Ok(path) => path,
         Err(e) => {
             tracing::error!(

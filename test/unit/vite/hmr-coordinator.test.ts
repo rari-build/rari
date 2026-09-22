@@ -19,6 +19,7 @@ interface MockServerComponentBuilder {
   getImportGraph: () => ReadonlyMap<string, ReadonlySet<string>>
   invalidateBuildCacheFor: (filePath: string) => void
   getModuleAnalysis: (filePath: string, source?: string) => ModuleAnalysis
+  getProjectRoot: () => string
 }
 
 interface MockFetchResponse {
@@ -79,6 +80,7 @@ describe('hmr coordinator', () => {
         const code = source ?? fs.readFileSync(filePath, 'utf-8')
         return analyzeModuleSource(code)
       }),
+      getProjectRoot: vi.fn(() => '/test'),
     }
 
     getModuleByIdMock = vi.fn()
