@@ -1406,7 +1406,7 @@ ${clientTransformedCode}`
 
           builder.setViteBuilder(
             await getOrCreateViteEmitBuilder({
-              root: server.config.root,
+              root: projectRoot,
               configFile: server.config.configFile,
               logLevel: 'error',
             }),
@@ -1847,7 +1847,7 @@ ${clientTransformedCode}`
       })
 
       server.httpServer?.on('close', () => {
-        clearViteEmitBuilder(server.config.root)
+        clearViteEmitBuilder(projectRoot)
         if (devServerComponentBuilder != null) {
           devServerComponentBuilder.setViteBuilder(null)
           devServerComponentBuilder = null
