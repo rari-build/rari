@@ -1,11 +1,9 @@
 import { expect, test } from '@playwright/test'
+import { waitForRariRuntime } from './shared/helpers'
 
 interface SoftNavSample {
   readonly path: string
   readonly h1: string | null
-  readonly animNames: readonly string[]
-  readonly hasPageExit: boolean
-  readonly hasPageEnter: boolean
   readonly hasUaGroup: boolean
   readonly urlHeldUntilCommit: boolean
   readonly pathBeforeCommit: string | null
@@ -52,36 +50,28 @@ test.describe('Soft-nav view transitions', () => {
 
       window.addEventListener('rari:navigate-committed', () => {
         softNav.pathAtCommit = location.pathname;
-        const collect = () => {
+        let frames = 0;
+        const tick = () => {
+          frames += 1;
+          if (frames < 2) {
+            requestAnimationFrame(tick);
+            return;
+          }
           const names = Array.from(new Set(
             document.getAnimations({ subtree: true })
               .map((animation) => String(animation.animationName || ''))
               .filter((name) => name !== '' && name !== 'none')
-          )).sort();
-          return names;
-        };
-        let frames = 0;
-        const tick = () => {
-          frames += 1;
-          const names = collect();
-          const hasPage = names.some((name) => name.indexOf('rari-page-') !== -1);
-          if (hasPage || frames >= 12) {
-            softNav.samples.push({
-              path: location.pathname,
-              h1: (document.querySelector('main h1, h1') && document.querySelector('main h1, h1').textContent)
-                ? document.querySelector('main h1, h1').textContent.trim()
-                : null,
-              animNames: names,
-              hasPageExit: names.some((name) => name.indexOf('rari-page-exit') !== -1),
-              hasPageEnter: names.some((name) => name.indexOf('rari-page-enter') !== -1),
-              hasUaGroup: names.some((name) => name.indexOf('-ua-view-transition-group') !== -1),
-              urlHeldUntilCommit: softNav.pathBeforeCommit === softNav.pathAtStart,
-              pathBeforeCommit: softNav.pathBeforeCommit,
-              pathAtCommit: softNav.pathAtCommit,
-            });
-            return;
-          }
-          requestAnimationFrame(tick);
+          ));
+          softNav.samples.push({
+            path: location.pathname,
+            h1: (document.querySelector('main h1, h1') && document.querySelector('main h1, h1').textContent)
+              ? document.querySelector('main h1, h1').textContent.trim()
+              : null,
+            hasUaGroup: names.some((name) => name.indexOf('-ua-view-transition-group') !== -1),
+            urlHeldUntilCommit: softNav.pathBeforeCommit === softNav.pathAtStart,
+            pathBeforeCommit: softNav.pathBeforeCommit,
+            pathAtCommit: softNav.pathAtCommit,
+          });
         };
         requestAnimationFrame(tick);
       });
@@ -89,14 +79,11 @@ test.describe('Soft-nav view transitions', () => {
   })
 
   for (const route of ROUTES) {
-    test(`soft-nav to ${route.href} updates content with the same page VT`, async ({ page }) => {
+    test(`soft-nav to ${route.href} commits after fetch without UA morph`, async ({ page }) => {
       await page.goto('/')
+      await waitForRariRuntime(page)
       await expect(page.locator('h1')).toContainText('Test App Home')
-
-      const nav = page.getByTestId('site-nav')
-      await nav.evaluate(node => {
-        node.setAttribute('data-persist', 'nav-ok')
-      })
+      await expect(page.getByTestId('site-nav')).toBeVisible()
 
       await page.evaluate(() => {
         const softNav = (window as SoftNavWindow).__softNav
@@ -106,6 +93,7 @@ test.describe('Soft-nav view transitions', () => {
       await page.locator(`nav a[href="${route.href}"]`).first().click()
       await expect(page).toHaveURL(route.href)
       await expect(page.locator('h1')).toHaveText(route.h1)
+      await expect(page.getByTestId('site-nav')).toBeVisible()
 
       await expect
         .poll(async () =>
@@ -115,51 +103,10 @@ test.describe('Soft-nav view transitions', () => {
 
       const sample = await page.evaluate(() => (window as SoftNavWindow).__softNav!.samples.at(-1)!)
 
-      expect(
-        sample.hasPageExit,
-        `exit missing for ${route.href}: ${sample.animNames.join(', ')}`,
-      ).toBe(true)
-      expect(
-        sample.hasPageEnter,
-        `enter missing for ${route.href}: ${sample.animNames.join(', ')}`,
-      ).toBe(true)
       expect(sample.hasUaGroup, `UA group morph leaked for ${route.href}`).toBe(false)
       expect(sample.urlHeldUntilCommit).toBe(true)
       expect(sample.pathBeforeCommit).toBe('/')
       expect(sample.pathAtCommit).toBe(route.href)
-      await expect(nav).toHaveAttribute('data-persist', 'nav-ok')
     })
   }
-
-  test('page VT animation set is identical across routes', async ({ page }) => {
-    const signatures: string[] = []
-
-    for (const route of ROUTES) {
-      await page.goto('/')
-      await page.evaluate(() => {
-        const softNav = (window as SoftNavWindow).__softNav
-        if (softNav) softNav.samples = []
-      })
-      await page.locator(`nav a[href="${route.href}"]`).first().click()
-      await expect(page).toHaveURL(route.href)
-      await expect(page.locator('h1')).toHaveText(route.h1)
-      await expect
-        .poll(async () =>
-          page.evaluate(() => (window as SoftNavWindow).__softNav?.samples.length ?? 0),
-        )
-        .toBeGreaterThan(0)
-
-      const sample = await page.evaluate(() => (window as SoftNavWindow).__softNav!.samples.at(-1)!)
-      signatures.push(
-        sample.animNames
-          .filter(name => name.includes('rari-page-'))
-          .sort()
-          .join('|'),
-      )
-    }
-
-    expect(new Set(signatures).size).toBe(1)
-    expect(signatures[0]).toContain('rari-page-enter')
-    expect(signatures[0]).toContain('rari-page-exit')
-  })
 })

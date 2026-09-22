@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rsc_soft_nav_keeps_root_layout_as_element() {
+    fn test_rsc_soft_nav_expands_root_layout_like_html() {
         let layouts = vec![LayoutInfo {
             component_id: "RootLayout".to_string(),
             is_root: true,
@@ -465,11 +465,11 @@ mod tests {
             true,
             "\"/\"",
             Some("stream-1"),
-            false,
+            true,
         );
 
-        assert!(script.contains("React.createElement(LayoutComponent0"));
-        assert!(!script.contains("LayoutComponent0(__layoutProps0)"));
+        assert!(script.contains("LayoutComponent0(__layoutProps0)"));
+        assert!(script.contains("catch (__layoutExpandError0)"));
     }
 
     #[test]
