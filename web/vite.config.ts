@@ -4,11 +4,13 @@ import { rari } from 'rari/vite'
 import { defineConfig } from 'vite-plus'
 import { monorepoFmt, monorepoLint } from '../.config/lint/monorepo'
 import { siteUrl } from './src/lib/site'
+import { stubUnusedMermaidDiagrams } from './vite/stub-unused-mermaid-diagrams'
 
 export default defineConfig({
   fmt: monorepoFmt,
   lint: monorepoLint,
   plugins: [
+    stubUnusedMermaidDiagrams(),
     rari({
       compiler: true,
       origin: siteUrl,
