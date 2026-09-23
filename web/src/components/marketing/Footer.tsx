@@ -5,8 +5,9 @@ import Bluesky from '../icons/Bluesky'
 import Discord from '../icons/Discord'
 import Github from '../icons/Github'
 
+const COPYRIGHT_YEAR = new Date().getFullYear()
+
 export default async function Footer() {
-  const currentYear = new Date().getFullYear()
   const stars = await getRepoStars()
   const commitHash = await getLatestCommitHash()
 
@@ -25,7 +26,7 @@ export default async function Footer() {
             >
               MIT License
             </a>{' '}
-            © {currentYear} Ryan Skinner
+            © {COPYRIGHT_YEAR} Ryan Skinner
             {commitHash != null && commitHash !== '' && (
               <>
                 {' '}

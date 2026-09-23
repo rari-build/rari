@@ -3,3 +3,7 @@ export async function sleep(ms: number) {
     setTimeout(resolve, ms)
   })
 }
+
+export function isoTimestamp(): string {
+  return new Date().toISOString()
+}

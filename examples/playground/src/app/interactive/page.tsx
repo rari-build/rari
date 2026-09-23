@@ -1,9 +1,12 @@
 import type { Metadata } from 'rari'
 import Counter from '@/components/Counter'
 import TodoList from '@/components/TodoList'
+import { isoTimestamp } from '@/utils/time'
 import { PageTransition } from '../page-transition'
 
 export default function InteractivePage() {
+  const renderedAt = isoTimestamp()
+
   return (
     <PageTransition>
       <div className="grid gap-8">
@@ -23,8 +26,8 @@ export default function InteractivePage() {
           <h3 className="text-gray-900 mb-4 text-xl font-semibold">Server Component Info</h3>
           <p className="text-gray-600 leading-relaxed">
             This text is rendered on the server at
-            <strong>{new Date().toISOString()}</strong>. The Counter and TodoList above are client
-            components that hydrate on the client.
+            <strong>{renderedAt}</strong>. The Counter and TodoList above are client components that
+            hydrate on the client.
           </p>
           <p className="text-gray-600 leading-relaxed mt-4">
             Try refreshing the page - the timestamp will update (server-rendered), but the counter
