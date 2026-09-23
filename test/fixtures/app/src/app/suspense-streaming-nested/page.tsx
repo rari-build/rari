@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Suspense } from 'react'
-import { sleep } from '../../utils/test-helpers'
+import { isoTimestamp, sleep } from '../../utils/test-helpers'
 
 export default function NestedSuspensePage() {
   return (
@@ -24,11 +24,10 @@ interface OuterProps {
 
 async function OuterComponent({ delay, children }: OuterProps) {
   await sleep(delay)
-  const timestamp = new Date().toISOString()
   return (
     <div data-testid="outer-content">
       <div>Outer content</div>
-      <div data-testid="outer-timestamp">{timestamp}</div>
+      <div data-testid="outer-timestamp">{isoTimestamp()}</div>
       {children}
     </div>
   )
@@ -41,10 +40,9 @@ interface InnerProps {
 
 async function InnerComponent({ delay, name }: InnerProps) {
   await sleep(delay)
-  const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>
-      {name}:{timestamp}
+      {name}:{isoTimestamp()}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { isoTimestamp } from '../../utils/test-helpers'
 
 export default function ParallelSuspensePage() {
   return (
@@ -23,10 +24,9 @@ async function SlowComponent({ name, delay }: SlowProps) {
   await new Promise<void>(resolve => {
     setTimeout(resolve, delay)
   })
-  const timestamp = new Date().toISOString()
   return (
     <div data-testid={`component-${name.toLowerCase()}`}>
-      {name}:{timestamp}
+      {name}:{isoTimestamp()}
     </div>
   )
 }

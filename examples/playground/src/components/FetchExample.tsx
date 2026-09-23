@@ -1,3 +1,5 @@
+import { localTimestamp } from '@/utils/time'
+
 interface JsonPlaceholderPost {
   id: number
   title: string
@@ -5,7 +7,7 @@ interface JsonPlaceholderPost {
   userId: number
 }
 
-export default async function FetchExample() {
+async function fetchJsonPlaceholderPost(): Promise<JsonPlaceholderPost> {
   const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
 
   if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`)
@@ -26,13 +28,17 @@ export default async function FetchExample() {
     throw new Error('Invalid JSONPlaceholder response')
   }
 
-  const post: JsonPlaceholderPost = {
+  return {
     id: payload.id,
     title: payload.title,
     body: payload.body,
     userId: payload.userId,
   }
-  const currentTime = new Date().toLocaleTimeString()
+}
+
+export default async function FetchExample() {
+  const post = await fetchJsonPlaceholderPost()
+  const currentTime = localTimestamp()
 
   return (
     <div className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm mb-4">

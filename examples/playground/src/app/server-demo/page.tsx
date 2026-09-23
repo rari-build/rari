@@ -1,8 +1,9 @@
 import FetchExample from '@/components/FetchExample'
+import { isoTimestamp } from '@/utils/time'
 import { PageTransition } from '../page-transition'
 
 export default function ServerDemoPage() {
-  const serverTime = new Date().toISOString()
+  const serverTime = isoTimestamp()
 
   return (
     <PageTransition>
