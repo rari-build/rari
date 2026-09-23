@@ -1,10 +1,13 @@
 $ErrorActionPreference = 'Stop'
 
 $searchRoots = @(
+  $env:REDIS_HOME,
   "$env:ChocolateyInstall\lib\redis",
   "$env:ChocolateyInstall\lib\redis-64",
-  "C:\ProgramData\chocolatey\lib\redis",
-  "C:\ProgramData\chocolatey\lib\redis-64"
+  "$env:ChocolateyInstall\bin",
+  'C:\ProgramData\chocolatey\lib\redis',
+  'C:\ProgramData\chocolatey\lib\redis-64',
+  'C:\ProgramData\chocolatey\bin'
 ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
 function Find-RedisExecutable {
@@ -19,6 +22,11 @@ function Find-RedisExecutable {
 
   foreach ($root in $searchRoots) {
     foreach ($name in $Names) {
+      $direct = Join-Path $root $name
+      if (Test-Path -LiteralPath $direct) {
+        return (Resolve-Path -LiteralPath $direct).Path
+      }
+
       $file = Get-ChildItem -Path $root -Filter $name -Recurse -File -ErrorAction SilentlyContinue |
         Select-Object -First 1
       if ($file) {
@@ -34,6 +42,8 @@ $redisService = Find-RedisExecutable @('RedisService.exe')
 $redisServer = Find-RedisExecutable @('redis-server.exe', 'redis-server')
 $redisCli = Find-RedisExecutable @('redis-cli.exe', 'redis-cli')
 
+Write-Host "REDIS_HOME: $env:REDIS_HOME"
+Write-Host "Search roots: $($searchRoots -join '; ')"
 Write-Host "RedisService: $redisService"
 Write-Host "redis-server: $redisServer"
 Write-Host "redis-cli: $redisCli"

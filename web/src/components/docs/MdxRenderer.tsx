@@ -11,6 +11,7 @@ import Heading from '@/components/docs/Heading'
 import PageHeader from '@/components/docs/PageHeader'
 import { getContentRoot } from '@/lib/content'
 import { extractBlogMetadata } from '@/lib/content/metadata'
+import { withMdxEvaluateCache } from '@/lib/mdx/evaluate-cached'
 import { remarkCodeBlock } from '@/lib/mdx/remark-codeblock'
 import { getHighlighter, SHIKI_THEMES } from '@/lib/mdx/shiki'
 
@@ -33,7 +34,7 @@ function PageHeaderWithFilePath({
   blogMetadata,
   ...props
 }: ComponentProps<typeof PageHeader> &
-  Readonly<Readonly<{ readonly filePath: string; readonly blogMetadata?: BlogMetadata }>>) {
+  Readonly<{ readonly filePath: string; readonly blogMetadata?: BlogMetadata }>) {
   return <PageHeader {...blogMetadata} {...props} filePath={filePath} />
 }
 
@@ -50,6 +51,21 @@ function createMdxComponents(filePath: string, blogMetadata?: BlogMetadata) {
   }
 }
 
+async function evaluateMdx(filePath: string, content: string): Promise<ComponentType> {
+  const highlighter = await getHighlighter()
+  const remarkPlugins: any[] = [remarkGfm, [remarkCodeBlock, { highlighter, themes: SHIKI_THEMES }]]
+
+  const blogMetadata = filePath.startsWith('blog/') ? extractBlogMetadata(content) : undefined
+  const evaluated = await evaluate(content, {
+    ...runtime,
+    baseUrl: import.meta.url,
+    development: false,
+    remarkPlugins,
+    components: createMdxComponents(filePath, blogMetadata),
+  })
+  return evaluated.default
+}
+
 export default async function MdxRenderer({
   filePath,
   className = '',
@@ -59,26 +75,10 @@ export default async function MdxRenderer({
   if (content == null || content === '') return <NotFoundPage />
 
   let MDXContent: ComponentType
-  let blogMetadata: BlogMetadata | undefined
-
   try {
-    const highlighter = await getHighlighter()
-    const remarkPlugins: any[] = [
-      remarkGfm,
-      [remarkCodeBlock, { highlighter, themes: SHIKI_THEMES }],
-    ]
-
-    const isBlogPost = filePath.startsWith('blog/')
-    blogMetadata = isBlogPost ? extractBlogMetadata(content) : undefined
-
-    const evaluated = await evaluate(content, {
-      ...runtime,
-      baseUrl: import.meta.url,
-      development: false,
-      remarkPlugins,
-      components: createMdxComponents(filePath, blogMetadata),
-    })
-    MDXContent = evaluated.default
+    MDXContent = await withMdxEvaluateCache(filePath, content, async () =>
+      evaluateMdx(filePath, content),
+    )
   } catch (error) {
     console.error('Error rendering MDX:', error)
     throw error
