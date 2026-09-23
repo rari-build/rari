@@ -15,7 +15,7 @@ packages:
   - web
 catalogs:
   analytics:
-    posthog-js: ^1.434.5
+    posthog-js: ^1.434.6
   build:
     '@napi-rs/cli': ^3.10.4
     oxc-transform-react: ^0.151.0

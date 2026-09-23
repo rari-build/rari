@@ -165,8 +165,8 @@ settings:
 catalogs:
   analytics:
     posthog-js:
-      specifier: ^1.434.5
-      version: 1.434.5
+      specifier: ^1.434.6
+      version: 1.434.6
   build:
     '@napi-rs/cli':
       specifier: ^3.10.4
@@ -721,7 +721,7 @@ importers:
         version: 12.0.0
       posthog-js:
         specifier: catalog:analytics
-        version: 1.434.5(@types/react@19.3.0)(react@19.3.0)
+        version: 1.434.6(@types/react@19.3.0)(react@19.3.0)
       rari:
         specifier: workspace:*
         version: link:../packages/rari
@@ -4894,8 +4894,8 @@ packages:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.434.5:
-    resolution: {integrity: sha512-0bQsdC7RMnBV9fHH4XeD5Jp0a20SkW/SMOqgcNv99ISRopeZ5hDS9M/kEDTR8Ey+XQxo3SLQePdN9J+IUwyNzA==}
+  posthog-js@1.434.6:
+    resolution: {integrity: sha512-JxE1nViv2OAYhx+o4CKT1fvEZRLwQcFElEAp3g/cT+Z8lPw0LjxyGIE+lmi0mj1AUrZyXorovsMEeNhhuhpiXw==}
     peerDependencies:
       '@types/react': '>=16.8.0'
       react: '>=16.8.0'
@@ -9643,7 +9643,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.434.5(@types/react@19.3.0)(react@19.3.0):
+  posthog-js@1.434.6(@types/react@19.3.0)(react@19.3.0):
     dependencies:
       '@posthog/browser-common': 0.9.0
       '@posthog/core': 1.55.1
