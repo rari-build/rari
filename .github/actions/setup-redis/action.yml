@@ -7,7 +7,70 @@ runs:
     - name: Install Redis (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: choco install redis -y --no-progress
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        choco install redis -y --no-progress
+        if ($LASTEXITCODE -ne 0) {
+          throw "choco install redis failed with exit code $LASTEXITCODE"
+        }
+
+        $chocoInstall = if ($env:ChocolateyInstall) { $env:ChocolateyInstall } else { 'C:\ProgramData\chocolatey' }
+        $profilePath = Join-Path $chocoInstall 'helpers\chocolateyProfile.psm1'
+        if (Test-Path -LiteralPath $profilePath) {
+          Import-Module $profilePath
+          refreshenv
+        }
+
+        # Ensure subsequent steps see Chocolatey shims.
+        $chocoBin = Join-Path $chocoInstall 'bin'
+        if (Test-Path -LiteralPath $chocoBin) {
+          $env:Path = "$chocoBin;$env:Path"
+          $chocoBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+        }
+
+        $searchRoots = @(
+          (Join-Path $chocoInstall 'lib\redis'),
+          (Join-Path $chocoInstall 'lib\redis-64'),
+          $chocoBin,
+          'C:\ProgramData\chocolatey\lib\redis',
+          'C:\ProgramData\chocolatey\lib\redis-64',
+          'C:\ProgramData\chocolatey\bin'
+        ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+        $cli = Get-Command redis-cli.exe -ErrorAction SilentlyContinue
+        if (-not $cli) {
+          foreach ($root in $searchRoots) {
+            $found = Get-ChildItem -Path $root -Filter 'redis-cli.exe' -Recurse -File -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) {
+              $cli = $found
+              break
+            }
+          }
+        }
+
+        if (-not $cli) {
+          Write-Host "ChocolateyInstall=$env:ChocolateyInstall"
+          Write-Host "PATH=$env:Path"
+          Write-Host 'chocolatey lib:'
+          Get-ChildItem (Join-Path $chocoInstall 'lib') -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host $_.FullName }
+          foreach ($root in $searchRoots) {
+            Write-Host "--- $root ---"
+            Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+              Select-Object -First 40 |
+              ForEach-Object { Write-Host $_.FullName }
+          }
+          throw 'redis-cli.exe was not found after choco install redis'
+        }
+
+        $redisCliPath = if ($cli.Source) { $cli.Source } else { $cli.FullName }
+        $redisHome = Split-Path -Parent $redisCliPath
+        "REDIS_HOME=$redisHome" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        $redisHome | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+        Write-Host "redis-cli: $redisCliPath"
+        Write-Host "REDIS_HOME=$redisHome"
 
     - name: Install Redis (Linux)
       if: runner.os == 'Linux'
