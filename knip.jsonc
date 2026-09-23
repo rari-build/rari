@@ -60,9 +60,9 @@
       "ignore": [
         "src/proxy.ts", // Proxy configuration file is used via Vite plugin
         "src/content/**/*.mdx", // Blog/docs MDX loaded via filesystem
-        "src/components/CodeBlock.tsx", // MDX client component
-        "src/components/MermaidChart.tsx", // MDX client component
-        "src/components/TerminalBlock.tsx", // MDX client component
+        "src/components/docs/CodeBlock.tsx", // MDX client component
+        "src/components/docs/MermaidChart.tsx", // MDX client component
+        "src/components/docs/TerminalBlock.tsx", // MDX client component
         "src/components/icons/File.tsx", // MDX client component
         "src/components/icons/Terminal2.tsx" // MDX client component
       ],

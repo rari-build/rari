@@ -1,10 +1,12 @@
 import path from 'node:path'
+import stylex from '@stylexjs/unplugin'
 import tailwindcss from '@tailwindcss/vite'
 import { rari } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
+    stylex.vite(),
     rari({
       cacheControl: {
         routes: {

@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "@rari/use-cache": "workspace:*",
+    "@stylexjs/stylex": "catalog:stylex",
     "rari": "workspace:*",
     "react": "catalog:react",
     "react-dom": "catalog:react"
   },
   "devDependencies": {
+    "@stylexjs/unplugin": "catalog:stylex",
     "@tailwindcss/vite": "catalog:tailwind",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
