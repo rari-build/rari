@@ -62,7 +62,11 @@ export function PostHog({ pathname }: Readonly<{ pathname?: string }>) {
     if (key == null || key === '' || host == null || host === '') return undefined
 
     const onInteraction = () => {
-      void loadAndInitPostHog(key, host).then(setClient)
+      void loadAndInitPostHog(key, host)
+        .then(setClient)
+        .catch((error: unknown) => {
+          console.warn('[PostHog] Failed to initialize:', error)
+        })
     }
 
     document.addEventListener('click', onInteraction, { once: true, passive: true })
