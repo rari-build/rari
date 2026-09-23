@@ -260,7 +260,7 @@ export async function buildEntriesWithViteEnvironment(
     buildConfig.emptyOutDir = false
     buildConfig.copyPublicDir = false
     buildConfig.emitAssets = true
-    buildConfig.minify = options.minify ?? false
+    buildConfig.minify = options.minify === true ? 'oxc' : false
     buildConfig.rolldownOptions = {
       ...previousRolldown,
       input,

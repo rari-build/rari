@@ -75,6 +75,48 @@ describe('buildRscEntriesWithViteEnvironment', () => {
     expect(buildConfig.rolldownOptions).toBe(previousRolldown)
   })
 
+  it('enables oxc minify when minify is true', async () => {
+    const buildConfig = {
+      write: false,
+      emptyOutDir: false,
+      copyPublicDir: false,
+      minify: false as boolean | 'oxc',
+      emitAssets: true,
+      rolldownOptions: {},
+    }
+    const build = vi.fn().mockImplementation(() => {
+      expect(buildConfig.minify).toBe('oxc')
+      return {
+        output: [
+          {
+            type: 'chunk',
+            isEntry: true,
+            name: 'App',
+            fileName: 'App.js',
+            code: 'export default function App() {}',
+          },
+        ],
+      }
+    })
+
+    await buildRscEntriesWithViteEnvironment({
+      viteBuilder: castMock<ViteBuilder>({
+        environments: {
+          rsc: {
+            init: async () => {},
+            config: { build: buildConfig },
+          },
+        },
+        build,
+      }),
+      entries: [{ componentId: 'App', filePath: '/src/App.tsx' }],
+      minify: true,
+    })
+
+    expect(build).toHaveBeenCalledOnce()
+    expect(buildConfig.minify).toBe(false)
+  })
+
   it('preserves binary non-css asset sources without utf-8 conversion', async () => {
     const buildConfig = {
       write: false,

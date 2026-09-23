@@ -1,5 +1,9 @@
 const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/
 
+export function currentYear(): number {
+  return new Date().getFullYear()
+}
+
 export function parseDate(dateString: string): Date {
   if (DATE_ONLY_REGEX.test(dateString)) return new Date(`${dateString}T12:00:00`)
 

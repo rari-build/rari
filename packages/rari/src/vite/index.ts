@@ -60,6 +60,7 @@ import {
   resolveModuleCachePath,
 } from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
+import { createSilenceReactDirectiveLogsPlugin } from './build/silence-directive-logs'
 import {
   buildClientHeadFromBundle,
   buildLayoutCssImportStatements,
@@ -2401,6 +2402,7 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
 
   plugins.push(
     mainPlugin,
+    createSilenceReactDirectiveLogsPlugin(),
     createStaticImagePlugin(),
     createFontPlugin(),
     webpackRequirePatchPlugin,
