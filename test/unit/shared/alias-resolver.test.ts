@@ -54,7 +54,7 @@ describe('alias-resolver', () => {
     })
 
     it('should resolve single-character @ alias with slash-prefixed imports', () => {
-      const source = '@/actions/todo-actions'
+      const source = '@/components/todo/actions'
       const aliases = {
         '@': '/project/src',
       }
@@ -62,7 +62,7 @@ describe('alias-resolver', () => {
 
       const result = resolveAlias(source, aliases, projectRoot)
 
-      expect(path.normalize(result!)).toBe(path.normalize('/project/src/actions/todo-actions'))
+      expect(path.normalize(result!)).toBe(path.normalize('/project/src/components/todo/actions'))
     })
 
     it('should handle alias with trailing slash', () => {

@@ -1,8 +1,8 @@
 'use client'
 
-import type { Todo, TodoActionState } from '@/actions/todo-actions'
+import type { Todo, TodoActionState } from './actions'
 import { useActionState, useEffect, useRef } from 'react'
-import { addTodo } from '@/actions/todo-actions'
+import { addTodo } from './actions'
 
 interface TodoFormProps {
   readonly onSuccess?: (todos?: readonly Todo[]) => void
