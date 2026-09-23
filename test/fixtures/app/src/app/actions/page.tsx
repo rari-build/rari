@@ -1,5 +1,5 @@
-import { getTodos } from '@/actions/todo-actions'
-import TodoApp from '@/components/TodoApp'
+import { getTodos } from '@/components/todo/actions'
+import TodoApp from '@/components/todo/TodoApp'
 
 export default async function ActionsPage() {
   const initialTodos = await getTodos()

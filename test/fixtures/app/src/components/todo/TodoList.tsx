@@ -1,8 +1,8 @@
 'use client'
 
-import type { Todo } from '@/actions/todo-actions'
+import type { Todo } from './actions'
 import { useState, useTransition } from 'react'
-import { clearCompleted, deleteTodo, resetTodos, toggleTodo } from '@/actions/todo-actions'
+import { clearCompleted, deleteTodo, resetTodos, toggleTodo } from './actions'
 
 interface TodoListProps {
   readonly initialTodos: readonly Todo[]

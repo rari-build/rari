@@ -1,8 +1,8 @@
 'use client'
 
-import type { Todo } from '@/actions/todo-actions'
+import type { Todo } from './actions'
 import { useState } from 'react'
-import { getTodos } from '@/actions/todo-actions'
+import { getTodos } from './actions'
 import TodoForm from './TodoForm'
 import TodoList from './TodoList'
 
