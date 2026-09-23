@@ -14,12 +14,10 @@ const codeBlockRegex = /<CodeBlock[^>]*>[\s\S]*?<\/CodeBlock>/gi
 const terminalBlockRegex = /<TerminalBlock[^>]*\/>/gi
 const packageManagerTabsRegex = /<PackageManagerTabs[^>]*\/>/gi
 const pageHeaderRegex = /<PageHeader[^>]*\/>/gi
-const jsxComponentRegex = /<[A-Z]\w[^>]*>([^<]*)<\/[A-Z]\w+>/g
-const jsxSelfClosingRegex = /<[A-Z]\w[^>]*\/>/g
 const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
 const markdownLinkRegex = /\[([^\]]+)\]\([^)]+\)/g
-const htmlTagRegex = /<\/?[A-Z][^>]*>/gi
+const anyTagRegex = /<[^>]+>/g
 const markdownFormattingRegex = /[*_~]/g
 const headingRegex = /^#{1,6}\s+/gm
 const listMarkerRegex = /^(?:[-*>+]|\d+\.)\s+/gm
@@ -76,9 +74,6 @@ function extractContent(mdxContent: string): {
   const title = titleMatch ? titleMatch[2] : ''
 
   let content = mdxContent
-  let previousContent = ''
-
-  content = content
     .replace(relatedSectionRegex, '')
     .replace(exportRegex, '')
     .replace(importRegex, '')
@@ -90,14 +85,11 @@ function extractContent(mdxContent: string): {
     .replace(propertyDefRegex, '')
     .replace(markdownTableRegex, '')
 
+  let previousContent = ''
   while (content !== previousContent) {
     previousContent = content
-
-    content = content.replace(jsxComponentRegex, '$1')
-    content = content.replace(jsxSelfClosingRegex, '')
-    content = content.replace(htmlTagRegex, '')
+    content = content.replace(anyTagRegex, '')
   }
-
   content = content.replace(angleBracketRegex, '')
 
   content = content
