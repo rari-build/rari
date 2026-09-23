@@ -13,9 +13,10 @@ export function rewriteExternalRequires(
   // Unminified Rolldown emits `__require("pkg")`. Minified output uses a short
   // CJS interop helper: `l=(e=>typeof require...` or with a PURE annotation
   // `t=/* @__PURE__ */ (e=>typeof require...`, called as `l(\`pkg\`)`.
-  const minifiedHelper = /([A-Za-z_$][\w$]*)=\s*(?:\/\*[\s\S]*?\*\/\s*)*\(e=>typeof require/.exec(
-    result,
-  )?.[1]
+  const minifiedHelper =
+    /([A-Za-z_$][\w$]*)=\s*(?:\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)*\(e=>typeof require/.exec(
+      result,
+    )?.[1]
 
   for (const [pkg, target] of Object.entries(externals)) {
     const ident = `__ext_${pkg.replace(/\W/g, '_')}`
