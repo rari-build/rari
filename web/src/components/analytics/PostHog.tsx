@@ -16,6 +16,21 @@ function isRariNavigateEvent(event: Event): event is CustomEvent<{ to: string }>
   )
 }
 
+async function loadAndInitPostHog(key: string, host: string): Promise<PostHogClient> {
+  const { default: posthog } = await import('posthog-js')
+  if (!posthog.__loaded) {
+    posthog.init(key, {
+      api_host: host,
+      person_profiles: 'always',
+      capture_pageview: false,
+      capture_pageleave: true,
+      defaults: '2026-01-30',
+      disable_beacon: true,
+    })
+  }
+  return posthog
+}
+
 function usePostHogPageViews(pathname: string | undefined, posthog: PostHogClient | null) {
   useEffect(() => {
     if (pathname != null && pathname !== '' && posthog != null) {
@@ -46,22 +61,8 @@ export function PostHog({ pathname }: Readonly<{ pathname?: string }>) {
     const host = import.meta.env.VITE_POSTHOG_HOST
     if (key == null || key === '' || host == null || host === '') return undefined
 
-    const load = async () => {
-      const { default: posthog } = await import('posthog-js')
-      if (posthog.__loaded) return
-      posthog.init(key, {
-        api_host: host,
-        person_profiles: 'always',
-        capture_pageview: false,
-        capture_pageleave: true,
-        defaults: '2026-01-30',
-        disable_beacon: true,
-      })
-      setClient(posthog)
-    }
-
     const onInteraction = () => {
-      void load()
+      void loadAndInitPostHog(key, host).then(setClient)
     }
 
     document.addEventListener('click', onInteraction, { once: true, passive: true })
