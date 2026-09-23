@@ -1,3 +1,150 @@
+## [rari@0.16.0] - 2026-09-23
+
+## Highlights
+
+- **Layout-owned documents:** root layouts own `<html>` / `<body>`. The client hydrates on `document` (no `#root` shell). Production emits `rari-client-head.html` and pulls layout CSS into the Vite client entry.
+- **Vite environments for RSC/SSR:** prod, HMR, and metadata emit through Vite `createBuilder` / environment builds with `sharedPlugins: true`. User Vite plugins run on server modules.
+- **React 19.3 View Transitions:** soft navigations and loading → content reveals use React’s `ViewTransition` / transition types.
+- **`rari/font`:** `rari/font/local` and `rari/font/google` self-host fonts at build time (Capsize fallbacks, subsets/preload, generated Google typings).
+- **Static image imports:** `import img from './photo.png'` yields hashed `/assets` URLs and `StaticImageData` for `rari/image`.
+- **App icons:** file-convention icons (`favicon`, `icon`, `apple-icon`) resolve into metadata and production assets.
+- **Proxy middleware:** `proxy.ts` still authors the middleware; static redirects/rewrites emit `proxy.json` and run in Rust. Path matchers (including optional segments) are supported; JS bundles only when analysis finds runtime logic.
+- **Dev DX:** vendored React Refresh runtime, stronger layout CSS / head injection, and HMR fixes for app-router reloads.
+
+## Breaking Changes
+
+- **Node.js:** `engines.node` is now `>=24.21.0` (was `>=22.18.0`). Update local toolchains, Docker images, and host `engines` fields.
+- **React:** peers target React **19.3** (`react` / `react-dom` / `react-server-dom-webpack`). Upgrade before relying on View Transitions navigations.
+- **Remove `index.html`:** delete project `index.html` and any `#root` mount. The root layout must return `<html>` and `<body>` (include `<head />` when you need a head slot). Client entry is virtual (`virtual:rari-entry-client`); hydration targets `document`.
+- **Soft navigation + root layout:** soft navigations expand the root layout like full HTML renders. Keep persistent chrome in a client component under the root layout so it does not remount on every soft nav.
+
+### 🚀 Features
+
+- add static image imports with hashed assets and optimizer resolution by @skiniks
+- add rari/font loaders for local and Google fonts by @skiniks
+- enhance Google font handling with validation and timeout management by @skiniks
+- implement code span masking to ignore font imports in comments and strings by @skiniks
+- enhance CSS link injection to ignore hrefs in non-attribute contexts by @skiniks
+- implement HTML comment masking and enhance CSS font stack handling by @skiniks
+- enhance HTML masking functions to preserve newlines and improve link scanning by @skiniks
+- improve HTML attribute value extraction logic and add test for CSS link injection by @skiniks
+- enhance HTML tag parsing and link handling in RscHtmlRenderer by @skiniks
+- add React 19.3 support with View Transitions and loading-aware navigations by @skiniks
+- add fallback mechanism for template component resolution in RouteComposer by @skiniks
+- implement navigation transitions and enhance template resolution in app router by @skiniks
+- enhance navigation state management and event handling in AppRouterProvider by @skiniks
+- add data attribute for navigation transitions and enhance form state handling by @skiniks
+- enhance form data handling and improve error resilience in streaming tests by @skiniks
+- implement navigation settlement handling in ClientRouter for improved error management by @skiniks
+- update ClientRouter to track committed URL for improved navigation state management by @skiniks
+- emit proxy.json and apply static rules in Rust without JS by @skiniks
+- add support for path matchers in proxy configuration by @skiniks
+- enhance path matching capabilities in proxy middleware and add tests for optional parameters by @skiniks
+- improve path normalization and matching in proxy middleware, enhance matcher tests for optional parameters by @skiniks
+- enhance matcher binding resolution and improve URL handling in navigation by @skiniks
+- add support for extracting config objects in proxy analysis and enhance matcher resolution logic by @skiniks
+- enhance proxy analysis and navigation handling with improved matcher resolution and string parsing by @skiniks
+- enhance regex handling and string decoding in proxy analysis by @skiniks
+- improve regex literal recognition and line continuation handling in proxy analysis by @skiniks
+- enhance regex literal recognition and line comment handling in proxy analysis by @skiniks
+- improve template SSR module key normalization and enhance tests for path resolution by @skiniks
+- refactor route component path normalization and enhance matcher extraction logic in proxy analysis by @skiniks
+- enhance computed property key handling and runtime enforcement in proxy analysis by @skiniks
+- enhance matcher extraction logic to support quoted keys and improve runtime enforcement in proxy analysis by @skiniks
+- replace index.html shell with layout-owned document rendering by @skiniks
+- refactor RscHtmlRenderer to accept public directory and update related usages by @skiniks
+- add find_closing_head_tag utility and refactor head tag injection logic in RscHtmlRenderer by @skiniks
+- implement HTML masking functions and enhance head tag handling in RscHtmlRenderer by @skiniks
+- enhance CSS asset handling and improve error management in ServerComponentBuilder by @skiniks
+- refactor origin validation logic in server actions and enhance MDX content handling by @skiniks
+- enhance CSS import handling by preserving absolute paths and stripping bare package imports by @skiniks
+- improve CSS import processing by inlining local relative imports and stripping qualified bare package imports by @skiniks
+- enhance CSS import processing by extracting and applying layer, supports, and media qualifiers during local import inlining by @skiniks
+- add function to copy MDX content directories, preserving earlier files in case of conflicts by @skiniks
+- refactor head tag scanning and client head generation for improved HTML rendering by @skiniks
+- refactor RouteComposer to separate nested and root layout handling, and introduce error boundary wrapping for improved error management by @skiniks
+- implement app icon management with resolution and injection into metadata for improved routing and rendering by @skiniks
+- enhance rendering with improved metadata handling and Vite integration, including new metadata head component and refactoring of HTML generation functions by @skiniks
+- improve error handling in rendering and warmup processes, including cancellation tracking and enhanced metadata validation by @skiniks
+- refactor layout rendering and route composition to support expanded root layouts and improve error handling in metadata injection by @skiniks
+- add display_server_url function to format server addresses and improve startup message clarity with tests for loopback and non-loopback IPs by @skiniks
+- enhance Vite integration with new React Refresh runtime and layout CSS handling, improving development experience and client-side rendering by @skiniks
+- enhance error handling in RouteComposer by introducing try-catch for layout component rendering and updating tests to validate error boundaries by @skiniks
+- enhance rendering logic by adding format_vite_origin_host function for better host formatting and improving request handling in Vite integration by @skiniks
+- add color attribute to icon descriptors and improve layout CSS import handling in Vite integration by @skiniks
+- add plugin to silence React directive logs and update build configurations by @skiniks
+
+### 🐛 Bug Fixes
+
+- update template string syntax in test for CSS link injection by @skiniks
+- correct template string syntax in RouteComposer tests by @skiniks
+- prevent unnecessary navigation processing by adding a guard clause in ClientRouter by @skiniks
+- update handleSameRouteNavigation and error handling to ensure consistent URL management and event emission in ClientRouter by @skiniks
+- update proxy initialization to return errors for missing rari package and executor by @skiniks
+- update condition for injecting flight in streaming_fizz to include headPending check by @skiniks
+- ensure HTML comments are masked correctly during head scanning in rendering functions by @skiniks
+- enhance error handling in layout rendering by ensuring captured elements are properly validated and updating timeout settings in streaming tests by @skiniks
+- restore app-router HMR reload and cross-origin refetch by @skiniks
+- restore app-router HMR emit for Rust runtime by @skiniks
+- update error message for useCacheTransform to include remote cache requirement by @skiniks
+
+### 🚜 Refactor
+
+- update import statement handling to track ranges and improve removal logic by @skiniks
+- streamline error boundary handling in RouteComposer and update image rendering logic by @skiniks
+- remove client_component_id from TemplateInfo and related usages by @skiniks
+- improve form state management and error handling in navigation components by @skiniks
+- streamline proxy initialization and enhance redirect handling by @skiniks
+- enhance error handling in proxy manifest loading and initialization by @skiniks
+- streamline layout rendering logic in RouteComposer by removing unnecessary try-catch and fallback mechanisms, enhancing clarity and performance by @skiniks
+- consolidate shared path, metadata, and Vite plugin helpers by @skiniks
+- improve process handling and cleanup logic in navigation and request processing by @skiniks
+- improve metadata module handling with dynamic file creation and cleanup by @skiniks
+- unify error handling across modules by replacing Error.isError with isError utility by @skiniks
+- streamline navigation error handling and URL parsing logic by @skiniks
+- simplify promise resolution and improve URL parsing consistency in navigation by @skiniks
+- enhance history key generation and update Rari version retrieval in layout by @skiniks
+- add clearCompiledProxyPatterns function and invoke it during ProxyExecutor initialization by @skiniks
+- enhance file resolution logic and add tests for directory imports by @skiniks
+- remove route info handling and related components by @skiniks
+- clean up unused code and improve configuration by @skiniks
+- remove unused Clippy lint attribute and improve test assertions by @skiniks
+- update component reload logic to handle unchanged states by @skiniks
+- make Vite environments authoritative for RSC/SSR emit by @skiniks
+- enhance CSS handling and server asset resolution by @skiniks
+- streamline CSS asset handling by @skiniks
+- update RSC entry emission to support code splitting options by @skiniks
+- improve layout CSS handling and binary asset support by @skiniks
+- simplify server build plugin by removing unused hot update logic and unnecessary variables by @skiniks
+- enhance project root handling in HMR and server components by @skiniks
+- update react refresh runtime script with upstream source links and metadata by @skiniks
+- update project root references in Vite builder and cleanup logic by @skiniks
+- standardize linting catalog references and update package dependencies by @skiniks
+- enhance buildStart logic to support asynchronous cache retrieval in Vite plugin by @skiniks
+- own page ViewTransition nesting in the layout composer by @skiniks
+- streamline suspense handling and update view transition logic by @skiniks
+- modify stale content handling to return undefined instead of current reference by @skiniks
+- migrate utility functions to dedicated modules and update import paths by @skiniks
+- implement view transitions configuration and detection logic by @skiniks
+- remove view transitions configuration and simplify layout rendering logic by @skiniks
+- enhance layout rendering by introducing SiteNav component and updating soft navigation tests by @skiniks
+
+### 🧪 Testing
+
+- add unit test for deduplication of unquoted CSS link hrefs with query strings by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- bump dependencies and harden image and Google Fonts tooling by @skiniks
+- update Rust toolchain version in CodSpeed workflow and improve state management in AppRouterProvider by @skiniks
+- update dependencies across multiple packages including async-compression, clap, and pnpm to latest versions for improved stability and features by @skiniks
+- update Node.js version requirements across documentation and configuration files to >=24.21.0 by @skiniks
+- update dependencies by @skiniks
+- prepare 0.16.0 with release notes and StyleX e2e by @skiniks
+- update lru dependency to 0.18.5 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.15.17...rari@0.16.0
 ## [rari@0.15.17] - 2026-09-02
 
 ### 🐛 Bug Fixes
