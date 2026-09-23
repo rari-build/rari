@@ -338,7 +338,7 @@ export class ServerComponentBuilder {
       const result = await buildRscEntriesWithViteEnvironment({
         viteBuilder,
         entries,
-        minify: options?.minify ?? false,
+        minify: options?.minify ?? this.options.minify,
         codeSplitting: options?.codeSplitting,
       })
       if (result == null) {
@@ -663,7 +663,7 @@ export class ServerComponentBuilder {
 
     const result = await this.emitRscEntries(
       entries.map(({ componentId, filePath }) => ({ componentId, filePath })),
-      { codeSplitting: false },
+      { minify: this.options.minify, codeSplitting: false },
     )
 
     for (const file of result.extraFiles) {
@@ -1531,6 +1531,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
         alias,
         assetsDir,
         outDir: resolvedViteOutDir,
+        minify: options.minify ?? config.mode === 'production',
       })
     },
 

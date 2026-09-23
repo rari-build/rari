@@ -1,15 +1,15 @@
 import { getLatestCommitHash, getRepoStars } from '@/lib/github'
 import { container } from '@/lib/site/styles'
+import { currentYear } from '@/lib/utils/date'
 import { formatCompactNumber } from '@/lib/utils/format'
 import Bluesky from '../icons/Bluesky'
 import Discord from '../icons/Discord'
 import Github from '../icons/Github'
 
-const COPYRIGHT_YEAR = new Date().getFullYear()
-
 export default async function Footer() {
   const stars = await getRepoStars()
   const commitHash = await getLatestCommitHash()
+  const copyrightYear = currentYear()
 
   return (
     <footer className="w-full bg-canvas rounded-t-md">
@@ -26,7 +26,7 @@ export default async function Footer() {
             >
               MIT License
             </a>{' '}
-            © {COPYRIGHT_YEAR} Ryan Skinner
+            © {copyrightYear} Ryan Skinner
             {commitHash != null && commitHash !== '' && (
               <>
                 {' '}

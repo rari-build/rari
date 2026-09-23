@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { defineConfig } from 'vite-plus'
 import { monorepoFmt, monorepoLint } from '../../.config/lint/monorepo'
+import { createSilenceReactDirectiveLogsPlugin } from './src/vite/build/silence-directive-logs'
 import { createReactCompilerPlugin } from './src/vite/transform/react-compiler'
 
 export default defineConfig({
@@ -45,7 +46,7 @@ export default defineConfig({
       'proxy/RariResponse': 'src/proxy/http/response.ts',
     },
     minify: true,
-    plugins: [createReactCompilerPlugin(true, 'library')],
+    plugins: [createSilenceReactDirectiveLogsPlugin(), createReactCompilerPlugin(true, 'library')],
     deps: {
       neverBundle: [
         '@mdx-js/mdx',

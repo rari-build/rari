@@ -41,6 +41,12 @@ function minifiedFixture(pkgs: readonly string[]): string {
   return `var l=(e=>typeof require<"u"?require:typeof Proxy<"u"?new Proxy(e,{get:(e,t)=>(typeof require<"u"?require:e)[t]}):e)(()=>{});${calls};export{}`
 }
 
+/** Rolldown 1.x minified shape with a PURE annotation before the helper. */
+function minifiedPureFixture(pkgs: readonly string[]): string {
+  const calls = pkgs.map(pkg => `t(\`${pkg}\`)`).join(';')
+  return `var t=/* @__PURE__ */ (e=>typeof require<\`u\`?require:typeof Proxy<\`u\`?new Proxy(e,{get:(e,t)=>(typeof require<\`u\`?require:e)[t]}):e)(function(e){if(typeof require<\`u\`)return require.apply(this,arguments);throw Error("no require")}),n=t;${calls};export{}`
+}
+
 describe('rewriteExternalRequires', () => {
   it.each(EXTERNALIZED_ENTRIES)(
     'rewrites minified helper requires for $name',
@@ -61,6 +67,28 @@ describe('rewriteExternalRequires', () => {
 
       expect(rewritten).not.toMatch(/\bl\(([`"'])react\1\)/)
       expect(rewritten).not.toMatch(/\bl\(([`"'])react-dom\1\)/)
+    },
+  )
+
+  it.each(EXTERNALIZED_ENTRIES)(
+    'rewrites PURE-annotated minified helper requires for $name',
+    ({ name, externals }) => {
+      const pkgs = Object.keys(externals)
+      const input = minifiedPureFixture(pkgs)
+
+      for (const pkg of pkgs) expect(packageStillRequired(input, pkg)).toBe(true)
+
+      const rewritten = rewriteExternalRequires(input, externals)
+      assertExternalsRewritten(name, rewritten, externals)
+
+      for (const [pkg, target] of Object.entries(externals)) {
+        expect(packageStillRequired(rewritten, pkg)).toBe(false)
+        expect(rewritten).toContain(`__ext_${pkg.replace(/\W/g, '_')}`)
+        expect(rewritten).toContain(`from '${target}'`)
+      }
+
+      expect(rewritten).not.toMatch(/\bt\(([`"'])react\1\)/)
+      expect(rewritten).not.toMatch(/\bt\(([`"'])react-dom\1\)/)
     },
   )
 
