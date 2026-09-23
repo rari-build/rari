@@ -381,6 +381,7 @@ jobs:
           pnpm --filter @rari/lint build
           pnpm --filter @rari/logger build
           pnpm --filter @rari/deploy build
+          pnpm --filter @rari/use-cache build
 
       - name: Build package
         run: pnpm --filter "${{ steps.pkg.outputs.name }}" build
