@@ -70,7 +70,7 @@ deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
 # === Async & Concurrency ===
-async-compression = { version = "0.4.47", features = ["brotli", "gzip", "tokio", "zstd"] }
+async-compression = { version = "0.4.48", features = ["brotli", "gzip", "tokio", "zstd"] }
 async-stream = "0.3.6"
 async-trait = "0.1.92"
 futures = "0.3.34"
@@ -152,7 +152,7 @@ dashmap = "6.2.1"
 lru = "0.18.4"
 parking_lot = { workspace = true }
 redis = { version = "1.7.0", default-features = false, features = ["tokio-comp"] }
-redb = "4.2.0"
+redb = "4.3.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
