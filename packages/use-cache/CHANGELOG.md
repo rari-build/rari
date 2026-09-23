@@ -1,3 +1,31 @@
+## [@rari/use-cache@0.16.0] - 2026-09-23
+
+## Highlights
+
+- **Layout-owned documents:** root layouts own `<html>` / `<body>`. The client hydrates on `document` (no `#root` shell). Production emits `rari-client-head.html` and pulls layout CSS into the Vite client entry.
+- **Vite environments for RSC/SSR:** prod, HMR, and metadata emit through Vite `createBuilder` / environment builds with `sharedPlugins: true`. User Vite plugins run on server modules.
+- **React 19.3 View Transitions:** soft navigations and loading → content reveals use React’s `ViewTransition` / transition types.
+- **`rari/font`:** `rari/font/local` and `rari/font/google` self-host fonts at build time (Capsize fallbacks, subsets/preload, generated Google typings).
+- **Static image imports:** `import img from './photo.png'` yields hashed `/assets` URLs and `StaticImageData` for `rari/image`.
+- **App icons:** file-convention icons (`favicon`, `icon`, `apple-icon`) resolve into metadata and production assets.
+- **Proxy middleware:** `proxy.ts` still authors the middleware; static redirects/rewrites emit `proxy.json` and run in Rust. Path matchers (including optional segments) are supported; JS bundles only when analysis finds runtime logic.
+- **Dev DX:** vendored React Refresh runtime, stronger layout CSS / head injection, and HMR fixes for app-router reloads.
+
+## Breaking Changes
+
+- **Node.js:** `engines.node` is now `>=24.21.0` (was `>=22.18.0`). Update local toolchains, Docker images, and host `engines` fields.
+- **React:** peers target React **19.3** (`react` / `react-dom` / `react-server-dom-webpack`). Upgrade before relying on View Transitions navigations.
+- **Remove `index.html`:** delete project `index.html` and any `#root` mount. The root layout must return `<html>` and `<body>` (include `<head />` when you need a head slot). Client entry is virtual (`virtual:rari-entry-client`); hydration targets `document`.
+- **Soft navigation + root layout:** soft navigations expand the root layout like full HTML renders. Keep persistent chrome in a client component under the root layout so it does not remount on every soft nav.
+
+### ⚙️ Miscellaneous Tasks
+
+- update dependencies across multiple packages including async-compression, clap, and pnpm to latest versions for improved stability and features by @skiniks
+- update Node.js version requirements across documentation and configuration files to >=24.21.0 by @skiniks
+- update dependencies by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.15.17...@rari/use-cache@0.16.0
 ## [@rari/use-cache@0.15.16] - 2026-08-31
 
 ### 🚜 Refactor
