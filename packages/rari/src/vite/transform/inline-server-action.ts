@@ -593,12 +593,20 @@ function isWsChar(ch: number): boolean {
 function skipBlockCommentBack(source: string, i: number): number | null {
   if (i < 2 || source.charCodeAt(i - 1) !== 47 || source.charCodeAt(i - 2) !== 42) return null
 
+  let commentStart = -1
   let j = i - 3
   while (j >= 0) {
-    if (source.charCodeAt(j) === 47 && source.charCodeAt(j + 1) === 42) return j
+    const ch = source.charCodeAt(j)
+    const next = source.charCodeAt(j + 1)
+    if (ch === 47 && next === 42) {
+      commentStart = j
+      j--
+      continue
+    }
+    if (ch === 42 && next === 47) break
     j--
   }
-  return null
+  return commentStart >= 0 ? commentStart : null
 }
 
 function skipWsBack(source: string, i: number): number {

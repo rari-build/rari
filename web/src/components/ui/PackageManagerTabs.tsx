@@ -48,10 +48,26 @@ function resolveCommands({
   }
 }
 
+function availableManagers(commands: PackageManagerCommands): PackageManager[] {
+  return PACKAGE_MANAGER_KEYS.filter(pm => commands[pm] !== '')
+}
+
+function resolveSelectedManager(
+  available: readonly PackageManager[],
+  preferred: PackageManager,
+): PackageManager {
+  if (available.length === 0) return 'pnpm'
+  if (available.includes(preferred)) return preferred
+  return available[0]
+}
+
 export default function PackageManagerTabs(props: PackageManagerTabsProps) {
   const commands = resolveCommands(props)
-  const { packageManager: activeTab, setPackageManager: setActiveTab } = usePackageManager()
+  const available = availableManagers(commands)
+  const { packageManager: preferred, setPackageManager: setActiveTab } = usePackageManager()
+  const selected = resolveSelectedManager(available, preferred)
   const { copied, copyToClipboard } = useClipboard()
+  const selectedCommand = commands[selected]
 
   return (
     <div className={code.panel}>
@@ -60,7 +76,7 @@ export default function PackageManagerTabs(props: PackageManagerTabsProps) {
         role="tablist"
         aria-label="Package manager selection"
       >
-        {PACKAGE_MANAGER_KEYS.map(pm => {
+        {available.map(pm => {
           const Icon = packageManagerIcons[pm]
           return (
             <button
@@ -72,14 +88,14 @@ export default function PackageManagerTabs(props: PackageManagerTabsProps) {
               relative inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded
               transition-colors duration-200 shrink-0
               ${
-                activeTab === pm
+                selected === pm
                   ? 'bg-surface text-fg shadow-sm'
                   : 'text-fg-muted hover:text-fg hover:bg-hover'
               }
             `}
               type="button"
               role="tab"
-              aria-selected={activeTab === pm}
+              aria-selected={selected === pm}
               aria-controls={`${pm}-panel`}
               id={`${pm}-tab`}
             >
@@ -93,15 +109,15 @@ export default function PackageManagerTabs(props: PackageManagerTabsProps) {
       <div
         className="relative"
         role="tabpanel"
-        id={`${activeTab}-panel`}
-        aria-labelledby={`${activeTab}-tab`}
+        id={`${selected}-panel`}
+        aria-labelledby={`${selected}-tab`}
       >
         <span className="absolute top-2 right-2 text-xs text-fg-muted font-mono opacity-100 lg:group-hover:opacity-0 transition-opacity duration-200 z-10">
           bash
         </span>
         <button
           onClick={() => {
-            void copyToClipboard(commands[activeTab])
+            void copyToClipboard(selectedCommand)
           }}
           className={`${code.copyButton} top-2`}
           type="button"
@@ -113,7 +129,7 @@ export default function PackageManagerTabs(props: PackageManagerTabsProps) {
         <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
           <code className="whitespace-pre wrap-break-word">
             <span className="text-fg-muted select-none">$ </span>
-            {highlightCommand(commands[activeTab])}
+            {highlightCommand(selectedCommand)}
           </code>
         </pre>
       </div>
