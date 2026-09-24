@@ -2,7 +2,7 @@ import type { Metadata } from 'rari'
 import Breadcrumbs from '@/components/docs/Breadcrumbs'
 import DocsContributePrompt from '@/components/docs/DocsContributePrompt'
 import PageHeader from '@/components/docs/PageHeader'
-import TrailCard from '@/components/ui/TrailCard'
+import TrailCard from '@/components/marketing/TrailCard'
 import { container } from '@/lib/site/styles'
 
 export default function ComponentsPage() {

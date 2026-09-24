@@ -1,8 +1,8 @@
 import type { Metadata } from 'rari'
 import News from '@/components/icons/News'
-import BlogPostCard from '@/components/marketing/BlogPostCard'
 import { getAllBlogPosts, isValidSlug } from '@/lib/content'
 import { container } from '@/lib/site/styles'
+import BlogPostCard from './_components/BlogPostCard'
 
 export default function BlogIndexPage() {
   const posts = getAllBlogPosts()
