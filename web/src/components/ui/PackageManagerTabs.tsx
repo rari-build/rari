@@ -12,13 +12,15 @@ import Npm from '../icons/Npm'
 import Pnpm from '../icons/Pnpm'
 import Yarn from '../icons/Yarn'
 
-interface PackageManagerTabsProps {
-  readonly commands: {
-    readonly pnpm: string
-    readonly npm: string
-    readonly yarn: string
-    readonly bun: string
-  }
+interface PackageManagerCommands {
+  readonly pnpm: string
+  readonly npm: string
+  readonly yarn: string
+  readonly bun: string
+}
+
+interface PackageManagerTabsProps extends Partial<PackageManagerCommands> {
+  readonly commands?: PackageManagerCommands
 }
 
 const PACKAGE_MANAGER_KEYS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
@@ -30,7 +32,24 @@ const packageManagerIcons: Record<PackageManager, React.ComponentType<{ classNam
   bun: Bun,
 }
 
-export default function PackageManagerTabs({ commands }: PackageManagerTabsProps) {
+function resolveCommands({
+  commands,
+  pnpm,
+  npm,
+  yarn,
+  bun,
+}: PackageManagerTabsProps): PackageManagerCommands {
+  if (commands != null) return commands
+  return {
+    pnpm: pnpm ?? '',
+    npm: npm ?? '',
+    yarn: yarn ?? '',
+    bun: bun ?? '',
+  }
+}
+
+export default function PackageManagerTabs(props: PackageManagerTabsProps) {
+  const commands = resolveCommands(props)
   const { packageManager: activeTab, setPackageManager: setActiveTab } = usePackageManager()
   const { copied, copyToClipboard } = useClipboard()
 

@@ -9,7 +9,8 @@ Use standard HTML `<a>` tags for navigation. The client router automatically int
 
 Just use regular anchor tags:
 
-<CodeBlock filename="src/app/page.tsx" language="tsx">{`export default function HomePage() {
+```tsx title="src/app/page.tsx"
+export default function HomePage() {
   return (
     <nav>
       <a href="/">Home</a>
@@ -18,7 +19,7 @@ Just use regular anchor tags:
     </nav>
   )
 }
-`}</CodeBlock>
+```
 
 That's it. No imports, no special components, no learning curve. If you know HTML, you know how to navigate in rari.
 
@@ -41,7 +42,8 @@ This gives you instant navigation with no full-page reloads, while keeping your 
 
 Layouts don't re-render during navigation. If you have a sidebar, header, or any shared UI in a layout component, it stays mounted and preserves its state:
 
-<CodeBlock filename="src/app/dashboard/layout.tsx" language="tsx">{`import { useState } from 'react'
+```tsx title="src/app/dashboard/layout.tsx"
+import { useState } from 'react'
 import type { LayoutProps } from 'rari'
 
 export default function DashboardLayout({ children }: LayoutProps) {
@@ -64,7 +66,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 Navigating between `/dashboard/analytics` and `/dashboard/settings` only swaps the page content. The sidebar stays mounted with `sidebarOpen` intact.
 
@@ -75,6 +77,7 @@ Only the changed content is fetched and streamed. If you navigate from `/blog` t
 ### Optimized Performance
 
 The router includes built-in optimizations:
+
 - Debounced navigation to prevent rapid-fire requests
 - Automatic request cancellation when navigating away
 - Route info caching to avoid redundant fetches
@@ -84,7 +87,8 @@ The router includes built-in optimizations:
 
 Since links are just `<a>` tags, style them however you want. CSS, Tailwind, CSS modules, styled-components, anything:
 
-<CodeBlock filename="src/app/components/Navigation.tsx" language="tsx">{`export default function Navigation() {
+```tsx title="src/app/components/Navigation.tsx"
+export default function Navigation() {
   return (
     <nav className="flex gap-4">
       <a
@@ -102,13 +106,14 @@ Since links are just `<a>` tags, style them however you want. CSS, Tailwind, CSS
     </nav>
   )
 }
-`}</CodeBlock>
+```
 
 ## Active Link Styling
 
 Use the `pathname` prop available in layouts and pages to style active links:
 
-<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+```tsx title="src/app/layout.tsx"
+import type { LayoutProps } from 'rari'
 
 export default function Layout({ children, pathname }: LayoutProps) {
   const isActive = (path: string) => pathname === path
@@ -136,11 +141,12 @@ export default function Layout({ children, pathname }: LayoutProps) {
     </html>
   )
 }
-`}</CodeBlock>
+```
 
 For more complex active state logic, you can check if the pathname starts with a certain path:
 
-<CodeBlock language="tsx">{`const isActiveSection = (path: string) => pathname?.startsWith(path)
+```tsx
+const isActiveSection = (path: string) => pathname?.startsWith(path)
 
 <a
   href="/docs/getting-started"
@@ -148,13 +154,14 @@ For more complex active state logic, you can check if the pathname starts with a
 >
   Documentation
 </a>
-`}</CodeBlock>
+```
 
 ## External Links
 
 External links work exactly as you'd expect. They're not intercepted and perform normal browser navigation:
 
-<CodeBlock language="tsx">{`export default function Footer() {
+```tsx
+export default function Footer() {
   return (
     <footer>
       <a href="https://github.com/your-repo" target="_blank" rel="noopener noreferrer">
@@ -166,7 +173,7 @@ External links work exactly as you'd expect. They're not intercepted and perform
     </footer>
   )
 }
-`}</CodeBlock>
+```
 
 The router automatically detects external URLs and lets the browser handle them normally.
 
@@ -176,12 +183,13 @@ The router automatically detects external URLs and lets the browser handle them 
 
 Hash links scroll to elements on the current page:
 
-<CodeBlock language="tsx">{`<a href="#features">Jump to Features</a>
+```tsx
+<a href="#features">Jump to Features</a>
 
 <section id="features">
   <h2>Features</h2>
 </section>
-`}</CodeBlock>
+```
 
 The router intercepts hash links and performs smooth scrolling to the target element.
 
@@ -189,10 +197,11 @@ The router intercepts hash links and performs smooth scrolling to the target ele
 
 Links with the `download` attribute are not intercepted:
 
-<CodeBlock language="tsx">{`<a href="/files/report.pdf" download>
+```tsx
+<a href="/files/report.pdf" download>
   Download Report
 </a>
-`}</CodeBlock>
+```
 
 ### Modified Clicks
 
@@ -206,10 +215,11 @@ Links clicked with modifier keys (Ctrl, Cmd, Shift, Alt) are not intercepted, al
 
 Links with `target` attributes other than `_self` are not intercepted:
 
-<CodeBlock language="tsx">{`<a href="/admin" target="_blank">
+```tsx
+<a href="/admin" target="_blank">
   Open Admin in New Tab
 </a>
-`}</CodeBlock>
+```
 
 ## Programmatic Navigation
 
@@ -219,7 +229,8 @@ Sometimes you need to navigate in response to events, form submissions, or condi
 
 For navigation from non-component code (e.g., event handlers, utilities, or server/standalone scripts), import `navigate` directly. Inside React components, prefer `useRouter` for in-component navigation:
 
-<CodeBlock filename="src/app/components/SearchForm.tsx" language="tsx">{`'use client'
+```tsx title="src/app/components/SearchForm.tsx"
+'use client'
 
 import { navigate } from 'rari/router'
 
@@ -228,7 +239,7 @@ export default function SearchForm() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const query = formData.get('q') as string
-    await navigate(\`/search?q=\${encodeURIComponent(query)}\`)
+    await navigate(`/search?q=${encodeURIComponent(query)}`)
   }
 
   return (
@@ -238,13 +249,14 @@ export default function SearchForm() {
     </form>
   )
 }
-`}</CodeBlock>
+```
 
 `navigate` accepts an optional second argument with navigation options:
 
-<CodeBlock language="tsx">{`// Replace the current history entry instead of pushing
+```tsx
+// Replace the current history entry instead of pushing
 await navigate('/dashboard', { replace: true })
-`}</CodeBlock>
+```
 
 The `navigate` function is client-side only. If called before the router initializes (during early hydration), it falls back to `window.location` automatically. When using the fallback, the `replace` option is respected by calling `window.location.replace(...)` instead of assigning `window.location.href`.
 
@@ -252,7 +264,8 @@ The `navigate` function is client-side only. If called before the router initial
 
 For React components that need full router access, `useRouter` gives you navigation methods plus reactive route state:
 
-<CodeBlock filename="src/app/components/LogoutButton.tsx" language="tsx">{`'use client'
+```tsx title="src/app/components/LogoutButton.tsx"
+'use client'
 
 import { useRouter } from 'rari/router'
 
@@ -266,34 +279,35 @@ export default function LogoutButton() {
 
   return <button onClick={handleLogout}>Log out</button>
 }
-`}</CodeBlock>
+```
 
 The hook returns:
 
-| Method / Property | Description |
-|---|---|
-| `push(href, options?)` | Navigate to a new URL (adds history entry) |
-| `replace(href, options?)` | Navigate without adding a history entry |
-| `back()` | Go back (equivalent to browser back button) |
-| `forward()` | Go forward |
-| `refresh()` | Re-render the current route |
-| `prefetch(href)` | Prefetch a route for faster future navigation |
-| `pathname` | Current pathname (reactive) |
-| `searchParams` | Current URL search params (reactive) |
+| Method / Property         | Description                                   |
+| ------------------------- | --------------------------------------------- |
+| `push(href, options?)`    | Navigate to a new URL (adds history entry)    |
+| `replace(href, options?)` | Navigate without adding a history entry       |
+| `back()`                  | Go back (equivalent to browser back button)   |
+| `forward()`               | Go forward                                    |
+| `refresh()`               | Re-render the current route                   |
+| `prefetch(href)`          | Prefetch a route for faster future navigation |
+| `pathname`                | Current pathname (reactive)                   |
+| `searchParams`            | Current URL search params (reactive)          |
 
 ### Navigation Options
 
 Both `navigate` and `router.push`/`router.replace` accept the same options:
 
-| Option | Type | Default | Description |
-|---|---|---|---|
+| Option    | Type      | Default | Description                                          |
+| --------- | --------- | ------- | ---------------------------------------------------- |
 | `replace` | `boolean` | `false` | Replace the current history entry instead of pushing |
 
 ### Convenience Hooks
 
 If you only need a specific piece of route state, use the focused hooks to avoid unnecessary re-renders:
 
-<CodeBlock language="tsx">{`'use client'
+```tsx
+'use client'
 
 import { usePathname, useSearchParams } from 'rari/router'
 
@@ -307,19 +321,20 @@ function FilteredList() {
   const sort = searchParams.get('sort')
   // ...
 }
-`}</CodeBlock>
+```
 
 ### When to Use What
 
 - **`<a>` tags**: the default. Use for all standard navigation.
 - **`navigate()`**: for navigation outside React components, or when you don't need reactive route state.
-- **`useRouter()`**: for components that need to navigate *and* read route state.
+- **`useRouter()`**: for components that need to navigate _and_ read route state.
 
 ## Prefetching
 
 You can prefetch routes programmatically using the `useRouter` hook:
 
-<CodeBlock language="tsx">{`'use client'
+```tsx
+'use client'
 
 import { useRouter } from 'rari/router'
 
@@ -332,7 +347,7 @@ export default function ProductCard({ href }: { href: string }) {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 Automatic link prefetching is not built in. The streaming architecture and route caching keep navigation fast enough that it hasn't been necessary. This may change in a future release based on feedback.
 

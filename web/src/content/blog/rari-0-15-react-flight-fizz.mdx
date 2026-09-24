@@ -60,7 +60,8 @@ On top of the Flight/Fizz work, we also shipped the first public cut of `'use ca
 
 Enable it explicitly:
 
-<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari } from 'rari/vite'
+```typescript title="vite.config.ts"
+import { rari } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -73,11 +74,12 @@ export default defineConfig({
     }),
   ],
 })
-`}</CodeBlock>
+```
 
 Then cache a function the usual way:
 
-<CodeBlock filename="src/app/example/page.tsx" language="tsx">{`async function getCachedData(label: string) {
+```tsx title="src/app/example/page.tsx"
+async function getCachedData(label: string) {
   'use cache'
   // expensive work runs once per cache key
   return label
@@ -88,7 +90,7 @@ export default async function Page() {
   const b = await getCachedData('first') // hits cache
   return <p>{a} / {b}</p>
 }
-`}</CodeBlock>
+```
 
 APIs in this release: `cacheLife`, `cacheTag`, `revalidateTag`, `revalidatePath`, `updateTag`.
 
@@ -111,9 +113,10 @@ If you need production-stable `use cache` with every Next semantic, wait. Turn t
 
 ## Try 0.15
 
-<CodeBlock language="bash">{`pnpm create rari-app@latest my-app
+```bash
+pnpm create rari-app@latest my-app
 # or bump an existing app to rari@0.15.3 and Node 22.18+
-`}</CodeBlock>
+```
 
 Upgrade checklist:
 
