@@ -80,6 +80,7 @@ const EXTERNAL_CLIENT_COMPONENT_MANIFESTS: Array<{
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
+
 function isRariInternalPath(filePath: string): boolean {
   return filePath.startsWith(RARI_PACKAGE_ROOT)
 }

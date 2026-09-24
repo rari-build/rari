@@ -171,6 +171,7 @@ export type Metadata = RouteMetadata
 export interface RouteParams {
   readonly [key: string]: string | readonly string[]
 }
+
 export interface SearchParams {
   readonly [key: string]: string | readonly string[] | undefined
 }

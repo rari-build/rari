@@ -20,7 +20,7 @@ async function initSentry(dsn: string) {
       Sentry.init({
         dsn,
         tracesSampleRate: 0.1,
-        environment: import.meta.env.VITE_SENTRY_ENV ?? import.meta.env.MODE,
+        environment: import.meta.env.MODE,
         integrations: [
           Sentry.browserTracingIntegration(),
           Sentry.replayIntegration({

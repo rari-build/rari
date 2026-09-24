@@ -84,6 +84,7 @@ export interface RscViteBuildEntry {
   readonly componentId: string
   readonly filePath: string
 }
+
 export type RscViteBuiltEntry = EnvViteBuiltEntry
 export type RscViteBuildResult = EnvViteBuildResult
 
