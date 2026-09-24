@@ -15,14 +15,14 @@
     "url": "https://github.com/rari-build/rari/issues"
   },
   "keywords": [
-    "rari",
-    "use-cache",
-    "transform",
     "napi",
     "napi-rs",
-    "rust",
+    "rari",
     "react",
-    "server-components"
+    "rust",
+    "server-components",
+    "transform",
+    "use-cache"
   ],
   "exports": {
     ".": {

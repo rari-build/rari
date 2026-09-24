@@ -5,13 +5,15 @@ import * as jsoncParser from 'jsonc-eslint-parser'
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const pluginJsonc = jsoncPlugin as ESLint.Plugin
 
+const jsoncLanguage = {
+  parser: jsoncParser,
+} as const
+
 export const packageJsonSortConfigs: Linter.Config[] = [
   {
     name: 'rari/sort/package-json',
     files: ['package.json', '**/package.json'],
-    languageOptions: {
-      parser: jsoncParser,
-    },
+    languageOptions: jsoncLanguage,
     plugins: {
       jsonc: pluginJsonc,
     },
@@ -21,6 +23,10 @@ export const packageJsonSortConfigs: Linter.Config[] = [
         {
           order: { type: 'asc' },
           pathPattern: '^files$',
+        },
+        {
+          order: { type: 'asc' },
+          pathPattern: '^keywords$',
         },
       ],
       'jsonc/sort-keys': [
@@ -115,3 +121,132 @@ export const packageJsonSortConfigs: Linter.Config[] = [
     },
   },
 ]
+
+export const tsconfigSortConfigs: Linter.Config[] = [
+  {
+    name: 'rari/sort/tsconfig-json',
+    files: ['**/[jt]sconfig.json', '**/[jt]sconfig.*.json', '.config/typescript/**/*.json'],
+    languageOptions: jsoncLanguage,
+    plugins: {
+      jsonc: pluginJsonc,
+    },
+    rules: {
+      'jsonc/sort-array-values': [
+        'error',
+        {
+          order: { type: 'asc' },
+          pathPattern: '^(?:files|include|exclude|types|lib|typeRoots|rootDirs|moduleSuffixes)$',
+        },
+        {
+          order: { type: 'asc' },
+          pathPattern: '^compilerOptions\\.(?:lib|types|typeRoots|rootDirs|moduleSuffixes)$',
+        },
+      ],
+      'jsonc/sort-keys': [
+        'error',
+        {
+          order: ['extends', 'compilerOptions', 'references', 'files', 'include', 'exclude'],
+          pathPattern: '^$',
+        },
+        {
+          order: [
+            'incremental',
+            'composite',
+            'tsBuildInfoFile',
+            'disableSourceOfProjectReferenceRedirect',
+            'disableSolutionSearching',
+            'disableReferencedProjectLoad',
+            'target',
+            'jsx',
+            'jsxFactory',
+            'jsxFragmentFactory',
+            'jsxImportSource',
+            'lib',
+            'moduleDetection',
+            'noLib',
+            'reactNamespace',
+            'useDefineForClassFields',
+            'emitDecoratorMetadata',
+            'experimentalDecorators',
+            'libReplacement',
+            'baseUrl',
+            'rootDir',
+            'rootDirs',
+            'customConditions',
+            'module',
+            'moduleResolution',
+            'moduleSuffixes',
+            'noResolve',
+            'paths',
+            'resolveJsonModule',
+            'resolvePackageJsonExports',
+            'resolvePackageJsonImports',
+            'typeRoots',
+            'types',
+            'allowArbitraryExtensions',
+            'allowImportingTsExtensions',
+            'allowUmdGlobalAccess',
+            'allowJs',
+            'checkJs',
+            'maxNodeModuleJsDepth',
+            'strict',
+            'strictBindCallApply',
+            'strictFunctionTypes',
+            'strictNullChecks',
+            'strictPropertyInitialization',
+            'allowUnreachableCode',
+            'allowUnusedLabels',
+            'alwaysStrict',
+            'exactOptionalPropertyTypes',
+            'noFallthroughCasesInSwitch',
+            'noImplicitAny',
+            'noImplicitOverride',
+            'noImplicitReturns',
+            'noImplicitThis',
+            'noPropertyAccessFromIndexSignature',
+            'noUncheckedIndexedAccess',
+            'noUnusedLocals',
+            'noUnusedParameters',
+            'useUnknownInCatchVariables',
+            'declaration',
+            'declarationDir',
+            'declarationMap',
+            'downlevelIteration',
+            'emitBOM',
+            'emitDeclarationOnly',
+            'importHelpers',
+            'importsNotUsedAsValues',
+            'inlineSourceMap',
+            'inlineSources',
+            'mapRoot',
+            'newLine',
+            'noEmit',
+            'noEmitHelpers',
+            'noEmitOnError',
+            'outDir',
+            'outFile',
+            'preserveConstEnums',
+            'preserveValueImports',
+            'removeComments',
+            'sourceMap',
+            'sourceRoot',
+            'stripInternal',
+            'allowSyntheticDefaultImports',
+            'esModuleInterop',
+            'forceConsistentCasingInFileNames',
+            'isolatedDeclarations',
+            'isolatedModules',
+            'preserveSymlinks',
+            'verbatimModuleSyntax',
+            'erasableSyntaxOnly',
+            'skipDefaultLibCheck',
+            'skipLibCheck',
+          ],
+          pathPattern: '^compilerOptions$',
+        },
+      ],
+    },
+  },
+]
+
+export const jsonSortConfigs: Linter.Config[] = [...packageJsonSortConfigs, ...tsconfigSortConfigs]

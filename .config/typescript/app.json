@@ -3,9 +3,9 @@
   "compilerOptions": {
     "target": "ES2023",
     "jsx": "react-jsx",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node"],
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
     "useDefineForClassFields": true,
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,

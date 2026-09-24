@@ -7,7 +7,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { ignorePatterns } from './ignores'
 import { lint as oxlintConfig } from './oxlint'
 import { pnpmConfigs } from './pnpm'
-import { packageJsonSortConfigs } from './sort'
+import { jsonSortConfigs } from './sort'
 
 // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
 function withReactPrefix(config: Linter.Config): Linter.Config {
@@ -83,7 +83,7 @@ const configs: Linter.Config[] = [
     },
   },
   ...pnpmConfigs,
-  ...packageJsonSortConfigs,
+  ...jsonSortConfigs,
 ]
 
 export default configs
