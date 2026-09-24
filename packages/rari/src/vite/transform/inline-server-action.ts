@@ -603,7 +603,13 @@ function skipBlockCommentBack(source: string, i: number): number | null {
       j--
       continue
     }
-    if (ch === 42 && next === 47) break
+    if (ch === 42 && next === 47) {
+      if (j > 0 && source.charCodeAt(j - 1) === 47) {
+        j--
+        continue
+      }
+      break
+    }
     j--
   }
   return commentStart >= 0 ? commentStart : null
