@@ -41,9 +41,11 @@ const ObjectProperties = {
 export function nonEnumerable(value: unknown): PropertyDescriptor {
   return ObjectProperties.apply(value, 'nonEnumerable')
 }
+
 export function readOnly(value: unknown): PropertyDescriptor {
   return ObjectProperties.apply(value, 'readOnly')
 }
+
 export function writeable(value: unknown): PropertyDescriptor {
   return ObjectProperties.apply(value, 'writeable')
 }
@@ -59,6 +61,7 @@ export function getterOnly(getter: () => unknown): PropertyDescriptor {
 export function applyToGlobal(properties: PropertyDescriptorMap) {
   return Object.defineProperties(globalThis, properties)
 }
+
 export function applyToDeno(properties: PropertyDescriptorMap) {
   return Object.defineProperties(g.Deno, properties)
 }

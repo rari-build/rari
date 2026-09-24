@@ -628,6 +628,7 @@ export function createFromFetch(promise, options) {
     findSourceMapURL: options?.findSourceMapURL ?? rariFindSourceMapURL,
   });
 }
+
 export function createFromReadableStream(stream, options) {
   return module.exports.createFromReadableStream(stream, {
     ...options,
@@ -635,6 +636,7 @@ export function createFromReadableStream(stream, options) {
     findSourceMapURL: options?.findSourceMapURL ?? rariFindSourceMapURL,
   });
 }
+
 export function createServerReference(id, callServer, encodeFormAction, findSourceMapURL, functionName) {
   return module.exports.createServerReference(
     id,
@@ -644,6 +646,7 @@ export function createServerReference(id, callServer, encodeFormAction, findSour
     functionName,
   );
 }
+
 export const encodeReply = module.exports.encodeReply;
 export const createTemporaryReferenceSet = module.exports.createTemporaryReferenceSet;
 `,

@@ -231,6 +231,7 @@ core.registerErrorBuilder('DOMExceptionDataError', msg => domException('DataErro
 // Notification that the core received an unhandled promise rejection that is about to
 // terminate the runtime. If we can handle it, attempt to do so.
 core.setUnhandledPromiseRejectionHandler(processUnhandledPromiseRejection)
+
 function processUnhandledPromiseRejection(promise: Promise<unknown>, reason: unknown): boolean {
   ensureEventTargetReady()
   const event = lazyEvent()
@@ -258,6 +259,7 @@ function processUnhandledPromiseRejection(promise: Promise<unknown>, reason: unk
 }
 
 core.setHandledPromiseRejectionHandler(processRejectionHandled)
+
 function processRejectionHandled(promise: Promise<unknown>, reason: unknown): void {
   ensureEventTargetReady()
   const event = lazyEvent()
@@ -278,6 +280,7 @@ core.setReportExceptionCallback(error => {
   lazyEvent().reportException(error)
 })
 op_set_format_exception_callback(formatException)
+
 function formatException(errorParam: unknown): string | null {
   const { getDefaultInspectOptions, getStderrNoColor, inspectArgs, quoteString } = lazyConsole()
 
