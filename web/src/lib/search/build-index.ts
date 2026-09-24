@@ -11,9 +11,6 @@ interface SearchCache {
 
 const exportRegex = /^export .+$/gm
 const importRegex = /^import .+$/gm
-const codeBlockRegex = /<CodeBlock[^>]*>[\s\S]*?<\/CodeBlock>/gi
-const terminalBlockRegex = /<TerminalBlock[^>]*\/>/gi
-const packageManagerTabsRegex = /<PackageManagerTabs[^>]*\/>/gi
 const pageHeaderRegex = /<PageHeader[^>]*\/>/gi
 const codeBlockContentRegex = /```[\s\S]*?```/g
 const inlineCodeRegex = /`([^`]+)`/g
@@ -78,9 +75,6 @@ function extractContent(mdxContent: string): {
     .replace(relatedSectionRegex, '')
     .replace(exportRegex, '')
     .replace(importRegex, '')
-    .replace(codeBlockRegex, '')
-    .replace(terminalBlockRegex, '')
-    .replace(packageManagerTabsRegex, '')
     .replace(pageHeaderRegex, '')
     .replace(codeBlockContentRegex, '')
     .replace(propertyDefRegex, '')

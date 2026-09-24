@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vite-plus/test'
 import { remarkFences } from '../../../web/src/lib/mdx/remark-fences'
 
 const transform = remarkFences()
+const highlightTransform = remarkFences({
+  highlighter: {
+    codeToHtml: (code, { lang }) => `<pre data-lang="${lang}"><code>${code}</code></pre>`,
+  },
+  themes: { light: 'light', dark: 'dark' },
+})
 
 describe('remarkFences', () => {
   it('maps language fences to CodeBlock with filename meta', () => {
@@ -28,6 +34,28 @@ describe('remarkFences', () => {
         { type: 'mdxJsxAttribute', name: 'filename', value: 'src/app/page.tsx' },
       ],
       children: [{ type: 'text', value: 'export default function Page() {}' }],
+    })
+  })
+
+  it('attaches highlightedHtml when a highlighter is provided', () => {
+    const tree: ASTNode = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'tsx', value: 'const x = 1' }],
+    }
+
+    highlightTransform(tree)
+
+    expect(tree.children?.[0]).toMatchObject({
+      type: 'mdxJsxFlowElement',
+      name: 'CodeBlock',
+      attributes: [
+        { type: 'mdxJsxAttribute', name: 'language', value: 'tsx' },
+        {
+          type: 'mdxJsxAttribute',
+          name: 'highlightedHtml',
+          value: '<pre data-lang="tsx"><code>const x = 1</code></pre>',
+        },
+      ],
     })
   })
 

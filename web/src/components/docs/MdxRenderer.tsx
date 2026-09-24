@@ -16,7 +16,6 @@ import TerminalBlock from '@/components/ui/TerminalBlock'
 import { getContentRoot } from '@/lib/content'
 import { extractBlogMetadata } from '@/lib/content/metadata'
 import { withMdxEvaluateCache } from '@/lib/mdx/evaluate-cached'
-import { remarkCodeBlock } from '@/lib/mdx/remark-codeblock'
 import { remarkFences } from '@/lib/mdx/remark-fences'
 import { getHighlighter, SHIKI_THEMES } from '@/lib/mdx/shiki'
 
@@ -62,11 +61,7 @@ function createMdxComponents(filePath: string, blogMetadata?: BlogMetadata) {
 
 async function evaluateMdx(filePath: string, content: string): Promise<ComponentType> {
   const highlighter = await getHighlighter()
-  const remarkPlugins: any[] = [
-    remarkGfm,
-    remarkFences,
-    [remarkCodeBlock, { highlighter, themes: SHIKI_THEMES }],
-  ]
+  const remarkPlugins: any[] = [remarkGfm, [remarkFences, { highlighter, themes: SHIKI_THEMES }]]
 
   const blogMetadata = filePath.startsWith('blog/') ? extractBlogMetadata(content) : undefined
   const evaluated = await evaluate(content, {
