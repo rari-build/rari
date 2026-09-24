@@ -299,5 +299,6 @@ fn create_warmup_context(route_match: &AppRouteMatch) -> LayoutRenderContext {
         pathname: route_match.pathname.clone(),
         template_navigation_id: None,
         metadata: None,
+        reuse_layout_paths: Vec::new(),
     }
 }

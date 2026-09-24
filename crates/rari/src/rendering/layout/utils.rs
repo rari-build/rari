@@ -161,6 +161,7 @@ pub fn create_layout_context(
         pathname,
         template_navigation_id: None,
         metadata: None,
+        reuse_layout_paths: Vec::new(),
     }
 }
 

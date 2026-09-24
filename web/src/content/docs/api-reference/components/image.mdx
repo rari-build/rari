@@ -61,7 +61,7 @@ Each pattern can include:
 
 ### Local Patterns
 
-The `localPatterns` array defines which paths in your `public` directory should be optimized. Images outside these patterns will not be processed.
+The `localPatterns` array defines which paths should be optimized (usually under `public/`). Images outside these patterns are not processed. rari also merges `/assets/**` by default for hashed static imports; set `includeBundledAssets: false` to use only the patterns you list.
 
 ### Optimization Settings
 

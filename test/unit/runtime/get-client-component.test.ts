@@ -16,13 +16,13 @@ type GlobalWithChunkLoader = typeof globalThis & {
   __rari_chunk_load__?: (chunkId: string) => Promise<unknown>
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types ComponentInfo is a mutable client-component registry entry */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 function setClientComponents(
   components: Readonly<NonNullable<GlobalWithRari['~clientComponents']>>,
 ) {
   Reflect.set(globalThis, '~clientComponents', components)
 }
-/* oxlint-enable typescript/prefer-readonly-parameter-types */
+// oxlint-enable typescript/prefer-readonly-parameter-types
 
 function requireModule(id: string): RequiredClientModule {
   const module: unknown = requireClientComponent(id)
@@ -104,6 +104,39 @@ describe('requireClientComponent path resolution', () => {
     try {
       const module = requireModule('a/Button.tsx')
       expect(module.default).toBeTypeOf('function')
+    } finally {
+      setClientComponents({})
+    }
+  })
+
+  it('skips registry stubs missing path when scanning by path', () => {
+    const Image = () => null
+    const fullEntry: ComponentInfo = {
+      id: 'Image',
+      path: 'rari/image',
+      type: 'client',
+      registered: true,
+      component: { default: Image, Image },
+    }
+
+    const codeBlockEntry: ComponentInfo = {
+      id: 'CodeBlock',
+      path: 'src/components/CodeBlock.tsx',
+      type: 'client',
+      registered: false,
+      loader: async () => Promise.resolve({ default: () => null }),
+    }
+
+    Reflect.set(globalThis, '~clientComponents', {
+      'rari/image#Image': fullEntry,
+      'rari/image': { component: { default: Image, Image } },
+      'src/components/CodeBlock.tsx': codeBlockEntry,
+    })
+
+    try {
+      const module = requireModule('components/CodeBlock.tsx')
+      expect(module.default).toBeTypeOf('function')
+      expect(codeBlockEntry.loadPromise).toBeDefined()
     } finally {
       setClientComponents({})
     }

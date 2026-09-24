@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types SSR build mutates manifest and css module buffers */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 import type { Plugin, ViteBuilder } from 'vite-plus'
 import type { ModuleAnalysis } from '../analysis/directives'
 import type { MdxPluginOptions } from '../mdx/registry'
@@ -1537,22 +1537,6 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
     buildStart() {
       if (!builder) return
-
-      const isProduction = process.env.NODE_ENV === 'production'
-      const cacheDirs = [
-        path.join(projectRoot, 'dist', 'cache', 'og'),
-        path.join(projectRoot, 'dist', 'cache', 'images'),
-      ]
-
-      if (isProduction) cacheDirs.push('/tmp/rari-og-cache', '/tmp/rari-image-cache')
-
-      for (const dir of cacheDirs) {
-        try {
-          if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
-        } catch (error) {
-          console.warn(`[rari] Failed to clear cache ${dir}:`, error)
-        }
-      }
 
       const srcDir = path.join(projectRoot, 'src')
       if (fs.existsSync(srcDir)) scanDirectory(srcDir, builder, Object.values(resolvedAliases))

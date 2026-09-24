@@ -4,8 +4,15 @@ import { AppRouterProvider } from 'virtual:app-router-provider'
 import { ClientRouter } from 'virtual:client-router'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { RouterProvider } from '@/router'
-import { asError, errorMessage, getCustomEventDetail, isRecord } from '@/shared/utils/type-guards'
+import {
+  asError,
+  errorMessage,
+  getCustomEventDetail,
+  isFlightThenable,
+  isRecord,
+} from '@/shared/utils/type-guards'
 import { showHydrationFailureBanner } from './boundaries/runtime-error-banner'
+import { normalizeFlightContent } from './flight/normalize-flight-content'
 import {
   clearServerInjectedErrors,
   hasFizzMarkers,
@@ -30,6 +37,50 @@ function createElementWithChildren<P extends { readonly children?: React.ReactNo
 ): React.ReactElement {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return React.createElement(type, props as P, children)
+}
+
+async function resolveFlightElement(
+  element: React.ReactNode | PromiseLike<React.ReactNode>,
+): Promise<React.ReactNode> {
+  let current: React.ReactNode | PromiseLike<React.ReactNode> = normalizeFlightContent(element)
+  for (let i = 0; i < 10 && isFlightThenable<React.ReactNode>(current); i += 1) {
+    current = normalizeFlightContent(await current)
+  }
+  if (isFlightThenable<React.ReactNode>(current)) {
+    throw new Error('[rari] Failed to resolve Flight element to a React node')
+  }
+  return current
+}
+
+function isDocumentRootElement(node: React.ReactNode): boolean {
+  return React.isValidElement(node) && (node.type === 'html' || node.type === 'HTML')
+}
+
+function mountAppRouterTree(resolvedElement: React.ReactNode): boolean {
+  if (!isDocumentRootElement(resolvedElement)) {
+    showHydrationFailureBanner(
+      document.body,
+      'RSC payload did not resolve to an <html> document root. Try refreshing the page.',
+    )
+    console.error('[rari] Hydration skipped: Flight content is not a document root')
+    return false
+  }
+
+  let content: React.ReactNode = React.createElement(AppRouterProvider, {
+    initialPayload: { element: resolvedElement },
+  })
+  content = createElementWithChildren(
+    ClientRouter,
+    { initialRoute: window.location.pathname },
+    content,
+  )
+  content = createElementWithChildren(
+    RouterProvider,
+    { initialPathname: window.location.pathname },
+    content,
+  )
+  mountApp(content)
+  return true
 }
 
 function notifyClientReady() {
@@ -198,7 +249,7 @@ export async function renderApp(): Promise<void> {
   const hasBufferedRows = !!(streaming?.bufferedRows && streaming.bufferedRows.length > 0)
 
   try {
-    let element
+    let element: React.ReactNode | PromiseLike<React.ReactNode> | null | undefined
 
     const needsInitialFetch = !hasEmbeddedPayload && !hasBufferedRows && !hasServerRenderedContent
 
@@ -235,21 +286,8 @@ export async function renderApp(): Promise<void> {
       }
 
       if (element != null) {
-        let hydrationContent: React.ReactNode = React.createElement(AppRouterProvider, {
-          initialPayload: { element },
-        })
-        hydrationContent = createElementWithChildren(
-          ClientRouter,
-          { initialRoute: window.location.pathname },
-          hydrationContent,
-        )
-        hydrationContent = createElementWithChildren(
-          RouterProvider,
-          { initialPathname: window.location.pathname },
-          hydrationContent,
-        )
-
-        mountApp(hydrationContent)
+        const resolvedElement = await resolveFlightElement(element)
+        mountAppRouterTree(resolvedElement)
       } else {
         showHydrationFailureBanner(
           document.body,
@@ -337,24 +375,8 @@ export async function renderApp(): Promise<void> {
 
     if (element == null) throw new Error('No RSC data available for hydration')
 
-    // Wrap element in providers for routing/navigation support.
-    // All providers (RouterProvider, ClientRouter, AppRouterProvider) produce
-    // no extra DOM they only provide context and render children directly.
-    let content: React.ReactNode = React.createElement(AppRouterProvider, {
-      initialPayload: { element },
-    })
-    content = createElementWithChildren(
-      ClientRouter,
-      { initialRoute: window.location.pathname },
-      content,
-    )
-    content = createElementWithChildren(
-      RouterProvider,
-      { initialPathname: window.location.pathname },
-      content,
-    )
-
-    mountApp(content)
+    const resolvedElement = await resolveFlightElement(element)
+    mountAppRouterTree(resolvedElement)
   } catch (error) {
     console.error('[rari] Error rendering app:', error)
   }

@@ -1,5 +1,4 @@
-/* oxlint-disable typescript/no-unsafe-assignment vitest asymmetric matchers (expect.*) are typed as any */
-
+// oxlint-disable typescript/no-unsafe-assignment
 import type { ModuleAnalysis } from '@rari/vite/analysis/directives'
 import type { ComponentRebuildResult } from '@rari/vite/server/build'
 import type { ModuleNode, ViteDevServer } from 'vite-plus'

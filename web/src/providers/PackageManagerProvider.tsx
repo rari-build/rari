@@ -1,20 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { createContext, use, useCallback, useState } from 'react'
-
-export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
+import type { PackageManager } from './usePackageManager'
+import { useCallback, useState } from 'react'
+import { PackageManagerContext } from './usePackageManager'
 
 function isPackageManager(value: string): value is PackageManager {
   return value === 'pnpm' || value === 'npm' || value === 'yarn' || value === 'bun'
 }
-
-interface PackageManagerContextType {
-  packageManager: PackageManager
-  setPackageManager: (pm: PackageManager) => void
-}
-
-const PackageManagerContext = createContext<PackageManagerContextType | null>(null)
 
 export function PackageManagerProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [packageManager, setPackageManager] = useState<PackageManager>(() => {
@@ -44,15 +37,4 @@ export function PackageManagerProvider({ children }: Readonly<{ children: ReactN
       {children}
     </PackageManagerContext>
   )
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function usePackageManager() {
-  const context = use(PackageManagerContext)
-
-  if (!context) {
-    throw new Error('usePackageManager must be used within a PackageManagerProvider')
-  }
-
-  return context
 }

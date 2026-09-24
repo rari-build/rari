@@ -1,6 +1,6 @@
 'use server'
 
-/* oxlint-disable typescript/require-await */
+// oxlint-disable typescript/require-await
 import type { TodoActionState } from './types'
 import {
   clearCompletedTodos,

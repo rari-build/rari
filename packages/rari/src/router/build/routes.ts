@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types route builder mutates accumulator arrays in place */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 import type { AppIconEntry } from '../metadata/app-icons'
 import type {
   ApiRouteEntry,

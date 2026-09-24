@@ -32,7 +32,7 @@
     toString: () => string
   }
 
-  g['~rari'] ??= {}
+  const rari = (g['~rari'] ??= {})
 
   function parseCookieHeader(header: string): Map<string, string> {
     const result = new Map<string, string>()
@@ -85,7 +85,7 @@
   }
 
   function currentRequestId(): string {
-    const id = g['~rari']?.currentRequestId?.()
+    const id = rari.currentRequestId?.()
     return typeof id === 'string' ? id : ''
   }
 
@@ -160,5 +160,5 @@
     }
   }
 
-  g['~rari'].cookies = createCookieStore
+  rari.cookies = createCookieStore
 })()

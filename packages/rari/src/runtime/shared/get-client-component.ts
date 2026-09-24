@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types ComponentInfo entries are the mutable client component registry; mutated in place throughout lazy-loading logic */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 import type { ComponentInfo } from './types'
 import * as React from 'react'
 import { toPosixPath } from '@/shared/utils/path'
@@ -77,7 +77,7 @@ function findComponentInfoByPath(
   for (const candidateBaseId of getLookupPathCandidates(baseId)) {
     for (const variant of getPathVariants(candidateBaseId)) {
       const componentInfo = Object.values(clientComponents).find(info => {
-        if (info.path === '') return false
+        if (typeof info.path !== 'string' || info.path === '') return false
 
         return pathsMatch(info.path, variant)
       })
@@ -336,17 +336,30 @@ export async function getClientComponent(id: string): Promise<any> {
 export function installRscChunkLoader(): void {
   if (typeof window === 'undefined') return
 
-  Reflect.set(globalThis, '__rari_chunk_load__', async (chunkId: string) => {
+  const resolveChunkComponent = (chunkId: string) => {
     const clientComponents = getClientComponents()
     const normalized = toPosixPath(chunkId)
-    const componentInfo =
-      chunkId in clientComponents
-        ? clientComponents[chunkId]
-        : normalized in clientComponents
-          ? clientComponents[normalized]
-          : Object.values(clientComponents).find(
-              info => info.path === chunkId || info.path === normalized,
-            )
+    if (chunkId in clientComponents) return clientComponents[chunkId]
+    if (normalized in clientComponents) return clientComponents[normalized]
+    return Object.values(clientComponents).find(
+      info => info.path === chunkId || info.path === normalized,
+    )
+  }
+
+  Reflect.set(globalThis, '__rari_get_script_filename__', (chunkId: string) => {
+    const raw = resolveChunkComponent(chunkId)?.path ?? toPosixPath(chunkId)
+    const filePath = toPosixPath(raw)
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath
+
+    const srcIndex = filePath.indexOf('/src/')
+    if (srcIndex !== -1) return filePath.slice(srcIndex)
+    if (filePath.startsWith('src/')) return `/${filePath}`
+    if (filePath.startsWith('/')) return filePath
+    return `/${filePath}`
+  })
+
+  Reflect.set(globalThis, '__rari_chunk_load__', async (chunkId: string) => {
+    const componentInfo = resolveChunkComponent(chunkId)
 
     if (componentInfo && componentInfo.component == null && componentInfo.loader != null) {
       const loadPromise = startComponentLoad(componentInfo)

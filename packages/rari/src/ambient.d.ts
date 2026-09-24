@@ -14,8 +14,10 @@ declare module 'virtual:react-flight-client' {
 
   export function createServerReference<A extends unknown[] = unknown[], R = unknown>(
     id: string,
-    callServer: (id: string, args: A) => Promise<R>,
+    callServer?: (id: string, args: A) => Promise<R>,
     encodeFormAction?: (args: A) => Promise<FormData | string>,
+    findSourceMapURL?: (filename: string, environmentName: string) => string | null,
+    functionName?: string,
   ): unknown
 
   export function createFromReadableStream<T>(
@@ -24,6 +26,7 @@ declare module 'virtual:react-flight-client' {
       readonly callServer?: (id: string, args: readonly unknown[]) => Promise<unknown>
       readonly moduleMap?: unknown
       readonly moduleLoading?: unknown
+      readonly findSourceMapURL?: (filename: string, environmentName: string) => string | null
     }>,
   ): Thenable<T>
 
@@ -32,6 +35,7 @@ declare module 'virtual:react-flight-client' {
     options?: Readonly<{
       readonly callServer?: (id: string, args: readonly unknown[]) => Promise<unknown>
       readonly temporaryReferences?: Map<string, unknown>
+      readonly findSourceMapURL?: (filename: string, environmentName: string) => string | null
     }>,
   ): Thenable<T>
 

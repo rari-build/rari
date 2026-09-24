@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { getNavigationTransitionSnapshot } from '../../../packages/rari/src/router/navigation/navigation-transition-store'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
@@ -115,6 +116,41 @@ describe('commitNavigationPayload', () => {
 
     expect(setRscPayload).not.toHaveBeenCalled()
     expect(pushState).not.toHaveBeenCalled()
+  })
+
+  it('bumps view-transition generation inside the transition before RSC commit', () => {
+    const generationBefore = getNavigationTransitionSnapshot().generation
+    const generationsAtCommit: number[] = []
+
+    vi.stubGlobal('window', {
+      history: { pushState: vi.fn(), replaceState: vi.fn() },
+      dispatchEvent: vi.fn(),
+      location: { href: 'http://localhost/', pathname: '/', search: '' },
+    })
+
+    commitNavigationPayload({
+      parsedPayload: { element: 'next' },
+      shouldScrollToTop: false,
+      navigationId: 3,
+      transitionTypes: ['nav', 'nav-forward'],
+      pendingHistory: { url: '/about', state: {} },
+      startTransition: scope => {
+        void scope()
+      },
+      currentNavigationIdRef: { current: 3 },
+      pendingScrollPayloadRef: { current: null },
+      setRenderKey: () => {
+        generationsAtCommit.push(getNavigationTransitionSnapshot().generation)
+      },
+      setRscPayload: () => {
+        generationsAtCommit.push(getNavigationTransitionSnapshot().generation)
+      },
+      clearHmrError: () => {},
+      pendingNavigateCommittedIdRef: { current: null },
+    })
+
+    expect(getNavigationTransitionSnapshot().generation).toBe(generationBefore + 1)
+    expect(generationsAtCommit).toEqual([generationBefore + 1, generationBefore + 1])
   })
 
   it('records navigation id for post-commit navigate-committed dispatch', () => {

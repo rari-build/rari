@@ -6,7 +6,6 @@ packages/rari-*/
 packages/use-cache-*/
 .pnpm-store/
 .build
-.cache
 *.redb
 coverage
 test-results

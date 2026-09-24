@@ -79,8 +79,6 @@ async function collect(
   return metadataList
 }
 
-g['~rari'] ??= {}
-
-g['~rari'].metadataCollector = {
+;(g['~rari'] ??= {}).metadataCollector = {
   collect,
 }

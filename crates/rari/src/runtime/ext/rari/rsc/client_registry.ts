@@ -8,7 +8,6 @@ interface ComponentInfo {
   readonly registered: boolean
 }
 
-/** Extra metadata that may be attached to a function/component value at runtime. */
 interface ClientComponentCandidate {
   'name'?: string
   'displayName'?: string
@@ -240,15 +239,13 @@ function createClientReference(componentId: string, componentPath: string): Clie
   return reference
 }
 
-if (typeof g !== 'undefined') {
-  g.registerClientComponent = registerClientComponent
-  g.isClientComponent = isClientComponent
-  g.getClientComponentInfo = getClientComponentInfo
-  g.getClientComponentId = getClientComponentId
-  g.listClientComponents = listClientComponents
-  g.listClientComponentNames = listClientComponentNames
-  g.clearClientComponents = clearClientComponents
-  g.registerClientComponentFromModule = registerClientComponentFromModule
-  g.markAsClientComponent = markAsClientComponent
-  g.createClientReference = createClientReference
-}
+g.registerClientComponent = registerClientComponent
+g.isClientComponent = isClientComponent
+g.getClientComponentInfo = getClientComponentInfo
+g.getClientComponentId = getClientComponentId
+g.listClientComponents = listClientComponents
+g.listClientComponentNames = listClientComponentNames
+g.clearClientComponents = clearClientComponents
+g.registerClientComponentFromModule = registerClientComponentFromModule
+g.markAsClientComponent = markAsClientComponent
+g.createClientReference = createClientReference

@@ -1,7 +1,6 @@
 /// <reference path="../../types.d.ts" />
 
-// oxlint-disable-next-line typescript/prefer-readonly-parameter-types
-;(function initActionArgsValidationCore(g: GlobalThis) {
+;(function initActionArgsValidationCore() {
   if (g.__RARI_ACTION_ARGS_VALIDATION__ !== undefined) return
 
   const MAX_BOUND_ARGS = 1000
@@ -209,4 +208,4 @@
     validateFormDataWithConfig,
     isDangerousActionProperty,
   }
-})(globalThis.g)
+})()

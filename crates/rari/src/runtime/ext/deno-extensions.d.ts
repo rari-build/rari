@@ -65,7 +65,7 @@ declare module 'ext:init_utilities/utilities.ts' {
   export function readOnly(value: any): PropertyDescriptor
   export function getterOnly(fn: () => any): PropertyDescriptor
   export function writeable(value: any): PropertyDescriptor
-  /* oxlint-disable typescript/no-unnecessary-type-parameters */
+  // oxlint-disable typescript/no-unnecessary-type-parameters
   export function loadExtScriptOnce<T>(specifier: string): T
   export function lazyExtScript<T>(specifier: string): () => T
   export function lazyExtModule<T>(specifier: string): () => T
@@ -77,7 +77,7 @@ declare module 'ext:init_utilities/utilities.ts' {
     select: (mod: T) => V,
     load: () => T,
   ): PropertyDescriptor
-  /* oxlint-enable typescript/no-unnecessary-type-parameters */
+  // oxlint-enable typescript/no-unnecessary-type-parameters
   export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor
   export function defineDenoLazyProps<T>(load: () => T, keys: ReadonlyArray<keyof T & string>): void
 }

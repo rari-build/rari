@@ -12,31 +12,32 @@ interface RegisterResult {
 ;(function initializeRscModules() {
   const EXPORT_FUNCTION_REGEX = /^export\s+(?:async\s+)?function\s+(\w+)/gm
 
-  g['~rsc'] ??= {}
-  g['~rsc'].modules ??= {}
-  g['~rari'] ??= {}
-  g['~rari'].serverManifest ??= {}
-  g['~rari'].ssrModules ??= {}
+  const rsc = (g['~rsc'] ??= {})
+  rsc.modules ??= {}
+  const rari = (g['~rari'] ??= {})
+  rari.serverManifest ??= {}
+  rari.ssrModules ??= {}
 
   function ensureRariManifestStores() {
-    g['~rari'] ??= {}
-    g['~rari'].serverManifest ??= {}
-    g['~rari'].ssrModules ??= {}
+    const store = (g['~rari'] ??= rari)
+    store.serverManifest ??= {}
+    store.ssrModules ??= {}
+    return store
   }
 
   function clearManifestEntriesForModule(moduleKey: string) {
-    ensureRariManifestStores()
+    const store = ensureRariManifestStores()
     const colonPrefix = `${moduleKey}:`
     const hashPrefix = `${moduleKey}#`
 
-    for (const key of Object.keys(g['~rari']!.serverManifest!)) {
+    for (const key of Object.keys(store.serverManifest!)) {
       if (key === moduleKey || key.startsWith(colonPrefix) || key.startsWith(hashPrefix))
-        delete g['~rari']!.serverManifest![key]
+        delete store.serverManifest![key]
     }
 
-    for (const key of Object.keys(g['~rari']!.ssrModules!)) {
+    for (const key of Object.keys(store.ssrModules!)) {
       if (key === moduleKey || key.startsWith(colonPrefix) || key.startsWith(hashPrefix))
-        delete g['~rari']!.ssrModules![key]
+        delete store.ssrModules![key]
     }
   }
 
@@ -45,23 +46,23 @@ interface RegisterResult {
     module: Readonly<RscModule>,
     exportName: string,
   ) {
-    ensureRariManifestStores()
+    const store = ensureRariManifestStores()
     const hashId = `${moduleKey}#${exportName}`
 
-    g['~rari']!.serverManifest![hashId] = {
+    store.serverManifest![hashId] = {
       id: moduleKey,
       name: exportName,
       chunks: [],
     }
-    g['~rari']!.ssrModules![hashId] = module
+    store.ssrModules![hashId] = module
   }
 
   function resolveServerFunctionExport(
     name: string,
   ): ((...args: readonly unknown[]) => unknown) | null {
-    ensureRariManifestStores()
-    const manifest = g['~rari']!.serverManifest!
-    const ssrModules = g['~rari']!.ssrModules!
+    const store = ensureRariManifestStores()
+    const manifest = store.serverManifest!
+    const ssrModules = store.ssrModules!
 
     const hashIdx = name.lastIndexOf('#')
     const colonIdx = name.lastIndexOf(':')
@@ -138,15 +139,15 @@ interface RegisterResult {
           : 'unknown'
     }
 
-    g['~rsc']!.modules![moduleKey] = module
+    rsc.modules![moduleKey] = module
 
     clearManifestEntriesForModule(moduleKey)
-    ensureRariManifestStores()
-    g['~rari']!.serverManifest![moduleKey] = {
+    const store = ensureRariManifestStores()
+    store.serverManifest![moduleKey] = {
       id: moduleKey,
       chunks: [],
     }
-    g['~rari']!.ssrModules![moduleKey] = module
+    store.ssrModules![moduleKey] = module
 
     let exportCount = 0
     for (const key in module) {

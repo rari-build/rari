@@ -24,8 +24,9 @@ export default async function Layout({ children, pathname }: LayoutProps) {
         <Providers pathname={pathname}>
           <div
             className="min-h-screen bg-chrome text-fg-body font-sans overflow-x-hidden"
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion CSS custom property
-            style={{ '--sidebar-width': 'calc(8rem)' } as CSSProperties}
+            style={
+              { '--sidebar-width': 'calc(8rem)' } as CSSProperties & { '--sidebar-width': string }
+            }
           >
             <div className="flex min-h-screen">
               <Sidebar version={version} />

@@ -41,6 +41,11 @@ pub const GET_RSC_BINARY_B64: &str = r"(function() {
 })()";
 
 pub const FIZZ_RENDER_SCRIPT: &str = include_str!("../layout/js/fizz_render.ts");
+pub const ROUTE_COMPOSER_SCRIPT: &str = concat!(
+    include_str!("../layout/js/layout_reuse.ts"),
+    "\n",
+    include_str!("../layout/js/route_composer.ts"),
+);
 pub const STREAMING_FIZZ_SCRIPT: &str = concat!(
     include_str!("../layout/js/html_boundaries.ts"),
     "\n",
@@ -49,7 +54,10 @@ pub const STREAMING_FIZZ_SCRIPT: &str = concat!(
 pub const RSC_RENDERER_SCRIPT: &str = include_str!("js/rsc_renderer.ts");
 
 pub const STREAMING_PIPELINE_READY_CHECK: &str = "typeof globalThis['~rari']?.renderStreamingDocument === 'function' \
-        && typeof globalThis['~rari']?.renderStaticDocument === 'function'";
+        && typeof globalThis['~rari']?.renderStaticDocument === 'function' \
+        && typeof globalThis['~rari']?.composeRoute === 'function' \
+        && typeof globalThis['~rari']?.createPageElement === 'function' \
+        && typeof globalThis['~rari']?.wrapLayoutReuse === 'function'";
 
 pub const LOAD_FULL_REACT_VENDORS_SCRIPT: &str = r"
 (function() {

@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types stream APIs intentionally take mutable error buffers */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 /// <reference path="../../types.d.ts" />
 
 declare global {
@@ -247,6 +247,49 @@ declare global {
           readonly streamId?: string
         }>,
       ) => Promise<string>
+      composeRoute?: (
+        options: Readonly<{
+          readonly pageElement: unknown
+          readonly layouts?: readonly {
+            readonly componentId: string
+            readonly isRoot: boolean
+            readonly filePath: string
+            readonly path: string
+          }[]
+          readonly templates?: readonly {
+            readonly componentId: string
+            readonly filePath: string
+            readonly ssrModuleKey: string
+          }[]
+          readonly pathname: string
+          readonly templateKey: string
+          readonly errorComponentId?: string
+          readonly metadata?: unknown
+          readonly deferRsc?: boolean
+          readonly captureStreamId?: string | null
+          readonly expandRootLayout?: boolean
+          readonly reuseLayoutPaths?: readonly string[]
+          readonly actionPostUrl?: unknown
+          readonly timings: Record<string, number>
+          readonly startTotal: number
+        }>,
+      ) => Promise<unknown>
+      createPageElement?: (
+        options: Readonly<{
+          readonly pageComponentId: string
+          readonly pageProps?: unknown
+          readonly loadingComponentId?: string | null
+          readonly useSuspense?: boolean
+          readonly routeFilePath?: string
+          readonly loadingFilePath?: string
+        }>,
+      ) => unknown
+      wrapLayoutReuse?: (path: string, child: unknown, expandDocument: boolean) => unknown
+      requireCreateElement?: () => (
+        component: unknown,
+        props: unknown,
+        ...children: readonly unknown[]
+      ) => unknown
       injectStreamError?: (caughtErrors: unknown[], streamId: string) => Promise<void>
       pumpRscElementStream?: (
         element: unknown,

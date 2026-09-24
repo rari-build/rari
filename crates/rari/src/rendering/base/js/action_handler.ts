@@ -82,8 +82,8 @@ void (async () => {
       const formState = await flightServer.decodeFormState(actionResult, formData, serverManifest)
 
       if (formState != null) {
-        g['~rari'] ??= {}
-        g['~rari'].actionFormState = formState
+        const rari = (g['~rari'] ??= {})
+        rari.actionFormState = formState
 
         if (
           actionResult != null &&

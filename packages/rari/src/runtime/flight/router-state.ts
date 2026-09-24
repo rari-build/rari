@@ -52,3 +52,15 @@ export function pathnameFromSegmentPath(segmentPath: SegmentPath): string {
 
   return `/${segmentPath.join('/')}`
 }
+
+export function sharedSegmentPath(fromPathname: string, toPathname: string): SegmentPath {
+  const from = segmentPathFromPathname(fromPathname)
+  const to = segmentPathFromPathname(toPathname)
+  const shared: string[] = []
+  const limit = Math.min(from.length, to.length)
+  for (let index = 0; index < limit; index += 1) {
+    if (from[index] !== to[index]) break
+    shared.push(from[index])
+  }
+  return shared
+}

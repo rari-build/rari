@@ -110,6 +110,7 @@ declare global {
     '__rari_client_ready'?: boolean
     '__rari_f'?: ReadonlyArray<0 | string | readonly [2, string]>
     '__rari_chunk_load__'?: (chunkId: string) => Promise<unknown>
+    '__rari_get_script_filename__'?: (chunkId: string) => string
   }
 
   interface Window {

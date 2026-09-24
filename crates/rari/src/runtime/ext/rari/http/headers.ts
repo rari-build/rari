@@ -10,14 +10,14 @@
     values: () => IterableIterator<string>
   }
 
-  g['~rari'] ??= {}
+  const rari = (g['~rari'] ??= {})
 
   function normalizeHeaderName(name: string): string {
     return name.toLowerCase()
   }
 
   function currentRequestId(): string {
-    const id = g['~rari']?.currentRequestId?.()
+    const id = rari.currentRequestId?.()
     return typeof id === 'string' ? id : ''
   }
 
@@ -70,5 +70,5 @@
     }
   }
 
-  g['~rari'].headers = createHeaders
+  rari.headers = createHeaders
 })()

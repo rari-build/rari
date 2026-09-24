@@ -1,7 +1,5 @@
-/// <reference path="./static-modules.d.ts" />
 import { Image as ImageComponent } from './image'
 
-export type { ImageFormat } from './constants'
 export {
   DEFAULT_DEVICE_SIZES,
   DEFAULT_FORMATS,
@@ -9,7 +7,9 @@ export {
   DEFAULT_MINIMUM_CACHE_TTL,
   DEFAULT_QUALITY_LEVELS,
 } from './constants'
+export type { ImageFormat } from './constants'
 export type { ImageProps, StaticImageData } from './image'
+export type {} from './static-modules'
 
 const isServer = typeof window === 'undefined'
 const Image = ImageComponent as typeof ImageComponent & {

@@ -23,8 +23,8 @@ use super::{
         BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS, FIZZ_RENDER_SCRIPT,
         LOAD_FULL_REACT_VENDORS_SCRIPT, LOAD_RSC_VENDORS_SCRIPT,
         MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
-        RSC_RENDERER_SCRIPT, SERVER_FUNCTION_RESOLVER, STREAMING_FIZZ_SCRIPT,
-        STREAMING_PIPELINE_READY_CHECK, V8_CACHE_CLEAR_SCRIPT,
+        ROUTE_COMPOSER_SCRIPT, RSC_RENDERER_SCRIPT, SERVER_FUNCTION_RESOLVER,
+        STREAMING_FIZZ_SCRIPT, STREAMING_PIPELINE_READY_CHECK, V8_CACHE_CLEAR_SCRIPT,
         module_registration_script_from_import, resolve_server_functions_for_component,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
@@ -272,7 +272,8 @@ globalThis['~errors'].batch.push({{
 
     async fn load_fizz_and_rsc_scripts(&self) -> Result<(), RariError> {
         self.load_js_script("fizz_render.ts", FIZZ_RENDER_SCRIPT).await?;
-        self.load_js_script("rsc_renderer.ts", RSC_RENDERER_SCRIPT).await
+        self.load_js_script("rsc_renderer.ts", RSC_RENDERER_SCRIPT).await?;
+        self.load_js_script("route_composer.ts", ROUTE_COMPOSER_SCRIPT).await
     }
 
     async fn load_streaming_fizz_script(&self) -> Result<(), RariError> {
@@ -356,12 +357,13 @@ globalThis['~errors'].batch.push({{
             })?;
 
         self.load_js_script("load_rsc_renderer.ts", RSC_RENDERER_SCRIPT).await?;
+        self.load_js_script("route_composer.ts", ROUTE_COMPOSER_SCRIPT).await?;
 
         let ready = self
             .runtime
             .execute_script(
                 "<check_rsc>".to_string(),
-                "typeof globalThis.renderToRsc === 'function'".to_string(),
+                "typeof globalThis.renderToRsc === 'function' && typeof globalThis['~rari']?.composeRoute === 'function' && typeof globalThis['~rari']?.createPageElement === 'function' && typeof globalThis['~rari']?.wrapLayoutReuse === 'function'".to_string(),
             )
             .await
             .map_err(|e| {
@@ -379,6 +381,7 @@ globalThis['~errors'].batch.push({{
         self.load_full_react_vendors().await?;
         self.load_js_script("fizz_render.ts", FIZZ_RENDER_SCRIPT).await?;
         self.load_js_script("rsc_renderer.ts", RSC_RENDERER_SCRIPT).await?;
+        self.load_js_script("route_composer.ts", ROUTE_COMPOSER_SCRIPT).await?;
         self.load_js_script("streaming_fizz.ts", STREAMING_FIZZ_SCRIPT).await?;
         self.verify_streaming_pipeline_ready().await
     }
@@ -412,6 +415,12 @@ globalThis['~errors'].batch.push({{
             .await
             .map_err(|e| RariError::internal(format!("resync: RSC renderer failed: {e}")))?;
 
+        let _ = runtime
+            .execute_script(
+                "resync_route_composer.ts".to_string(),
+                ROUTE_COMPOSER_SCRIPT.to_string(),
+            )
+            .await;
         let _ = runtime
             .execute_script("resync_fizz_render.ts".to_string(), FIZZ_RENDER_SCRIPT.to_string())
             .await;

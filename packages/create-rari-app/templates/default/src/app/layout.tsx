@@ -1,4 +1,4 @@
-/* eslint-disable style/object-curly-spacing */
+// eslint-disable style/object-curly-spacing
 import type { LayoutProps, Metadata } from 'rari'
 import './globals.css'
 
