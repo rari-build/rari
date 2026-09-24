@@ -369,4 +369,21 @@ export default /* inline */ async function save(formData) {
       'export default registerServerReference($$ACTION_0_save, "page", "default")',
     )
   })
+
+  it('preserves named exports when a block comment contains an embedded /* marker', () => {
+    const input = `import { db } from './db'
+export /* keep /* nested marker */ async function save(formData) {
+  'use server'
+  await db.write(formData)
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result).not.toBeNull()
+    expect(result!.rewrittenExportNames).toEqual(['save'])
+    expect(result!.code).toContain(
+      'export const save = registerServerReference($$ACTION_0_save, "page", "save")',
+    )
+    expect(result!.code).not.toMatch(/^export \/\*/m)
+  })
 })
