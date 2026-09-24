@@ -456,6 +456,11 @@ function collectModuleBindings(source: string): Set<string> {
   return names
 }
 
+function isMemberPropertyAccess(source: string, identStart: number): boolean {
+  if (identStart <= 0 || source.charCodeAt(identStart - 1) !== 46 /* . */) return false
+  return identStart < 2 || source.charCodeAt(identStart - 2) !== 46
+}
+
 function collectIdentsInRange(
   source: string,
   start: number,
@@ -482,7 +487,7 @@ function collectIdentsInRange(
       continue
     }
 
-    if (i > 0 && source.charCodeAt(i - 1) === 46) {
+    if (isMemberPropertyAccess(source, i)) {
       i = ident.end
       continue
     }
@@ -570,7 +575,7 @@ function rewriteIdentRefs(source: string, from: string, to: string): string {
     }
     if (
       ident.name === from &&
-      (i <= 0 || source.charCodeAt(i - 1) !== 46) &&
+      !isMemberPropertyAccess(source, i) &&
       !isObjectLiteralKey(source, i, ident.end)
     ) {
       out += source.slice(last, i) + to
