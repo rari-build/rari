@@ -390,6 +390,7 @@ export function Image({
   if (blurSrcKey !== finalSrc) {
     setBlurSrcKey(finalSrc)
     setNearViewport(shouldEagerBlur)
+    setBlurComplete(false)
   }
 
   const activeBlurUrl =
