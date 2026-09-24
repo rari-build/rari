@@ -1,13 +1,9 @@
-'use client'
-
-import { useClipboard } from '@/lib/hooks/use-clipboard'
 import { code } from '@/lib/site/styles'
-import Check from '../icons/Check'
-import Copy from '../icons/Copy'
 import File from '../icons/File'
 import React from '../icons/React'
 import TypeScript from '../icons/TypeScript'
 import Vite from '../icons/Vite'
+import CopyButton from '../ui/CopyButton'
 
 interface CodeBlockProps {
   readonly children: string
@@ -41,7 +37,7 @@ export default function CodeBlock({
   language = 'typescript',
   highlightedHtml,
 }: CodeBlockProps) {
-  const { copied, copyToClipboard } = useClipboard()
+  const codeText = children.trim()
 
   return (
     <div className={`${code.panel} ${className != null && className !== '' ? className : ''}`}>
@@ -52,16 +48,10 @@ export default function CodeBlock({
         </div>
       )}
 
-      <button
-        onClick={() => {
-          void copyToClipboard(children.trim())
-        }}
-        className={`${code.copyButton} ${filename != null && filename !== '' ? 'top-14' : 'top-2'}`}
-        type="button"
-        aria-label="Copy code to clipboard"
-      >
-        {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-      </button>
+      <CopyButton
+        text={codeText}
+        className={filename != null && filename !== '' ? 'top-14' : 'top-2'}
+      />
 
       {highlightedHtml != null && highlightedHtml !== '' ? (
         <div
@@ -78,7 +68,7 @@ export default function CodeBlock({
                 : 'whitespace-pre wrap-break-word'
             }
           >
-            {children.trim()}
+            {codeText}
           </code>
         </pre>
       )}

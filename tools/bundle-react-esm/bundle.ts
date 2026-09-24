@@ -146,6 +146,7 @@ const entries: BundleEntry[] = [
       'useDebugValue',
       'useDeferredValue',
       'useEffect',
+      'useEffectEvent',
       'useId',
       'useImperativeHandle',
       'useInsertionEffect',

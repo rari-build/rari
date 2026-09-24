@@ -1,28 +1,22 @@
 import type { PageProps } from 'rari'
-import { readFile } from 'node:fs/promises'
 import { getDocsFilePath, isValidSlugArray } from '@/lib/content'
-import { extractBasicMetadata } from '@/lib/content/metadata'
+import { loadOgMeta } from '@/lib/content/og-meta'
 import { generateOGImage } from '@/lib/site/og-image'
 
 export default async function Image({ params }: PageProps) {
   const slug = params.slug
-  let title = 'rari Docs'
-  let description = 'Complete documentation for rari framework.'
-
-  if (isValidSlugArray(slug)) {
-    try {
-      const content = await readFile(getDocsFilePath(slug), 'utf-8')
-      const metadata = extractBasicMetadata(content)
-
-      if (metadata.title != null && metadata.title !== '') title = metadata.title
-      if (metadata.description != null && metadata.description !== '')
-        description = metadata.description
-    } catch {}
+  const defaults = {
+    title: 'rari Docs',
+    description: 'Complete documentation for rari framework.',
   }
+
+  const { title, description } = isValidSlugArray(slug)
+    ? await loadOgMeta(getDocsFilePath(slug), defaults)
+    : defaults
 
   return generateOGImage({
     title,
-    description,
+    description: description ?? defaults.description,
     section: 'docs',
   })
 }

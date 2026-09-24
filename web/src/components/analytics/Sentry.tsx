@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useIdleLoad } from '@/lib/hooks/use-idle-load'
 
 const EXTENSION_PATTERN =
   /chrome-extension:\/\/|moz-extension:\/\/|safari-extension:|edge-extension:|extensions::/
@@ -72,40 +72,14 @@ async function initSentry(dsn: string) {
 }
 
 export function Sentry() {
-  useEffect(() => {
+  useIdleLoad(() => {
     const dsn = import.meta.env.VITE_SENTRY_DSN
-    if (typeof dsn !== 'string' || dsn === '') return undefined
+    if (typeof dsn !== 'string' || dsn === '') return
 
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let started = false
-
-    const loadSentry = () => {
-      if (started) return
-      started = true
-      if (timer != null) {
-        clearTimeout(timer)
-        timer = undefined
-      }
-      void initSentry(dsn).catch((error: unknown) => {
-        console.warn('[Sentry] Failed to load:', error)
-      })
-      document.removeEventListener('click', loadSentry)
-      document.removeEventListener('scroll', loadSentry)
-      document.removeEventListener('keydown', loadSentry)
-    }
-
-    document.addEventListener('click', loadSentry, { once: true, passive: true })
-    document.addEventListener('scroll', loadSentry, { once: true, passive: true })
-    document.addEventListener('keydown', loadSentry, { once: true, passive: true })
-    timer = setTimeout(loadSentry, 5000)
-
-    return () => {
-      if (timer != null) clearTimeout(timer)
-      document.removeEventListener('click', loadSentry)
-      document.removeEventListener('scroll', loadSentry)
-      document.removeEventListener('keydown', loadSentry)
-    }
-  }, [])
+    void initSentry(dsn).catch((error: unknown) => {
+      console.warn('[Sentry] Failed to load:', error)
+    })
+  }, 5000)
 
   return null
 }

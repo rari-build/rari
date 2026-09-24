@@ -1,5 +1,3 @@
-'use client'
-
 import type { JSX } from 'react'
 
 const PACKAGE_NAME_REGEX = /^[@\w.:/-]+$/
