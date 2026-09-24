@@ -115,12 +115,122 @@ function peekFulfilledFlightContent(
   return isReactNode(content.value) ? content.value : undefined
 }
 
-function isDocumentRoot(node: React.ReactNode): boolean {
+function isDocumentRoot(node: React.ReactNode): node is React.ReactElement {
   return React.isValidElement(node) && node.type === 'html'
 }
 
 function isMergeableFlightRoot(node: React.ReactNode): boolean {
   return isDocumentRoot(node) || (React.isValidElement(node) && isLayoutReuseMarker(node))
+}
+
+function emitNavigateError(
+  detail: Readonly<{
+    readonly from: string
+    readonly to: string
+    readonly navigationId: number
+  }>,
+  error: Error,
+): void {
+  console.error('[rari] AppRouter: Navigation failed:', error)
+  window.dispatchEvent(
+    new CustomEvent('rari:navigate-error', {
+      detail: {
+        from: detail.from,
+        to: detail.to,
+        error,
+        navigationId: detail.navigationId,
+      },
+    }),
+  )
+}
+
+function resolvePreviousDocument(
+  previousElement: React.ReactNode | PromiseLike<React.ReactNode> | undefined,
+): React.ReactElement | null {
+  if (
+    previousElement != null &&
+    !isFlightThenable<React.ReactNode>(previousElement) &&
+    isDocumentRoot(previousElement)
+  ) {
+    return previousElement
+  }
+  return null
+}
+
+function shouldScrollToTopForNavigation(detail: NavigationDetail): boolean {
+  const pendingUrl = detail.pendingHistory?.url
+  const hasHash =
+    pendingUrl != null && pendingUrl !== ''
+      ? new URL(pendingUrl, window.location.origin).hash.length > 0
+      : window.location.hash.length > 0
+  return (
+    (detail.options.historyKey == null || detail.options.historyKey === '') &&
+    !hasHash &&
+    detail.options.scroll !== false
+  )
+}
+
+function resolveRariServerOrigin(): string {
+  return (
+    import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== ''
+      ? import.meta.env.RARI_SERVER_URL
+      : window.location.origin
+  ).replace(PATH_TRAILING_SLASH_REGEX, '')
+}
+
+async function mergeNavigatedFlightPayload(
+  parsedPayload: RscPayload,
+  previousElement: React.ReactNode | PromiseLike<React.ReactNode> | undefined,
+  navigationId: number,
+  currentNavigationId: number,
+): Promise<
+  | { readonly kind: 'payload'; readonly payload: RscPayload }
+  | { readonly kind: 'error'; readonly error: Error }
+  | { readonly kind: 'superseded' }
+> {
+  const resolvedElement = await unwrapFlightContent(parsedPayload.element)
+  if (currentNavigationId !== navigationId) return { kind: 'superseded' }
+  if (!isMergeableFlightRoot(resolvedElement)) {
+    return {
+      kind: 'error',
+      error: new Error(
+        '[rari] AppRouter: navigated Flight content did not resolve to an <html> document root',
+      ),
+    }
+  }
+  const previousDocument = resolvePreviousDocument(previousElement)
+  if (
+    React.isValidElement(resolvedElement) &&
+    isLayoutReuseMarker(resolvedElement) &&
+    previousDocument == null
+  ) {
+    return {
+      kind: 'error',
+      error: new Error(
+        '[rari] AppRouter: layout-reuse Flight marker requires a previous <html> document',
+      ),
+    }
+  }
+  const mergedElement =
+    previousDocument != null
+      ? mergeFlightRefresh(previousDocument, resolvedElement)
+      : resolvedElement
+  if (!isDocumentRoot(mergedElement)) {
+    return {
+      kind: 'error',
+      error: new Error(
+        '[rari] AppRouter: layout-merged Flight content did not resolve to an <html> document root',
+      ),
+    }
+  }
+  return {
+    kind: 'payload',
+    payload: {
+      ...parsedPayload,
+      element: mergedElement,
+      rawElement: mergedElement,
+    },
+  }
 }
 
 async function unwrapFlightContent(
@@ -332,6 +442,45 @@ export function AppRouterProvider({
     }
   }
 
+  const parseRefetchResponse = async (
+    response: Response,
+    requestKey: string,
+  ): Promise<RscPayload | Error | 'stale'> => {
+    try {
+      const protocolClone = response.clone()
+      const rscFlightProtocol = await protocolClone.text()
+
+      if (isStaleContent(rscFlightProtocol)) {
+        pendingFetchesRef.current.delete(requestKey)
+        return 'stale'
+      }
+
+      await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
+
+      const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
+      const resolvedElement = await unwrapFlightContent(element)
+      if (!isDocumentRoot(resolvedElement)) {
+        throw new Error(
+          '[rari] AppRouter: refetched Flight content did not resolve to an <html> document root',
+        )
+      }
+      return {
+        element: resolvedElement,
+        rawElement: resolvedElement,
+        flightProtocol: rscFlightProtocol,
+      }
+    } catch (parseError) {
+      const error = toError(parseError)
+      trackHMRFailure(
+        error,
+        'parse',
+        `Failed to parse RSC Flight protocol: ${error.message}`,
+        window.location.pathname,
+      )
+      return error
+    }
+  }
+
   const refetchRscPayload = async (
     targetPath?: string,
     abortSignal?: AbortSignal,
@@ -347,17 +496,8 @@ export function AppRouterProvider({
     if (existingFetch) return existingFetch
 
     const fetchPromise = (async (): Promise<RscPayload | undefined> => {
-      let failure: unknown
-
       try {
-        const rariServerUrl = (
-          import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== ''
-            ? import.meta.env.RARI_SERVER_URL
-            : window.location.origin
-        ).replace(PATH_TRAILING_SLASH_REGEX, '')
-
-        const url = rariServerUrl + pathToFetch + window.location.search
-
+        const url = resolveRariServerOrigin() + pathToFetch + window.location.search
         const response = await fetch(url, {
           headers: {
             'Accept': 'text/x-component',
@@ -377,57 +517,23 @@ export function AppRouterProvider({
             `HTTP ${response.status} when fetching ${url}`,
             window.location.pathname,
           )
-          failure = error
-        } else {
-          let parsedPayload: RscPayload | undefined
-          let rscFlightProtocol = ''
-
-          try {
-            const protocolClone = response.clone()
-            rscFlightProtocol = await protocolClone.text()
-
-            if (isStaleContent(rscFlightProtocol)) {
-              pendingFetchesRef.current.delete(requestKey)
-              return undefined
-            }
-
-            await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
-
-            const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
-            const resolvedElement = await unwrapFlightContent(element)
-            if (!isDocumentRoot(resolvedElement)) {
-              throw new Error(
-                '[rari] AppRouter: refetched Flight content did not resolve to an <html> document root',
-              )
-            }
-            parsedPayload = {
-              element: resolvedElement,
-              rawElement: resolvedElement,
-              flightProtocol: rscFlightProtocol,
-            }
-          } catch (parseError) {
-            const error = toError(parseError)
-            trackHMRFailure(
-              error,
-              'parse',
-              `Failed to parse RSC Flight protocol: ${error.message}`,
-              window.location.pathname,
-            )
-            failure = error
-          }
-
-          if (failure == null) {
-            if (currentNavigationIdRef.current === navigationId) {
-              if (commit) setRscPayload(parsedPayload)
-              if (rscFlightProtocol !== '') lastSuccessfulPayloadRef.current = rscFlightProtocol
-              resetFailureTracking()
-            }
-
-            pendingFetchesRef.current.delete(requestKey)
-            return parsedPayload
-          }
+          throw error
         }
+
+        const parsed = await parseRefetchResponse(response, requestKey)
+        if (parsed === 'stale') return undefined
+        if (parsed instanceof Error) throw parsed
+
+        if (currentNavigationIdRef.current === navigationId) {
+          if (commit) setRscPayload(parsed)
+          if (parsed.flightProtocol != null && parsed.flightProtocol !== '')
+            lastSuccessfulPayloadRef.current = parsed.flightProtocol
+          resetFailureTracking()
+        }
+        pendingFetchesRef.current.delete(requestKey)
+        return parsed
       } catch (error) {
+        pendingFetchesRef.current.delete(requestKey)
         if (
           isError(error) &&
           !error.message.includes('Failed to fetch RSC data') &&
@@ -440,15 +546,8 @@ export function AppRouterProvider({
             window.location.pathname,
           )
         }
-
-        failure = error
+        throw toError(error)
       }
-
-      pendingFetchesRef.current.delete(requestKey)
-      if (failure != null) {
-        throw toError(failure)
-      }
-      return undefined
     })()
 
     pendingFetchesRef.current.set(requestKey, fetchPromise)
@@ -478,10 +577,106 @@ export function AppRouterProvider({
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
 
+    const loadNavigationPayload = async (
+      detail: NavigationDetail,
+    ): Promise<RscPayload | undefined> => {
+      if (detail.rscResponsePromise) {
+        const response = await detail.rscResponsePromise
+        if (currentNavigationIdRef.current !== detail.navigationId) return undefined
+        const parsed = await parseRscResponseRef.current(Promise.resolve(response))
+        if (currentNavigationIdRef.current !== detail.navigationId) return undefined
+        return parsed
+      }
+      if (detail.rscResponse) {
+        const parsed = await parseRscResponseRef.current(Promise.resolve(detail.rscResponse))
+        if (currentNavigationIdRef.current !== detail.navigationId) return undefined
+        return parsed
+      }
+      if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '') {
+        return parseRscFlightProtocolRef.current(detail.rscFlightProtocol)
+      }
+      if (!detail.isStreaming) {
+        return refetchRscPayloadRef.current(detail.to, detail.abortSignal, {
+          commit: false,
+        })
+      }
+      return undefined
+    }
+
+    const resolveNavigatedPayload = async (
+      detail: NavigationDetail,
+      parsedPayload: RscPayload,
+    ): Promise<RscPayload | null> => {
+      try {
+        const merged = await mergeNavigatedFlightPayload(
+          parsedPayload,
+          rscPayloadRef.current?.element,
+          detail.navigationId,
+          currentNavigationIdRef.current,
+        )
+        if (merged.kind === 'superseded') return null
+        if (merged.kind === 'error') {
+          emitNavigateError(detail, merged.error)
+          return null
+        }
+        if (currentNavigationIdRef.current !== detail.navigationId) return null
+        return merged.payload
+      } catch (resolveError) {
+        emitNavigateError(detail, toError(resolveError))
+        return null
+      }
+    }
+
+    const commitSuccessfulNavigation = (
+      detail: NavigationDetail,
+      resolvedPayload: RscPayload,
+    ): void => {
+      commitNavigationPayload({
+        parsedPayload: resolvedPayload,
+        shouldScrollToTop: shouldScrollToTopForNavigation(detail),
+        navigationId: detail.navigationId,
+        transitionTypes: resolveNavigationTransitionTypes({
+          historyKey: detail.options.historyKey,
+          replace: detail.options.replace,
+        }),
+        pendingHistory: detail.pendingHistory,
+        startTransition: startNavTransitionRef.current,
+        currentNavigationIdRef,
+        pendingScrollPayloadRef,
+        setRenderKey,
+        setRscPayload,
+        clearHmrError: () => {
+          setHmrError(null)
+        },
+        pendingNavigateCommittedIdRef,
+      })
+
+      if (resolvedPayload.flightProtocol != null && resolvedPayload.flightProtocol !== '')
+        lastSuccessfulPayloadRef.current = resolvedPayload.flightProtocol
+
+      resetFailureTracking()
+
+      if (onNavigateRef.current) onNavigateRef.current(detail)
+    }
+
+    const loadParsedNavigationPayload = async (
+      detail: NavigationDetail,
+    ): Promise<
+      | { readonly kind: 'payload'; readonly payload: RscPayload | undefined }
+      | { readonly kind: 'error'; readonly error: Error }
+      | { readonly kind: 'aborted' }
+    > => {
+      try {
+        return { kind: 'payload', payload: await loadNavigationPayload(detail) }
+      } catch (error) {
+        if (isError(error) && error.name === 'AbortError') return { kind: 'aborted' }
+        return { kind: 'error', error: toError(error) }
+      }
+    }
+
     const handleNavigate = async (event: Event) => {
       const detail = getCustomEventDetail(event, isNavigationDetail)
       if (!detail) return
-
       if (detail.navigationId !== currentNavigationIdRef.current) return
 
       scrollPositionRef.current = {
@@ -490,187 +685,28 @@ export function AppRouterProvider({
       }
       saveFormState()
 
-      let parsedPayload: RscPayload | undefined
-      let parseError: Error | null = null
-
-      try {
-        if (detail.rscResponsePromise) {
-          const response = await detail.rscResponsePromise
-          if (currentNavigationIdRef.current !== detail.navigationId) return
-          parsedPayload = await parseRscResponseRef.current(Promise.resolve(response))
-          if (currentNavigationIdRef.current !== detail.navigationId) return
-        } else if (detail.rscResponse) {
-          parsedPayload = await parseRscResponseRef.current(Promise.resolve(detail.rscResponse))
-          if (currentNavigationIdRef.current !== detail.navigationId) return
-        } else if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '') {
-          parsedPayload = await parseRscFlightProtocolRef.current(detail.rscFlightProtocol)
-        } else if (!detail.isStreaming) {
-          parsedPayload = await refetchRscPayloadRef.current(detail.to, detail.abortSignal, {
-            commit: false,
-          })
-        }
-      } catch (error) {
-        if (isError(error) && error.name === 'AbortError') return
-        parseError = toError(error)
-      }
-
-      if (parseError) {
-        console.error('[rari] AppRouter: Navigation failed:', parseError)
-
-        window.dispatchEvent(
-          new CustomEvent('rari:navigate-error', {
-            detail: {
-              from: detail.from,
-              to: detail.to,
-              error: parseError,
-              navigationId: detail.navigationId,
-            },
-          }),
-        )
-
+      const loaded = await loadParsedNavigationPayload(detail)
+      if (loaded.kind === 'aborted') return
+      if (loaded.kind === 'error') {
+        emitNavigateError(detail, loaded.error)
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
-
         return
       }
 
+      const parsedPayload = loaded.payload
       if (
-        !parsedPayload &&
+        parsedPayload == null &&
         detail.isStreaming &&
         currentNavigationIdRef.current === detail.navigationId
       ) {
         return
       }
 
-      if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
-        let resolvedPayload: typeof parsedPayload
-        try {
-          const resolvedElement = await unwrapFlightContent(parsedPayload.element)
-          if (currentNavigationIdRef.current !== detail.navigationId) return
-          if (!isMergeableFlightRoot(resolvedElement)) {
-            parseError = new Error(
-              '[rari] AppRouter: navigated Flight content did not resolve to an <html> document root',
-            )
-            console.error('[rari] AppRouter: Navigation failed:', parseError)
-            window.dispatchEvent(
-              new CustomEvent('rari:navigate-error', {
-                detail: {
-                  from: detail.from,
-                  to: detail.to,
-                  error: parseError,
-                  navigationId: detail.navigationId,
-                },
-              }),
-            )
-            return
-          }
-          const previousElement = rscPayloadRef.current?.element
-          const previousDocument =
-            previousElement != null &&
-            !isFlightThenable<React.ReactNode>(previousElement) &&
-            isDocumentRoot(previousElement)
-              ? previousElement
-              : null
-          if (
-            React.isValidElement(resolvedElement) &&
-            isLayoutReuseMarker(resolvedElement) &&
-            previousDocument == null
-          ) {
-            parseError = new Error(
-              '[rari] AppRouter: layout-reuse Flight marker requires a previous <html> document',
-            )
-            console.error('[rari] AppRouter: Navigation failed:', parseError)
-            window.dispatchEvent(
-              new CustomEvent('rari:navigate-error', {
-                detail: {
-                  from: detail.from,
-                  to: detail.to,
-                  error: parseError,
-                  navigationId: detail.navigationId,
-                },
-              }),
-            )
-            return
-          }
-          const mergedElement =
-            previousDocument != null
-              ? mergeFlightRefresh(previousDocument, resolvedElement)
-              : resolvedElement
-          if (!isDocumentRoot(mergedElement)) {
-            parseError = new Error(
-              '[rari] AppRouter: layout-merged Flight content did not resolve to an <html> document root',
-            )
-            console.error('[rari] AppRouter: Navigation failed:', parseError)
-            window.dispatchEvent(
-              new CustomEvent('rari:navigate-error', {
-                detail: {
-                  from: detail.from,
-                  to: detail.to,
-                  error: parseError,
-                  navigationId: detail.navigationId,
-                },
-              }),
-            )
-            return
-          }
-          resolvedPayload = {
-            ...parsedPayload,
-            element: mergedElement,
-            rawElement: mergedElement,
-          }
-        } catch (resolveError) {
-          parseError = toError(resolveError)
-          console.error('[rari] AppRouter: Navigation failed:', parseError)
-          window.dispatchEvent(
-            new CustomEvent('rari:navigate-error', {
-              detail: {
-                from: detail.from,
-                to: detail.to,
-                error: parseError,
-                navigationId: detail.navigationId,
-              },
-            }),
-          )
-          return
-        }
+      if (parsedPayload == null || currentNavigationIdRef.current !== detail.navigationId) return
 
-        const pendingUrl = detail.pendingHistory?.url
-        const hasHash =
-          pendingUrl != null && pendingUrl !== ''
-            ? new URL(pendingUrl, window.location.origin).hash.length > 0
-            : window.location.hash.length > 0
-        const shouldScrollToTop =
-          (detail.options.historyKey == null || detail.options.historyKey === '') &&
-          !hasHash &&
-          detail.options.scroll !== false
-        const navigationId = detail.navigationId
-
-        commitNavigationPayload({
-          parsedPayload: resolvedPayload,
-          shouldScrollToTop,
-          navigationId,
-          transitionTypes: resolveNavigationTransitionTypes({
-            historyKey: detail.options.historyKey,
-            replace: detail.options.replace,
-          }),
-          pendingHistory: detail.pendingHistory,
-          startTransition: startNavTransitionRef.current,
-          currentNavigationIdRef,
-          pendingScrollPayloadRef,
-          setRenderKey,
-          setRscPayload,
-          clearHmrError: () => {
-            setHmrError(null)
-          },
-          pendingNavigateCommittedIdRef,
-        })
-
-        if (resolvedPayload.flightProtocol != null && resolvedPayload.flightProtocol !== '')
-          lastSuccessfulPayloadRef.current = resolvedPayload.flightProtocol
-
-        resetFailureTracking()
-
-        if (onNavigateRef.current) onNavigateRef.current(detail)
-      }
+      const resolvedPayload = await resolveNavigatedPayload(detail, parsedPayload)
+      if (resolvedPayload == null) return
+      commitSuccessfulNavigation(detail, resolvedPayload)
     }
 
     const handleAppRouterRerender = async () => {

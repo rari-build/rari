@@ -31,47 +31,66 @@ interface CssImportQualifiers {
   readonly mediaQuery: string | null
 }
 
-function extractImportQualifiers(suffix: string): CssImportQualifiers {
-  let rest = suffix.trim().replace(/^\)\s*/, '')
-  let layerName: string | null = null
-  let supportsCondition: string | null = null
+function extractSupportsCondition(rest: string): {
+  supportsCondition: string | null
+  rest: string
+} {
+  if (!/^supports\s*\(/i.test(rest)) return { supportsCondition: null, rest }
 
+  const openParen = rest.indexOf('(')
+  let depth = 0
+  let end = -1
+  for (let i = openParen; i < rest.length; i++) {
+    const ch = rest[i]
+    if (ch === '(') depth++
+    else if (ch === ')') {
+      depth--
+      if (depth === 0) {
+        end = i
+        break
+      }
+    }
+  }
+  if (end === -1) return { supportsCondition: null, rest }
+
+  return {
+    supportsCondition: rest.slice(openParen + 1, end).trim(),
+    rest: rest.slice(end + 1).trim(),
+  }
+}
+
+function extractLayerName(rest: string): { layerName: string | null; rest: string } {
   const layerOpen = /^layer\s*\(/i.exec(rest)
   if (layerOpen) {
     const openParen = rest.indexOf('(')
     const closeParen = rest.indexOf(')', openParen)
-    if (closeParen !== -1) {
-      layerName = rest.slice(openParen + 1, closeParen).trim()
-      rest = rest.slice(closeParen + 1).trim()
+    if (closeParen === -1) return { layerName: null, rest }
+    return {
+      layerName: rest.slice(openParen + 1, closeParen).trim(),
+      rest: rest.slice(closeParen + 1).trim(),
     }
-  } else if (/^layer(?:\s|$)/i.test(rest)) {
-    layerName = ''
-    rest = rest.replace(/^layer\s*/i, '')
   }
+  if (/^layer(?:\s|$)/i.test(rest)) {
+    return { layerName: '', rest: rest.replace(/^layer\s*/i, '') }
+  }
+  return { layerName: null, rest }
+}
 
-  if (/^supports\s*\(/i.test(rest)) {
-    const openParen = rest.indexOf('(')
-    let depth = 0
-    let end = -1
-    for (let i = openParen; i < rest.length; i++) {
-      const ch = rest[i]
-      if (ch === '(') depth++
-      else if (ch === ')') {
-        depth--
-        if (depth === 0) {
-          end = i
-          break
-        }
-      }
-    }
-    if (end !== -1) {
-      supportsCondition = rest.slice(openParen + 1, end).trim()
-      rest = rest.slice(end + 1).trim()
-    }
-  }
+function extractImportQualifiers(suffix: string): CssImportQualifiers {
+  let rest = suffix.trim().replace(/^\)\s*/, '')
+
+  const layer = extractLayerName(rest)
+  rest = layer.rest
+
+  const supports = extractSupportsCondition(rest)
+  rest = supports.rest
 
   const mediaQuery = rest.trim() === '' ? null : rest.trim()
-  return { layerName, supportsCondition, mediaQuery }
+  return {
+    layerName: layer.layerName,
+    supportsCondition: supports.supportsCondition,
+    mediaQuery,
+  }
 }
 
 function applyImportQualifiers(css: string, qualifiers: CssImportQualifiers): string {
@@ -155,6 +174,30 @@ export function resolveLayoutCssServerSkipSet(
   return skip
 }
 
+function existingFile(candidate: string): string | null {
+  return fs.existsSync(candidate) && fs.statSync(candidate).isFile() ? candidate : null
+}
+
+function tryResolveBareCss(bare: string, fromFile: string, projectRoot: string): string | null {
+  const resolveFrom = [fromFile, path.join(projectRoot, 'package.json')]
+  for (const from of resolveFrom) {
+    try {
+      const resolved = existingFile(createRequire(from).resolve(bare))
+      if (resolved != null) return resolved
+    } catch {
+      try {
+        const resolved = existingFile(
+          fileURLToPath(import.meta.resolve(bare, pathToFileURL(from).href)),
+        )
+        if (resolved != null) return resolved
+      } catch {
+        // try next resolve root
+      }
+    }
+  }
+  return null
+}
+
 function resolveCssFilePath(
   source: string,
   fromFile: string,
@@ -164,41 +207,39 @@ function resolveCssFilePath(
   const bare = source.replace(/[?#].*$/, '')
   if (!CSS_IMPORT_SOURCE_RE.test(bare)) return null
 
-  if (path.isAbsolute(bare)) {
-    return fs.existsSync(bare) && fs.statSync(bare).isFile() ? bare : null
-  }
+  if (path.isAbsolute(bare)) return existingFile(bare)
 
   if (bare.startsWith('./') || bare.startsWith('../')) {
-    const resolved = path.resolve(path.dirname(fromFile), bare)
-    return fs.existsSync(resolved) && fs.statSync(resolved).isFile() ? resolved : null
+    return existingFile(path.resolve(path.dirname(fromFile), bare))
   }
 
   const aliased = resolveAlias(bare, aliases, projectRoot)
-  if (
-    aliased != null &&
-    aliased !== '' &&
-    fs.existsSync(aliased) &&
-    fs.statSync(aliased).isFile()
-  ) {
-    return aliased
+  if (aliased != null && aliased !== '') {
+    const resolved = existingFile(aliased)
+    if (resolved != null) return resolved
   }
 
-  const resolveFrom = [fromFile, path.join(projectRoot, 'package.json')]
-  for (const from of resolveFrom) {
-    try {
-      const resolved = createRequire(from).resolve(bare)
-      if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return resolved
-    } catch {
-      try {
-        const resolved = fileURLToPath(import.meta.resolve(bare, pathToFileURL(from).href))
-        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return resolved
-      } catch {
-        // try next resolve root
-      }
-    }
-  }
+  return tryResolveBareCss(bare, fromFile, projectRoot)
+}
 
-  return null
+function shouldSkipCssQueryImport(source: string): boolean {
+  const query = source.includes('?') ? source.slice(source.indexOf('?')) : ''
+  return /(?:\?|&)raw(?:&|$)/.test(query) || /(?:\?|&)url(?:&|$)/.test(query)
+}
+
+function readPreparedServerCss(
+  resolved: string,
+  layoutCssSkip: ReadonlySet<string>,
+): string | null {
+  if (isCssModulePath(resolved)) return null
+  if (layoutCssSkip.has(path.resolve(resolved))) return null
+  try {
+    const content = fs.readFileSync(resolved, 'utf-8')
+    const prepared = preparePlainCssForServerAsset(resolved, content)
+    return prepared !== '' ? prepared : null
+  } catch {
+    return null
+  }
 }
 
 export function collectComponentServerCssSources(options: {
@@ -212,8 +253,7 @@ export function collectComponentServerCssSources(options: {
   for (const imp of scanImportStatements(options.code)) {
     if (!CSS_IMPORT_SOURCE_RE.test(imp.source)) continue
     if (isCssModulePath(imp.source)) continue
-    const query = imp.source.includes('?') ? imp.source.slice(imp.source.indexOf('?')) : ''
-    if (/(?:\?|&)raw(?:&|$)/.test(query) || /(?:\?|&)url(?:&|$)/.test(query)) continue
+    if (shouldSkipCssQueryImport(imp.source)) continue
 
     const resolved = resolveCssFilePath(
       imp.source,
@@ -222,18 +262,42 @@ export function collectComponentServerCssSources(options: {
       options.aliases,
     )
     if (resolved == null) continue
-    if (isCssModulePath(resolved)) continue
-    if (options.layoutCssSkip.has(path.resolve(resolved))) continue
 
-    try {
-      const content = fs.readFileSync(resolved, 'utf-8')
-      const prepared = preparePlainCssForServerAsset(resolved, content)
-      if (prepared !== '') cssModules.push(prepared)
-    } catch {
-      // Skip unreadable CSS; emit path still owns the JS bundle.
-    }
+    const prepared = readPreparedServerCss(resolved, options.layoutCssSkip)
+    if (prepared != null) cssModules.push(prepared)
   }
   return cssModules
+}
+
+function nextSyntheticBinding(
+  defaultBinding: string | null | undefined,
+  prefix: string,
+  count: number,
+): { binding: string; nextCount: number } {
+  if (defaultBinding != null) return { binding: defaultBinding, nextCount: count }
+  return {
+    binding: `${prefix}${count === 0 ? '' : count}`,
+    nextCount: count + 1,
+  }
+}
+
+function emitCssUrlAsset(
+  resolved: string,
+  projectRoot: string,
+  assetsDirName: string,
+): { fileName: string; href: string; code: string } {
+  const content = fs.readFileSync(resolved)
+  const ext = path.extname(resolved) || '.css'
+  const base = path.basename(resolved, ext)
+  const relativeSource = toPosixPath(path.relative(projectRoot, resolved))
+  const hash = contentHash(`${relativeSource}:${content.toString('utf8')}`, 8)
+  const fileName = `${base}-${hash}${ext}`
+  const relativeFileName = `${assetsDirName}/${fileName}`
+  return {
+    fileName: relativeFileName,
+    href: `/${relativeFileName}`,
+    code: content.toString('utf8'),
+  }
 }
 
 export function transformCssQueryImportsForEmit(options: {
@@ -270,9 +334,12 @@ export function transformCssQueryImportsForEmit(options: {
 
     if (isRaw) {
       const content = fs.readFileSync(resolved, 'utf-8')
-      const binding =
-        imp.defaultBinding ?? `cssRaw${syntheticBindingCount === 0 ? '' : syntheticBindingCount}`
-      if (imp.defaultBinding == null) syntheticBindingCount++
+      const { binding, nextCount } = nextSyntheticBinding(
+        imp.defaultBinding,
+        'cssRaw',
+        syntheticBindingCount,
+      )
+      syntheticBindingCount = nextCount
       replacements.push({
         start: imp.start,
         end: imp.end,
@@ -281,22 +348,18 @@ export function transformCssQueryImportsForEmit(options: {
       continue
     }
 
-    const content = fs.readFileSync(resolved)
-    const ext = path.extname(resolved) || '.css'
-    const base = path.basename(resolved, ext)
-    const relativeSource = toPosixPath(path.relative(options.projectRoot, resolved))
-    const hash = contentHash(`${relativeSource}:${content.toString('utf8')}`, 8)
-    const fileName = `${base}-${hash}${ext}`
-    const relativeFileName = `${assetsDirName}/${fileName}`
-    extraFiles.push({ fileName: relativeFileName, code: content.toString('utf8') })
-    const href = `/${relativeFileName}`
-    const binding =
-      imp.defaultBinding ?? `cssUrl${syntheticBindingCount === 0 ? '' : syntheticBindingCount}`
-    if (imp.defaultBinding == null) syntheticBindingCount++
+    const asset = emitCssUrlAsset(resolved, options.projectRoot, assetsDirName)
+    extraFiles.push({ fileName: asset.fileName, code: asset.code })
+    const { binding, nextCount } = nextSyntheticBinding(
+      imp.defaultBinding,
+      'cssUrl',
+      syntheticBindingCount,
+    )
+    syntheticBindingCount = nextCount
     replacements.push({
       start: imp.start,
       end: imp.end,
-      code: `const ${binding} = ${JSON.stringify(href)};`,
+      code: `const ${binding} = ${JSON.stringify(asset.href)};`,
     })
   }
 

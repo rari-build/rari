@@ -98,20 +98,25 @@ function wghtAxisRange(
   weight: GoogleFontOptions['weight'],
   axisRanges?: readonly GoogleFontAxisRange[] | null,
 ): string {
-  if (isVariableWeight(weight)) {
-    if (typeof weight === 'string' && isWeightRange(weight)) return variableWeightRange(weight)
-    if (Array.isArray(weight)) {
-      for (const value of weight) {
-        if (typeof value === 'string' && isWeightRange(value)) return variableWeightRange(value)
-      }
-    }
-    return catalogAxisRange(axisRanges, 'wght') ?? variableWeightRange(weight)
-  }
+  if (isVariableWeight(weight)) return variableWghtAxisRange(weight, axisRanges)
   if (weight != null) {
     const weights = weightList(weight)
     if (weights.length === 1) return `${weights[0]}..${weights[0]}`
   }
   return catalogAxisRange(axisRanges, 'wght') ?? '100..900'
+}
+
+function variableWghtAxisRange(
+  weight: GoogleFontOptions['weight'],
+  axisRanges?: readonly GoogleFontAxisRange[] | null,
+): string {
+  if (typeof weight === 'string' && isWeightRange(weight)) return variableWeightRange(weight)
+  if (Array.isArray(weight)) {
+    for (const value of weight) {
+      if (typeof value === 'string' && isWeightRange(value)) return variableWeightRange(value)
+    }
+  }
+  return catalogAxisRange(axisRanges, 'wght') ?? variableWeightRange(weight)
 }
 
 function styleValues(style: GoogleFontOptions['style']): string[] {
@@ -148,60 +153,91 @@ export function buildGoogleCssUrl(
   const extraAxes = axisNames(options)
   const variable = isVariableWeight(options.weight) || extraAxes.length > 0
 
-  let axis: string
-  if (variable) {
-    const named = ['wght', ...extraAxes.filter(name => name !== 'wght' && name !== 'ital')].sort(
-      (a, b) => a.localeCompare(b),
-    )
-    const staticWeights = staticWeightsForAxes(options.weight)
-    const axisValue = (name: string, wghtValue: string) =>
-      name === 'wght' ? wghtValue : (catalogAxisRange(axisRanges, name) ?? '1..1000')
-
-    if (staticWeights != null) {
-      const tuples = staticWeights.map(weight =>
-        named.map(name => axisValue(name, weight)).join(','),
-      )
-      if (hasItalic && hasNormal) {
-        axis = `ital,${named.join(',')}@${[
-          ...tuples.map(tuple => `0,${tuple}`),
-          ...tuples.map(tuple => `1,${tuple}`),
-        ].join(';')}`
-      } else if (hasItalic) {
-        axis = `ital,${named.join(',')}@${tuples.map(tuple => `1,${tuple}`).join(';')}`
-      } else if (named.length === 1 && named[0] === 'wght') {
-        axis = `wght@${staticWeights.join(';')}`
-      } else {
-        axis = `${named.join(',')}@${tuples.join(';')}`
-      }
-    } else {
-      const wghtRange = wghtAxisRange(options.weight, axisRanges)
-      const values = named.map(name => axisValue(name, wghtRange))
-      if (hasItalic && hasNormal) {
-        axis = `ital,${named.join(',')}@0,${values.join(',')};1,${values.join(',')}`
-      } else if (hasItalic) {
-        axis = `ital,${named.join(',')}@1,${values.join(',')}`
-      } else if (named.length === 1 && named[0] === 'wght') {
-        axis = `wght@${values[0]}`
-      } else {
-        axis = `${named.join(',')}@${values.join(',')}`
-      }
-    }
-  } else {
-    const weights = weightList(options.weight)
-    if (hasItalic && hasNormal) {
-      const pairs = [
-        ...weights.map(weight => `0,${weight}`),
-        ...weights.map(weight => `1,${weight}`),
-      ]
-      axis = `ital,wght@${pairs.join(';')}`
-    } else if (hasItalic) {
-      axis = `ital,wght@${weights.map(weight => `1,${weight}`).join(';')}`
-    } else {
-      axis = `wght@${weights.join(';')}`
-    }
-  }
+  const axis = variable
+    ? buildVariableGoogleAxis(options, axisRanges, extraAxes, hasItalic, hasNormal)
+    : buildStaticGoogleAxis(options.weight, hasItalic, hasNormal)
 
   return `https://fonts.googleapis.com/css2?family=${familyParam}:${axis}&display=${display}`
+}
+
+function buildVariableGoogleAxis(
+  options: GoogleFontOptions,
+  axisRanges: readonly GoogleFontAxisRange[] | null | undefined,
+  extraAxes: readonly string[],
+  hasItalic: boolean,
+  hasNormal: boolean,
+): string {
+  const named = ['wght', ...extraAxes.filter(name => name !== 'wght' && name !== 'ital')].sort(
+    (a, b) => a.localeCompare(b),
+  )
+  const staticWeights = staticWeightsForAxes(options.weight)
+  const axisValue = (name: string, wghtValue: string) =>
+    name === 'wght' ? wghtValue : (catalogAxisRange(axisRanges, name) ?? '1..1000')
+
+  if (staticWeights != null) {
+    return formatStaticWeightVariableAxis(named, staticWeights, axisValue, hasItalic, hasNormal)
+  }
+
+  const wghtRange = wghtAxisRange(options.weight, axisRanges)
+  const values = named.map(name => axisValue(name, wghtRange))
+  return formatRangeVariableAxis(named, values, hasItalic, hasNormal)
+}
+
+function formatStaticWeightVariableAxis(
+  named: readonly string[],
+  staticWeights: readonly string[],
+  axisValue: (name: string, wghtValue: string) => string,
+  hasItalic: boolean,
+  hasNormal: boolean,
+): string {
+  const tuples = staticWeights.map(weight => named.map(name => axisValue(name, weight)).join(','))
+  if (hasItalic && hasNormal) {
+    return `ital,${named.join(',')}@${[
+      ...tuples.map(tuple => `0,${tuple}`),
+      ...tuples.map(tuple => `1,${tuple}`),
+    ].join(';')}`
+  }
+  if (hasItalic) {
+    return `ital,${named.join(',')}@${tuples.map(tuple => `1,${tuple}`).join(';')}`
+  }
+  if (named.length === 1 && named[0] === 'wght') {
+    return `wght@${staticWeights.join(';')}`
+  }
+  return `${named.join(',')}@${tuples.join(';')}`
+}
+
+function formatRangeVariableAxis(
+  named: readonly string[],
+  values: readonly string[],
+  hasItalic: boolean,
+  hasNormal: boolean,
+): string {
+  if (hasItalic && hasNormal) {
+    return `ital,${named.join(',')}@0,${values.join(',')};1,${values.join(',')}`
+  }
+  if (hasItalic) {
+    return `ital,${named.join(',')}@1,${values.join(',')}`
+  }
+  if (named.length === 1 && named[0] === 'wght') {
+    return `wght@${values[0]}`
+  }
+  return `${named.join(',')}@${values.join(',')}`
+}
+
+function buildStaticGoogleAxis(
+  weight: GoogleFontOptions['weight'],
+  hasItalic: boolean,
+  hasNormal: boolean,
+): string {
+  const weights = weightList(weight)
+  if (hasItalic && hasNormal) {
+    const pairs = [...weights.map(value => `0,${value}`), ...weights.map(value => `1,${value}`)]
+    return `ital,wght@${pairs.join(';')}`
+  }
+  if (hasItalic) {
+    return `ital,wght@${weights.map(value => `1,${value}`).join(';')}`
+  }
+  return `wght@${weights.join(';')}`
 }
 
 export interface ParsedGoogleFontFace {

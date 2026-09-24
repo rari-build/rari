@@ -217,41 +217,78 @@ function mergeDocumentHeads(
   return cloneWithMergedChildren(currentHead, currentProps, [...kept, ...flatRefreshKids])
 }
 
-function unwrapLayoutReuseMarkers(node: React.ReactNode): React.ReactNode {
-  if (Array.isArray(node)) {
-    const unwrapped: React.ReactNode[] = []
-    for (const child of childArray(node)) {
-      unwrapped.push(unwrapLayoutReuseMarkers(child))
-    }
-    if (unwrapped.length === 0) return null
-    if (unwrapped.length === 1) return unwrapped[0]
-    return unwrapped
+function collapseNodeList(nodes: readonly React.ReactNode[]): React.ReactNode {
+  if (nodes.length === 0) return null
+  if (nodes.length === 1) return nodes[0]
+  return [...nodes]
+}
+
+function unwrapChildList(children: React.ReactNode): React.ReactNode[] {
+  const unwrapped: React.ReactNode[] = []
+  for (const child of childArray(children)) {
+    unwrapped.push(unwrapLayoutReuseMarkers(child))
   }
+  return unwrapped
+}
+
+function unwrapLayoutReuseMarkers(node: React.ReactNode): React.ReactNode {
+  if (Array.isArray(node)) return collapseNodeList(unwrapChildList(node))
   if (!isReactElement(node)) return node
 
   if (isLayoutReuseMarker(node)) {
-    const kids: React.ReactNode[] = []
-    for (const child of childArray(elementPropsRecord(node).children)) {
-      kids.push(unwrapLayoutReuseMarkers(child))
-    }
-    if (kids.length === 0) return null
-    if (kids.length === 1) return kids[0]
-    return kids
+    return collapseNodeList(unwrapChildList(elementPropsRecord(node).children))
   }
 
   const props = elementPropsRecord(node)
   const kids = childArray(props.children)
   if (kids.length === 0) return node
-  const unwrappedKids: React.ReactNode[] = []
-  for (const child of kids) {
-    unwrappedKids.push(unwrapLayoutReuseMarkers(child))
-  }
+  const unwrappedKids = unwrapChildList(kids)
   if (unwrappedKids.every((child, index) => child === kids[index])) return node
-  return cloneWithMergedChildren(
-    node,
-    props,
-    unwrappedKids.length === 1 ? unwrappedKids[0] : unwrappedKids,
-  )
+  return cloneWithMergedChildren(node, props, collapseNodeList(unwrappedKids))
+}
+
+function spliceReuseMarkerIntoRemaining(
+  remaining: readonly React.ReactNode[],
+  refreshChild: React.ReactElement,
+): React.ReactNode[] {
+  if (remaining.length === 0) return [unwrapLayoutReuseMarkers(refreshChild)]
+  if (remaining.length === 1) return [mergeFlightRefresh(remaining[0], refreshChild)]
+
+  const merged: React.ReactNode[] = []
+  let spliced = false
+  for (const child of remaining) {
+    if (!spliced && isReactElement(child)) {
+      spliced = true
+      merged.push(mergeFlightRefresh(child, refreshChild))
+    } else {
+      merged.push(child)
+    }
+  }
+  return merged
+}
+
+function mergeChildListsWithReuseMarkers(
+  currentList: readonly React.ReactNode[],
+  refreshList: readonly React.ReactNode[],
+): React.ReactNode {
+  const merged: React.ReactNode[] = []
+  let currentIndex = 0
+  for (const refreshChild of refreshList) {
+    if (isReactElement(refreshChild) && isLayoutReuseMarker(refreshChild)) {
+      merged.push(...spliceReuseMarkerIntoRemaining(currentList.slice(currentIndex), refreshChild))
+      currentIndex = currentList.length
+      continue
+    }
+    const currentChild = currentList[currentIndex]
+    merged.push(
+      currentChild === undefined
+        ? unwrapLayoutReuseMarkers(refreshChild)
+        : mergeFlightRefresh(currentChild, refreshChild),
+    )
+    currentIndex += 1
+  }
+  if (currentIndex < currentList.length) merged.push(...currentList.slice(currentIndex))
+  return collapseNodeList(merged)
 }
 
 function mergeChildLists(
@@ -266,39 +303,7 @@ function mergeChildLists(
   if (refreshList.length === 0) return currentChildren
 
   if (refreshList.some(child => isReactElement(child) && isLayoutReuseMarker(child))) {
-    const merged: React.ReactNode[] = []
-    let currentIndex = 0
-    for (const refreshChild of refreshList) {
-      if (isReactElement(refreshChild) && isLayoutReuseMarker(refreshChild)) {
-        const remaining = currentList.slice(currentIndex)
-        if (remaining.length === 0) {
-          merged.push(unwrapLayoutReuseMarkers(refreshChild))
-        } else if (remaining.length === 1) {
-          merged.push(mergeFlightRefresh(remaining[0], refreshChild))
-        } else {
-          let spliced = false
-          for (const child of remaining) {
-            if (!spliced && isReactElement(child)) {
-              spliced = true
-              merged.push(mergeFlightRefresh(child, refreshChild))
-            } else {
-              merged.push(child)
-            }
-          }
-        }
-        currentIndex = currentList.length
-        continue
-      }
-      const currentChild = currentList[currentIndex]
-      merged.push(
-        currentChild === undefined
-          ? unwrapLayoutReuseMarkers(refreshChild)
-          : mergeFlightRefresh(currentChild, refreshChild),
-      )
-      currentIndex += 1
-    }
-    if (currentIndex < currentList.length) merged.push(...currentList.slice(currentIndex))
-    return merged.length === 1 ? merged[0] : merged
+    return mergeChildListsWithReuseMarkers(currentList, refreshList)
   }
 
   if (currentList.length !== refreshList.length) {
@@ -309,9 +314,7 @@ function mergeChildLists(
     mergeFlightRefresh(currentChild, refreshList[index]),
   )
 
-  if (merged.length === 1) return merged[0]
-
-  return merged
+  return collapseNodeList(merged)
 }
 
 function cloneWithMergedChildren(
@@ -433,38 +436,48 @@ function isEmptyContentSlot(element: React.ReactElement): boolean {
   return elementChildren(element).length === 0
 }
 
-export function spliceLayoutReuseChildren(
-  current: React.ReactNode,
+function spliceAtLayoutPath(
+  current: React.ReactElement,
   nextPage: React.ReactNode,
-  layoutPath?: string,
+  layoutPath: string,
+): React.ReactNode | null {
+  const slot = findLayoutSlotByPath(current, layoutPath)
+  if (slot == null) return null
+
+  const parentProps = elementPropsRecord(slot.parent)
+  const kids = elementChildren(slot.parent)
+  const nextKids = [...kids]
+  const existing = kids[slot.slotIndex]
+  nextKids[slot.slotIndex] = isReactElement(existing)
+    ? cloneWithMergedChildren(existing, elementPropsRecord(existing), nextPage)
+    : nextPage
+  return replaceElementInTree(
+    current,
+    slot.parent,
+    cloneWithMergedChildren(slot.parent, parentProps, nextKids),
+  )
+}
+
+function replaceChildAt(
+  current: React.ReactElement,
+  props: {
+    readonly children?: React.ReactNode
+    readonly [key: string]: unknown
+  },
+  kids: readonly React.ReactNode[],
+  index: number,
+  nextChild: React.ReactNode,
+): React.ReactElement {
+  const nextKids: React.ReactNode[] = [...kids]
+  nextKids[index] = nextChild
+  return cloneWithMergedChildren(current, props, nextKids)
+}
+
+function spliceIntoContentHost(
+  current: React.ReactElement,
+  nextPage: React.ReactNode,
+  layoutPath: string | undefined,
 ): React.ReactNode {
-  if (!isReactElement(current)) return nextPage
-
-  if (isReactElement(nextPage) && isLayoutReuseMarker(nextPage)) {
-    const nestedPath = layoutReusePath(nextPage)
-    const nestedChildren = elementPropsRecord(nextPage).children
-    const spliced = spliceLayoutReuseChildren(current, nestedChildren, nestedPath ?? layoutPath)
-    return spliced
-  }
-
-  if (layoutPath != null && layoutPath !== '') {
-    const slot = findLayoutSlotByPath(current, layoutPath)
-    if (slot != null) {
-      const parentProps = elementPropsRecord(slot.parent)
-      const kids = elementChildren(slot.parent)
-      const nextKids = [...kids]
-      const existing = kids[slot.slotIndex]
-      nextKids[slot.slotIndex] = isReactElement(existing)
-        ? cloneWithMergedChildren(existing, elementPropsRecord(existing), nextPage)
-        : nextPage
-      return replaceElementInTree(
-        current,
-        slot.parent,
-        cloneWithMergedChildren(slot.parent, parentProps, nextKids),
-      )
-    }
-  }
-
   const props = elementPropsRecord(current)
   const kids = elementChildren(current)
 
@@ -484,28 +497,64 @@ export function spliceLayoutReuseChildren(
     child => isReactElement(child) && (child.type === 'main' || child.type === 'MAIN'),
   )
   if (mainIndex >= 0) {
-    const nextKids: React.ReactNode[] = [...kids]
-    nextKids[mainIndex] = spliceLayoutReuseChildren(kids[mainIndex], nextPage, layoutPath)
-    return cloneWithMergedChildren(current, props, nextKids)
+    return replaceChildAt(
+      current,
+      props,
+      kids,
+      mainIndex,
+      spliceLayoutReuseChildren(kids[mainIndex], nextPage, layoutPath),
+    )
   }
 
   for (let index = 0; index < kids.length; index += 1) {
     const child = kids[index]
     if (!isReactElement(child) || !elementTreeContainsMain(child)) continue
-    const nextKids: React.ReactNode[] = [...kids]
-    nextKids[index] = spliceLayoutReuseChildren(child, nextPage, layoutPath)
-    return cloneWithMergedChildren(current, props, nextKids)
+    return replaceChildAt(
+      current,
+      props,
+      kids,
+      index,
+      spliceLayoutReuseChildren(child, nextPage, layoutPath),
+    )
   }
 
   for (let index = 0; index < kids.length; index += 1) {
     const child = kids[index]
     if (!isReactElement(child) || !isEmptyContentSlot(child)) continue
-    const nextKids: React.ReactNode[] = [...kids]
-    nextKids[index] = cloneWithMergedChildren(child, elementPropsRecord(child), nextPage)
-    return cloneWithMergedChildren(current, props, nextKids)
+    return replaceChildAt(
+      current,
+      props,
+      kids,
+      index,
+      cloneWithMergedChildren(child, elementPropsRecord(child), nextPage),
+    )
   }
 
   return cloneWithMergedChildren(current, props, nextPage)
+}
+
+export function spliceLayoutReuseChildren(
+  current: React.ReactNode,
+  nextPage: React.ReactNode,
+  layoutPath?: string,
+): React.ReactNode {
+  if (!isReactElement(current)) return nextPage
+
+  if (isReactElement(nextPage) && isLayoutReuseMarker(nextPage)) {
+    const nestedPath = layoutReusePath(nextPage)
+    return spliceLayoutReuseChildren(
+      current,
+      elementPropsRecord(nextPage).children,
+      nestedPath ?? layoutPath,
+    )
+  }
+
+  if (layoutPath != null && layoutPath !== '') {
+    const spliced = spliceAtLayoutPath(current, nextPage, layoutPath)
+    if (spliced != null) return spliced
+  }
+
+  return spliceIntoContentHost(current, nextPage, layoutPath)
 }
 
 function replaceElementInTree(
@@ -570,57 +619,34 @@ function mergeDocumentWithReuse(
   return cloneWithMergedChildren(current, currentProps, nextKids)
 }
 
-export function mergeFlightRefresh(
-  current: React.ReactNode,
-  refresh: React.ReactNode,
+function mergeHtmlDocumentWithReuseMarker(
+  current: React.ReactElement,
+  refreshProps: {
+    readonly children?: React.ReactNode
+    readonly [key: string]: unknown
+  },
+  path: string | undefined,
+): React.ReactElement {
+  const currentProps = elementPropsRecord(current)
+  const currentKids = elementChildren(current)
+  const bodyIndex = currentKids.findIndex(child => isReactElement(child) && isBodyElement(child))
+  const currentBody = bodyIndex >= 0 ? currentKids[bodyIndex] : undefined
+  const splicedBody = isReactElement(currentBody)
+    ? spliceLayoutReuseChildren(currentBody, refreshProps.children, path)
+    : spliceLayoutReuseChildren(current, refreshProps.children, path)
+
+  if (isReactElement(currentBody) && bodyIndex >= 0) {
+    const nextKids = [...currentKids]
+    nextKids[bodyIndex] = splicedBody
+    return cloneWithMergedChildren(current, currentProps, nextKids)
+  }
+  return cloneWithMergedChildren(current, currentProps, splicedBody)
+}
+
+function mergeSameTypeElements(
+  current: React.ReactElement,
+  refresh: React.ReactElement,
 ): React.ReactNode {
-  if (current == null) return unwrapLayoutReuseMarkers(refresh)
-
-  if (refresh == null) return current
-
-  if (!isReactElement(current) || !isReactElement(refresh)) return refresh
-
-  if (isLayoutReuseMarker(refresh)) {
-    const refreshProps = elementPropsRecord(refresh)
-    const path = layoutReusePath(refresh)
-
-    if (isHtmlElement(current)) {
-      const currentProps = elementPropsRecord(current)
-      const currentKids = elementChildren(current)
-      const bodyIndex = currentKids.findIndex(
-        child => isReactElement(child) && isBodyElement(child),
-      )
-      const currentBody = bodyIndex >= 0 ? currentKids[bodyIndex] : undefined
-      const splicedBody = isReactElement(currentBody)
-        ? spliceLayoutReuseChildren(currentBody, refreshProps.children, path)
-        : spliceLayoutReuseChildren(current, refreshProps.children, path)
-
-      if (isReactElement(currentBody) && bodyIndex >= 0) {
-        const nextKids = [...currentKids]
-        nextKids[bodyIndex] = splicedBody
-        return cloneWithMergedChildren(current, currentProps, nextKids)
-      }
-      return cloneWithMergedChildren(current, currentProps, splicedBody)
-    }
-
-    return spliceLayoutReuseChildren(current, refreshProps.children, path)
-  }
-
-  if (isHtmlElement(current) && isHtmlElement(refresh) && treeContainsReuseMarker(refresh)) {
-    return mergeDocumentWithReuse(current, refresh)
-  }
-
-  if (isHeadElement(current) || isHeadElement(refresh)) {
-    if (isHeadElement(current) && isHeadElement(refresh)) return refresh
-    return refresh
-  }
-
-  if (matchingClientShell(current, refresh)) {
-    return refresh
-  }
-
-  if (current.type !== refresh.type) return refresh
-
   const currentProps = elementPropsRecord(current)
   const refreshProps = elementPropsRecord(refresh)
 
@@ -647,4 +673,38 @@ export function mergeFlightRefresh(
   }
 
   return cloneWithMergedChildren(refresh, refreshProps, mergedChildren)
+}
+
+export function mergeFlightRefresh(
+  current: React.ReactNode,
+  refresh: React.ReactNode,
+): React.ReactNode {
+  if (current == null) return unwrapLayoutReuseMarkers(refresh)
+
+  if (refresh == null) return current
+
+  if (!isReactElement(current) || !isReactElement(refresh)) return refresh
+
+  if (isLayoutReuseMarker(refresh)) {
+    const refreshProps = elementPropsRecord(refresh)
+    const path = layoutReusePath(refresh)
+
+    if (isHtmlElement(current)) {
+      return mergeHtmlDocumentWithReuseMarker(current, refreshProps, path)
+    }
+
+    return spliceLayoutReuseChildren(current, refreshProps.children, path)
+  }
+
+  if (isHtmlElement(current) && isHtmlElement(refresh) && treeContainsReuseMarker(refresh)) {
+    return mergeDocumentWithReuse(current, refresh)
+  }
+
+  if (isHeadElement(current) || isHeadElement(refresh)) return refresh
+
+  if (matchingClientShell(current, refresh)) return refresh
+
+  if (current.type !== refresh.type) return refresh
+
+  return mergeSameTypeElements(current, refresh)
 }

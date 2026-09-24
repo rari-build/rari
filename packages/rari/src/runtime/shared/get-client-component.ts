@@ -164,63 +164,129 @@ function findComponentInfo(id: string): ComponentLookup | null {
   const clientComponentNames = getClientComponentNames()
 
   const normalizedId = toPosixPath(id)
-
-  for (const candidateId of getIdCandidates(id)) {
-    if (candidateId in clientComponents) {
-      const componentInfo = clientComponents[candidateId]
-      const hashIndex = candidateId.indexOf('#')
-      const exportNameFromId = hashIndex === -1 ? undefined : candidateId.slice(hashIndex + 1)
-      return {
-        info: componentInfo,
-        exportName: resolveExportName(componentInfo, exportNameFromId),
-      }
-    }
-  }
+  const direct = findDirectComponentInfo(id, clientComponents)
+  if (direct != null) return direct
 
   const hashIndex = normalizedId.indexOf('#')
   const baseId = hashIndex === -1 ? normalizedId : normalizedId.slice(0, hashIndex)
   const exportName = hashIndex === -1 ? undefined : normalizedId.slice(hashIndex + 1)
 
+  const byBase = findComponentInfoByBaseId(id, exportName, clientComponents)
+  if (byBase != null) return byBase
+
+  const byPathOrName = findComponentInfoByPathOrName(
+    id,
+    baseId,
+    exportName,
+    clientComponents,
+    clientComponentPaths,
+    clientComponentNames,
+  )
+  if (byPathOrName != null) return byPathOrName
+
+  return findComponentInfoByPath(baseId, exportName, clientComponents)
+}
+
+function findDirectComponentInfo(
+  id: string,
+  clientComponents: Readonly<Record<string, ComponentInfo>>,
+): ComponentLookup | null {
+  for (const candidateId of getIdCandidates(id)) {
+    if (!(candidateId in clientComponents)) continue
+    const componentInfo = clientComponents[candidateId]
+    const hashIndex = candidateId.indexOf('#')
+    const exportNameFromId = hashIndex === -1 ? undefined : candidateId.slice(hashIndex + 1)
+    return {
+      info: componentInfo,
+      exportName: resolveExportName(componentInfo, exportNameFromId),
+    }
+  }
+  return null
+}
+
+function findComponentInfoByBaseId(
+  id: string,
+  exportName: string | undefined,
+  clientComponents: Readonly<Record<string, ComponentInfo>>,
+): ComponentLookup | null {
   for (const candidateId of getIdCandidates(id)) {
     const candidateHashIndex = candidateId.indexOf('#')
     const candidateBaseId =
       candidateHashIndex === -1 ? candidateId : candidateId.slice(0, candidateHashIndex)
-    if (candidateBaseId in clientComponents) {
-      return {
-        info: clientComponents[candidateBaseId],
-        exportName: resolveExportName(clientComponents[candidateBaseId], exportName),
-      }
+    if (!(candidateBaseId in clientComponents)) continue
+    return {
+      info: clientComponents[candidateBaseId],
+      exportName: resolveExportName(clientComponents[candidateBaseId], exportName),
     }
   }
+  return null
+}
 
+function findComponentInfoByPathOrName(
+  id: string,
+  baseId: string,
+  exportName: string | undefined,
+  clientComponents: Readonly<Record<string, ComponentInfo>>,
+  clientComponentPaths: Readonly<Record<string, string>>,
+  clientComponentNames: Readonly<Record<string, string>>,
+): ComponentLookup | null {
   const candidateBaseIds =
-    normalizedId !== id ? [baseId, id.includes('#') ? id.slice(0, id.indexOf('#')) : id] : [baseId]
+    toPosixPath(id) !== id
+      ? [baseId, id.includes('#') ? id.slice(0, id.indexOf('#')) : id]
+      : [baseId]
 
   for (const candidateBaseId of candidateBaseIds) {
-    for (const variant of getPathVariants(candidateBaseId)) {
-      if (variant in clientComponentPaths) {
-        const componentId = clientComponentPaths[variant]
-        if (componentId !== '' && componentId in clientComponents) {
-          return {
-            info: clientComponents[componentId],
-            exportName: resolveExportName(clientComponents[componentId], exportName),
-          }
-        }
-      }
-    }
+    const byPath = lookupByPathVariants(
+      candidateBaseId,
+      exportName,
+      clientComponents,
+      clientComponentPaths,
+    )
+    if (byPath != null) return byPath
 
-    if (candidateBaseId in clientComponentNames) {
-      const componentId = clientComponentNames[candidateBaseId]
-      if (componentId !== '' && componentId in clientComponents) {
-        return {
-          info: clientComponents[componentId],
-          exportName: resolveExportName(clientComponents[componentId], exportName),
-        }
+    const byName = lookupByComponentName(
+      candidateBaseId,
+      exportName,
+      clientComponents,
+      clientComponentNames,
+    )
+    if (byName != null) return byName
+  }
+  return null
+}
+
+function lookupByPathVariants(
+  candidateBaseId: string,
+  exportName: string | undefined,
+  clientComponents: Readonly<Record<string, ComponentInfo>>,
+  clientComponentPaths: Readonly<Record<string, string>>,
+): ComponentLookup | null {
+  for (const variant of getPathVariants(candidateBaseId)) {
+    if (!(variant in clientComponentPaths)) continue
+    const componentId = clientComponentPaths[variant]
+    if (componentId !== '' && componentId in clientComponents) {
+      return {
+        info: clientComponents[componentId],
+        exportName: resolveExportName(clientComponents[componentId], exportName),
       }
     }
   }
+  return null
+}
 
-  return findComponentInfoByPath(baseId, exportName, clientComponents)
+function lookupByComponentName(
+  candidateBaseId: string,
+  exportName: string | undefined,
+  clientComponents: Readonly<Record<string, ComponentInfo>>,
+  clientComponentNames: Readonly<Record<string, string>>,
+): ComponentLookup | null {
+  if (!(candidateBaseId in clientComponentNames)) return null
+  const componentId = clientComponentNames[candidateBaseId]
+  if (componentId === '' || !(componentId in clientComponents)) return null
+  return {
+    info: clientComponents[componentId],
+    exportName: resolveExportName(clientComponents[componentId], exportName),
+  }
 }
 
 function startComponentLoad(componentInfo: LazyComponentInfo): Promise<any> | undefined {

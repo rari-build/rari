@@ -178,6 +178,66 @@ function findClosingParen(source: string, openParenIndex: number): number {
   return -1
 }
 
+async function metricsFromFontFile(filePath: string): Promise<{
+  readonly ascent: number
+  readonly descent: number
+  readonly lineGap: number
+  readonly unitsPerEm: number
+  readonly xWidthAvg: number
+} | null> {
+  try {
+    const unpacked = await fromBuffer(fs.readFileSync(filePath))
+    return {
+      ascent: unpacked.ascent,
+      descent: unpacked.descent,
+      lineGap: unpacked.lineGap,
+      unitsPerEm: unpacked.unitsPerEm,
+      xWidthAvg: unpacked.xWidthAvg,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function resolveFontFallbackAdjustment(
+  primary: ResolvedFontFace,
+  family: string,
+): Promise<{
+  readonly overrides: ReturnType<typeof computeFallbackOverrides> | null
+  readonly metrics: Awaited<ReturnType<typeof loadMetricsForFamily>>
+}> {
+  let metrics = await loadMetricsForFamily(family)
+  if (primary.adjustFontFallback === false) return { overrides: null, metrics }
+
+  let fallbackName: FallbackFontName | null =
+    primary.adjustFontFallback === 'Arial' || primary.adjustFontFallback === 'Times New Roman'
+      ? primary.adjustFontFallback
+      : null
+
+  metrics ??= await metricsFromFontFile(primary.filePaths[0])
+  if (metrics == null) return { overrides: null, metrics }
+
+  fallbackName ??= categoryFallback(metrics.category)
+  return { overrides: computeFallbackOverrides(metrics, fallbackName), metrics }
+}
+
+function serializeFallbackFontFace(
+  family: string,
+  overrides: ReturnType<typeof computeFallbackOverrides> | null,
+): string {
+  if (overrides == null) return ''
+  return (
+    `@font-face {\n` +
+    `  font-family: "${family} Fallback";\n` +
+    `  src: local("${overrides.fallbackFont}");\n` +
+    `  ascent-override: ${overrides.ascentOverride};\n` +
+    `  descent-override: ${overrides.descentOverride};\n` +
+    `  line-gap-override: ${overrides.lineGapOverride};\n` +
+    `  size-adjust: ${overrides.sizeAdjust};\n` +
+    `}\n`
+  )
+}
+
 async function prepareFaces(
   faces: ResolvedFontFace[],
   assetsDir: string,
@@ -220,51 +280,15 @@ async function prepareFaces(
   const variableClassName =
     primary.variable != null ? classNameFromHash('rari_font_var', idHash) : null
 
-  let overrides = null
-  let metrics = await loadMetricsForFamily(family)
-  if (primary.adjustFontFallback !== false) {
-    let fallbackName: FallbackFontName | null =
-      primary.adjustFontFallback === 'Arial' || primary.adjustFontFallback === 'Times New Roman'
-        ? primary.adjustFontFallback
-        : null
-
-    if (metrics == null) {
-      try {
-        const unpacked = await fromBuffer(fs.readFileSync(primary.filePaths[0]))
-        metrics = {
-          ascent: unpacked.ascent,
-          descent: unpacked.descent,
-          lineGap: unpacked.lineGap,
-          unitsPerEm: unpacked.unitsPerEm,
-          xWidthAvg: unpacked.xWidthAvg,
-        }
-      } catch {
-        metrics = null
-      }
-    }
-
-    if (metrics != null) {
-      fallbackName ??= categoryFallback(metrics.category)
-      overrides = computeFallbackOverrides(metrics, fallbackName)
-    }
-  }
+  const adjusted = await resolveFontFallbackAdjustment(primary, family)
+  const overrides = adjusted.overrides
+  const metrics = adjusted.metrics
 
   let css = ''
   for (const face of emittedFaces) {
     css += serializeFontFaceRule(face)
   }
-
-  if (overrides != null) {
-    css +=
-      `@font-face {\n` +
-      `  font-family: "${family} Fallback";\n` +
-      `  src: local("${overrides.fallbackFont}");\n` +
-      `  ascent-override: ${overrides.ascentOverride};\n` +
-      `  descent-override: ${overrides.descentOverride};\n` +
-      `  line-gap-override: ${overrides.lineGapOverride};\n` +
-      `  size-adjust: ${overrides.sizeAdjust};\n` +
-      `}\n`
-  }
+  css += serializeFallbackFontFace(family, overrides)
 
   const stack = buildFontFamilyStack(
     family,
@@ -311,31 +335,30 @@ function buildCodeSpanMask(code: string): boolean[] {
 
   let i = 0
   while (i < code.length) {
-    const ch = code.charCodeAt(i)
-    if (ch === 47 && code.charCodeAt(i + 1) === 47) {
-      const start = i
-      const nl = code.indexOf('\n', i + 2)
-      i = nl === -1 ? code.length : nl
-      markNonCode(start, i)
-      continue
-    }
-    if (ch === 47 && code.charCodeAt(i + 1) === 42) {
-      const start = i
-      const end = code.indexOf('*/', i + 2)
-      i = end === -1 ? code.length : end + 2
-      markNonCode(start, i)
-      continue
-    }
-    if (ch === 34 || ch === 39 || ch === 96) {
-      const start = i
-      i = skipStringOrTemplate(code, i)
-      markNonCode(start, i)
+    const next = advancePastNonCodeSpan(code, i)
+    if (next != null) {
+      markNonCode(i, next)
+      i = next
       continue
     }
     i += 1
   }
 
   return isCode
+}
+
+function advancePastNonCodeSpan(code: string, i: number): number | null {
+  const ch = code.charCodeAt(i)
+  if (ch === 47 && code.charCodeAt(i + 1) === 47) {
+    const nl = code.indexOf('\n', i + 2)
+    return nl === -1 ? code.length : nl
+  }
+  if (ch === 47 && code.charCodeAt(i + 1) === 42) {
+    const end = code.indexOf('*/', i + 2)
+    return end === -1 ? code.length : end + 2
+  }
+  if (ch === 34 || ch === 39 || ch === 96) return skipStringOrTemplate(code, i)
+  return null
 }
 
 function parseImportBindings(
@@ -437,47 +460,42 @@ function isIdentPart(code: number): boolean {
   return isIdentStart(code) || (code >= 48 && code <= 57)
 }
 
-function skipStringOrTemplate(code: string, start: number): number {
-  const quote = code.charCodeAt(start)
-  let i = start + 1
-  if (quote === 96) {
-    while (i < code.length) {
-      const ch = code.charCodeAt(i)
-      if (ch === 92) {
-        i += 2
-        continue
-      }
-      if (ch === 96) return i + 1
-      if (ch === 36 && code.charCodeAt(i + 1) === 123) {
-        i += 2
-        let depth = 1
-        while (i < code.length && depth > 0) {
-          const inner = code.charCodeAt(i)
-          if (inner === 34 || inner === 39 || inner === 96) {
-            i = skipStringOrTemplate(code, i)
-            continue
-          }
-          if (inner === 47 && code.charCodeAt(i + 1) === 47) {
-            const nl = code.indexOf('\n', i + 2)
-            i = nl === -1 ? code.length : nl + 1
-            continue
-          }
-          if (inner === 47 && code.charCodeAt(i + 1) === 42) {
-            const end = code.indexOf('*/', i + 2)
-            i = end === -1 ? code.length : end + 2
-            continue
-          }
-          if (inner === 123) depth += 1
-          else if (inner === 125) depth -= 1
-          i += 1
-        }
-        continue
-      }
-      i += 1
-    }
-    return i
-  }
+function skipLineComment(code: string, start: number): number {
+  const nl = code.indexOf('\n', start + 2)
+  return nl === -1 ? code.length : nl + 1
+}
 
+function skipBlockComment(code: string, start: number): number {
+  const end = code.indexOf('*/', start + 2)
+  return end === -1 ? code.length : end + 2
+}
+
+function skipTemplateExpression(code: string, start: number): number {
+  let i = start
+  let depth = 1
+  while (i < code.length && depth > 0) {
+    const inner = code.charCodeAt(i)
+    if (inner === 34 || inner === 39 || inner === 96) {
+      i = skipStringOrTemplate(code, i)
+      continue
+    }
+    if (inner === 47 && code.charCodeAt(i + 1) === 47) {
+      i = skipLineComment(code, i)
+      continue
+    }
+    if (inner === 47 && code.charCodeAt(i + 1) === 42) {
+      i = skipBlockComment(code, i)
+      continue
+    }
+    if (inner === 123) depth += 1
+    else if (inner === 125) depth -= 1
+    i += 1
+  }
+  return i
+}
+
+function skipQuotedString(code: string, start: number, quote: number): number {
+  let i = start + 1
   while (i < code.length) {
     const ch = code.charCodeAt(i)
     if (ch === 92) {
@@ -490,46 +508,75 @@ function skipStringOrTemplate(code: string, start: number): number {
   return i
 }
 
+function skipTemplateLiteral(code: string, start: number): number {
+  let i = start + 1
+  while (i < code.length) {
+    const ch = code.charCodeAt(i)
+    if (ch === 92) {
+      i += 2
+      continue
+    }
+    if (ch === 96) return i + 1
+    if (ch === 36 && code.charCodeAt(i + 1) === 123) {
+      i = skipTemplateExpression(code, i + 2)
+      continue
+    }
+    i += 1
+  }
+  return i
+}
+
+function skipStringOrTemplate(code: string, start: number): number {
+  const quote = code.charCodeAt(start)
+  if (quote === 96) return skipTemplateLiteral(code, start)
+  return skipQuotedString(code, start, quote)
+}
+
+function advancePastCommentOrString(code: string, i: number): number | null {
+  const ch = code.charCodeAt(i)
+  if (ch === 47 && code.charCodeAt(i + 1) === 47) return skipLineComment(code, i)
+  if (ch === 47 && code.charCodeAt(i + 1) === 42) return skipBlockComment(code, i)
+  if (ch === 34 || ch === 39 || ch === 96) return skipStringOrTemplate(code, i)
+  return null
+}
+
+function matchCallSite(
+  code: string,
+  localName: string,
+  i: number,
+): { readonly start: number; readonly openParen: number } | null {
+  const ch = code.charCodeAt(i)
+  if (!isIdentStart(ch) || !code.startsWith(localName, i)) return null
+  const end = i + localName.length
+  const prev = i === 0 ? 0 : code.charCodeAt(i - 1)
+  if (i !== 0 && isIdentPart(prev)) return null
+  if (end < code.length && isIdentPart(code.charCodeAt(end))) return null
+  let j = end
+  while (
+    j < code.length &&
+    (code[j] === ' ' || code[j] === '\t' || code[j] === '\n' || code[j] === '\r')
+  ) {
+    j += 1
+  }
+  if (code[j] !== '(') return null
+  return { start: i, openParen: j }
+}
+
 function findCalls(code: string, localName: string): Array<{ start: number; openParen: number }> {
   const sites: Array<{ start: number; openParen: number }> = []
   let i = 0
   while (i < code.length) {
-    const ch = code.charCodeAt(i)
-    if (ch === 47 && code.charCodeAt(i + 1) === 47) {
-      const nl = code.indexOf('\n', i + 2)
-      i = nl === -1 ? code.length : nl + 1
-      continue
-    }
-    if (ch === 47 && code.charCodeAt(i + 1) === 42) {
-      const end = code.indexOf('*/', i + 2)
-      i = end === -1 ? code.length : end + 2
-      continue
-    }
-    if (ch === 34 || ch === 39 || ch === 96) {
-      i = skipStringOrTemplate(code, i)
+    const skipped = advancePastCommentOrString(code, i)
+    if (skipped != null) {
+      i = skipped
       continue
     }
 
-    if (isIdentStart(ch) && code.startsWith(localName, i)) {
-      const end = i + localName.length
-      const prev = i === 0 ? 0 : code.charCodeAt(i - 1)
-      if (
-        (i === 0 || !isIdentPart(prev)) &&
-        (end >= code.length || !isIdentPart(code.charCodeAt(end)))
-      ) {
-        let j = end
-        while (
-          j < code.length &&
-          (code[j] === ' ' || code[j] === '\t' || code[j] === '\n' || code[j] === '\r')
-        ) {
-          j += 1
-        }
-        if (code[j] === '(') {
-          sites.push({ start: i, openParen: j })
-          i = j + 1
-          continue
-        }
-      }
+    const site = matchCallSite(code, localName, i)
+    if (site != null) {
+      sites.push(site)
+      i = site.openParen + 1
+      continue
     }
     i += 1
   }
@@ -586,26 +633,8 @@ export async function transformFontSource(
       const closeParen = findClosingParen(nextCode, site.openParen)
       if (closeParen === -1) fail('unbalanced parentheses')
 
-      const inside = nextCode.slice(site.openParen + 1, closeParen).trim()
-      let optionsLiteral: Record<string, JsonValue> | null = null
-      let spliceEnd = closeParen + 1
-      if (inside.startsWith('{')) {
-        const openBrace = nextCode.indexOf('{', site.openParen)
-        const parsed = extractObjectLiteral(nextCode, openBrace)
-        if (parsed == null) {
-          fail('options must be a static object literal')
-        } else {
-          optionsLiteral = parsed.value
-          let end = parsed.end
-          while (end < nextCode.length && /\s/.test(nextCode[end] ?? '')) end += 1
-          if (nextCode[end] !== ')') fail('options must be a static object literal')
-          spliceEnd = end + 1
-        }
-      } else if (inside !== '') {
-        fail('options must be a static object literal')
-      }
-
-      const prepared = await resolvePrepared(optionsLiteral)
+      const parsed = parseFontCallOptions(nextCode, site.openParen, closeParen, fail)
+      const prepared = await resolvePrepared(parsed.optionsLiteral)
       cssModules.push({ id: prepared.cssId, css: prepared.css })
       cssImports.add(prepared.cssId)
       for (const asset of prepared.assets) assets.push(asset)
@@ -613,8 +642,12 @@ export async function transformFontSource(
         if (!preloadUrls.includes(url)) preloadUrls.push(url)
       }
       const replacement = serializeFont(prepared.font)
-      shiftImportRanges(site.start, spliceEnd, replacement.length - (spliceEnd - site.start))
-      nextCode = nextCode.slice(0, site.start) + replacement + nextCode.slice(spliceEnd)
+      shiftImportRanges(
+        site.start,
+        parsed.spliceEnd,
+        replacement.length - (parsed.spliceEnd - site.start),
+      )
+      nextCode = nextCode.slice(0, site.start) + replacement + nextCode.slice(parsed.spliceEnd)
     }
   }
 
@@ -664,49 +697,111 @@ export async function transformFontSource(
   return { code: nextCode, cssModules, assets, preloadUrls }
 }
 
+function parseFontCallOptions(
+  nextCode: string,
+  openParen: number,
+  closeParen: number,
+  fail: (reason: string) => never,
+): { readonly optionsLiteral: Record<string, JsonValue> | null; readonly spliceEnd: number } {
+  const inside = nextCode.slice(openParen + 1, closeParen).trim()
+  if (inside === '') return { optionsLiteral: null, spliceEnd: closeParen + 1 }
+  if (!inside.startsWith('{')) fail('options must be a static object literal')
+
+  const openBrace = nextCode.indexOf('{', openParen)
+  const parsed = extractObjectLiteral(nextCode, openBrace)
+  if (parsed == null) fail('options must be a static object literal')
+
+  let end = parsed.end
+  while (end < nextCode.length && /\s/.test(nextCode[end] ?? '')) end += 1
+  if (nextCode[end] !== ')') fail('options must be a static object literal')
+  return { optionsLiteral: parsed.value, spliceEnd: end + 1 }
+}
+
+function skipWhitespaceAndComments(code: string, start: number): number {
+  let i = start
+  while (i < code.length) {
+    const c = code[i]
+    if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
+      i += 1
+      continue
+    }
+    if (c === '/' && code[i + 1] === '/') {
+      i = skipLineComment(code, i)
+      continue
+    }
+    if (c === '/' && code[i + 1] === '*') {
+      i = skipBlockComment(code, i)
+      continue
+    }
+    break
+  }
+  return i
+}
+
+function tryConsumeModuleDirective(code: string, start: number): number | null {
+  const quote = code[start]
+  if (quote !== "'" && quote !== '"') return null
+  if (!code.startsWith('use client', start + 1) && !code.startsWith('use server', start + 1))
+    return null
+  if (code[start + 11] !== quote) return null
+  let i = start + 12
+  if (code[i] === ';') i += 1
+  return skipWhitespaceAndComments(code, i)
+}
+
 function insertAfterModulePrologue(code: string, insertion: string): string {
   let i = code.charCodeAt(0) === 0xfeff ? 1 : 0
   let insertAt = 0
 
   for (;;) {
-    while (i < code.length) {
-      const c = code[i]
-      if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
-        i += 1
-        continue
-      }
-      if (c === '/' && code[i + 1] === '/') {
-        const nl = code.indexOf('\n', i + 2)
-        i = nl === -1 ? code.length : nl + 1
-        continue
-      }
-      if (c === '/' && code[i + 1] === '*') {
-        const end = code.indexOf('*/', i + 2)
-        i = end === -1 ? code.length : end + 2
-        continue
-      }
-      break
-    }
-
-    const quote = code[i]
-    if (quote !== "'" && quote !== '"') break
-    if (!code.startsWith('use client', i + 1) && !code.startsWith('use server', i + 1)) break
-    if (code[i + 11] !== quote) break
-    i += 12
-    if (code[i] === ';') i += 1
-    while (i < code.length) {
-      const c = code[i]
-      if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
-        i += 1
-        continue
-      }
-      break
-    }
+    i = skipWhitespaceAndComments(code, i)
+    const next = tryConsumeModuleDirective(code, i)
+    if (next == null) break
+    i = next
     insertAt = i
   }
 
   if (insertAt === 0) return `${insertion}\n${code}`
   return `${code.slice(0, insertAt)}${insertion}\n${code.slice(insertAt)}`
+}
+
+function fontHttpContentType(ext: string): string {
+  if (ext === '.woff') return 'font/woff'
+  if (ext === '.ttf') return 'font/ttf'
+  if (ext === '.otf') return 'font/otf'
+  return 'font/woff2'
+}
+
+function fontFormatFromExt(ext: string): 'woff' | 'truetype' | 'opentype' | 'woff2' {
+  if (ext === '.woff') return 'woff'
+  if (ext === '.ttf') return 'truetype'
+  if (ext === '.otf') return 'opentype'
+  return 'woff2'
+}
+
+function resolveContainedDiskPath(outDir: string, relative: string): string | null {
+  const diskPath = path.resolve(outDir, relative)
+  let realOutDir: string
+  try {
+    realOutDir = fs.realpathSync(outDir)
+  } catch {
+    realOutDir = path.resolve(outDir)
+  }
+  let realDiskPath: string
+  try {
+    realDiskPath = fs.realpathSync(diskPath)
+  } catch {
+    return null
+  }
+  const contained = path.relative(realOutDir, realDiskPath)
+  if (contained.startsWith('..') || path.isAbsolute(contained)) return null
+  try {
+    const stat = fs.statSync(realDiskPath)
+    if (!stat.isFile() || !FONT_EXT_RE.test(realDiskPath)) return null
+  } catch {
+    return null
+  }
+  return realDiskPath
 }
 
 function writeFontAssets(
@@ -751,15 +846,7 @@ export function createFontPlugin(): Plugin {
       for (const entry of result.cssModules) cssModules.set(entry.id, entry.css)
       for (const asset of result.assets) pendingAssets.set(asset.fileName, asset.source)
       for (const url of result.preloadUrls) {
-        const ext = path.extname(url).toLowerCase()
-        const format =
-          ext === '.woff'
-            ? 'woff'
-            : ext === '.ttf'
-              ? 'truetype'
-              : ext === '.otf'
-                ? 'opentype'
-                : 'woff2'
+        const format = fontFormatFromExt(path.extname(url).toLowerCase())
         addClientHeadExtraTag(
           `<link rel="preload" href="${url}" as="font" type="${fontMimeType(format)}" crossorigin />`,
         )
@@ -787,62 +874,18 @@ export function createFontPlugin(): Plugin {
         }
         const source = pendingAssets.get(relative)
         if (source != null) {
-          const ext = path.extname(relative).toLowerCase()
-          res.setHeader(
-            'Content-Type',
-            ext === '.woff'
-              ? 'font/woff'
-              : ext === '.ttf'
-                ? 'font/ttf'
-                : ext === '.otf'
-                  ? 'font/otf'
-                  : 'font/woff2',
-          )
+          res.setHeader('Content-Type', fontHttpContentType(path.extname(relative).toLowerCase()))
           res.setHeader('Cache-Control', 'no-cache')
           res.end(source)
           return
         }
 
-        const diskPath = path.resolve(outDir, relative)
-        let realOutDir: string
-        try {
-          realOutDir = fs.realpathSync(outDir)
-        } catch {
-          realOutDir = path.resolve(outDir)
-        }
-        let realDiskPath: string
-        try {
-          realDiskPath = fs.realpathSync(diskPath)
-        } catch {
+        const realDiskPath = resolveContainedDiskPath(outDir, relative)
+        if (realDiskPath == null) {
           next()
           return
         }
-        const contained = path.relative(realOutDir, realDiskPath)
-        if (contained.startsWith('..') || path.isAbsolute(contained)) {
-          next()
-          return
-        }
-        try {
-          const stat = fs.statSync(realDiskPath)
-          if (!stat.isFile() || !FONT_EXT_RE.test(realDiskPath)) {
-            next()
-            return
-          }
-        } catch {
-          next()
-          return
-        }
-        const ext = path.extname(realDiskPath).toLowerCase()
-        res.setHeader(
-          'Content-Type',
-          ext === '.woff'
-            ? 'font/woff'
-            : ext === '.ttf'
-              ? 'font/ttf'
-              : ext === '.otf'
-                ? 'font/otf'
-                : 'font/woff2',
-        )
+        res.setHeader('Content-Type', fontHttpContentType(path.extname(realDiskPath).toLowerCase()))
         res.setHeader('Cache-Control', 'no-cache')
         fs.createReadStream(realDiskPath).pipe(res)
       })

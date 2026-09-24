@@ -63,17 +63,30 @@ function generateImageXml(images: readonly (string | SitemapImage)[]): string {
 }
 
 function buildVideoXml(video: SitemapVideo): string {
+  return [
+    '    <video:video>',
+    `      <video:title>${escapeXml(video.title)}</video:title>`,
+    `      <video:thumbnail_loc>${escapeXml(video.thumbnail_loc)}</video:thumbnail_loc>`,
+    `      <video:description>${escapeXml(video.description)}</video:description>`,
+    ...videoLocationLines(video),
+    ...videoStatsLines(video),
+    ...videoFlagLines(video),
+    ...videoRestrictionLines(video),
+    '    </video:video>',
+  ].join('\n')
+}
+
+function videoLocationLines(video: SitemapVideo): string[] {
   const lines: string[] = []
-
-  lines.push('    <video:video>')
-  lines.push(`      <video:title>${escapeXml(video.title)}</video:title>`)
-  lines.push(`      <video:thumbnail_loc>${escapeXml(video.thumbnail_loc)}</video:thumbnail_loc>`)
-  lines.push(`      <video:description>${escapeXml(video.description)}</video:description>`)
-
   if (video.content_loc != null && video.content_loc !== '')
     lines.push(`      <video:content_loc>${escapeXml(video.content_loc)}</video:content_loc>`)
   if (video.player_loc != null && video.player_loc !== '')
     lines.push(`      <video:player_loc>${escapeXml(video.player_loc)}</video:player_loc>`)
+  return lines
+}
+
+function videoStatsLines(video: SitemapVideo): string[] {
+  const lines: string[] = []
   if (video.duration !== undefined)
     lines.push(`      <video:duration>${video.duration}</video:duration>`)
   if (video.expiration_date != null && video.expiration_date !== '')
@@ -87,7 +100,11 @@ function buildVideoXml(video: SitemapVideo): string {
     lines.push(
       `      <video:publication_date>${escapeXml(video.publication_date)}</video:publication_date>`,
     )
+  return lines
+}
 
+function videoFlagLines(video: SitemapVideo): string[] {
+  const lines: string[] = []
   if (video.family_friendly !== undefined)
     lines.push(
       `      <video:family_friendly>${video.family_friendly ? 'yes' : 'no'}</video:family_friendly>`,
@@ -98,7 +115,11 @@ function buildVideoXml(video: SitemapVideo): string {
     )
   if (video.live !== undefined)
     lines.push(`      <video:live>${video.live ? 'yes' : 'no'}</video:live>`)
+  return lines
+}
 
+function videoRestrictionLines(video: SitemapVideo): string[] {
+  const lines: string[] = []
   if (video.restriction)
     lines.push(
       `      <video:restriction relationship="${escapeXml(video.restriction.relationship)}">${escapeXml(video.restriction.content)}</video:restriction>`,
@@ -119,10 +140,7 @@ function buildVideoXml(video: SitemapVideo): string {
   if (video.tag) {
     for (const tag of video.tag) lines.push(`      <video:tag>${escapeXml(tag)}</video:tag>`)
   }
-
-  lines.push('    </video:video>')
-
-  return lines.join('\n')
+  return lines
 }
 
 function generateVideoXml(videos: readonly SitemapVideo[]): string {

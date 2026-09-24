@@ -57,7 +57,15 @@ interface RegisterResult {
     store.ssrModules![hashId] = module
   }
 
-  function resolveServerFunctionExport(
+  function lookupModuleExport(
+    moduleNs: Readonly<RscModule>,
+    fnName: string,
+  ): ((...args: readonly unknown[]) => unknown) | null {
+    const fn = fnName === 'default' ? (moduleNs.default ?? moduleNs[fnName]) : moduleNs[fnName]
+    return typeof fn === 'function' ? (fn as (...args: readonly unknown[]) => unknown) : null // oxlint-disable-line typescript/no-unsafe-type-assertion
+  }
+
+  function resolveNamespacedServerFunction(
     name: string,
   ): ((...args: readonly unknown[]) => unknown) | null {
     const store = ensureRariManifestStores()
@@ -66,19 +74,24 @@ interface RegisterResult {
 
     const hashIdx = name.lastIndexOf('#')
     const colonIdx = name.lastIndexOf(':')
+    if (hashIdx === -1 && colonIdx === -1) return null
 
-    if (hashIdx !== -1 || colonIdx !== -1) {
-      const moduleId = hashIdx !== -1 ? name.slice(0, hashIdx) : name.slice(0, colonIdx)
-      const exportName = hashIdx !== -1 ? name.slice(hashIdx + 1) : name.slice(colonIdx + 1)
-      const entry = manifest[name] ?? manifest[moduleId]
-      const moduleNs =
-        ssrModules[name] ?? (entry ? ssrModules[entry.id] : undefined) ?? ssrModules[moduleId]
-      if (moduleNs == null) return null
+    const moduleId = hashIdx !== -1 ? name.slice(0, hashIdx) : name.slice(0, colonIdx)
+    const exportName = hashIdx !== -1 ? name.slice(hashIdx + 1) : name.slice(colonIdx + 1)
+    const entry = manifest[name] ?? manifest[moduleId]
+    const moduleNs =
+      ssrModules[name] ?? (entry ? ssrModules[entry.id] : undefined) ?? ssrModules[moduleId]
+    if (moduleNs == null) return null
 
-      const fnName = entry?.name ?? exportName
-      const fn = fnName === 'default' ? (moduleNs.default ?? moduleNs[fnName]) : moduleNs[fnName]
-      return typeof fn === 'function' ? (fn as (...args: readonly unknown[]) => unknown) : null // oxlint-disable-line typescript/no-unsafe-type-assertion
-    }
+    return lookupModuleExport(moduleNs, entry?.name ?? exportName)
+  }
+
+  function resolveShortNameServerFunction(
+    name: string,
+  ): ((...args: readonly unknown[]) => unknown) | null {
+    const store = ensureRariManifestStores()
+    const manifest = store.serverManifest!
+    const ssrModules = store.ssrModules!
 
     let foundKey: string | null = null
     let foundFunction: ((...args: readonly unknown[]) => unknown) | null = null
@@ -90,9 +103,8 @@ interface RegisterResult {
       const moduleNs = ssrModules[key] ?? (entry ? ssrModules[entry.id] : undefined)
       if (moduleNs == null) continue
 
-      const fnName = entry?.name ?? name
-      const fn = fnName === 'default' ? (moduleNs.default ?? moduleNs[fnName]) : moduleNs[fnName]
-      if (typeof fn !== 'function') continue
+      const fn = lookupModuleExport(moduleNs, entry?.name ?? name)
+      if (fn == null) continue
 
       if (foundKey !== null) {
         throw new Error(
@@ -101,10 +113,52 @@ interface RegisterResult {
       }
 
       foundKey = key
-      foundFunction = fn as (...args: readonly unknown[]) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion
+      foundFunction = fn
     }
 
     return foundFunction
+  }
+
+  function resolveServerFunctionExport(
+    name: string,
+  ): ((...args: readonly unknown[]) => unknown) | null {
+    if (name.includes('#') || name.includes(':')) return resolveNamespacedServerFunction(name)
+    return resolveShortNameServerFunction(name)
+  }
+
+  function parseRegisterModuleArgs(
+    moduleKeyOrModule: string | Readonly<RscModule>,
+    moduleNameOrMainExport: unknown,
+    exportedFunctions:
+      | Readonly<{ readonly [key: string]: (...args: readonly any[]) => any }>
+      | undefined,
+    argCount: number,
+  ): { module: RscModule; moduleKey: string } {
+    if (argCount === 2 && typeof moduleKeyOrModule === 'object') {
+      if (typeof moduleNameOrMainExport !== 'string')
+        throw new TypeError('registerModule requires a string module key')
+      return { module: { ...moduleKeyOrModule }, moduleKey: moduleNameOrMainExport }
+    }
+
+    if (argCount === 3) {
+      if (typeof moduleKeyOrModule !== 'string')
+        throw new TypeError('registerModule requires a string module key')
+      const moduleKey = moduleKeyOrModule
+      const module: RscModule = { ...exportedFunctions }
+      if (moduleNameOrMainExport != null) {
+        module.default = moduleNameOrMainExport
+        module[moduleKey] = moduleNameOrMainExport
+      }
+      return { module, moduleKey }
+    }
+
+    return {
+      module: typeof moduleKeyOrModule === 'object' ? { ...moduleKeyOrModule } : {},
+      moduleKey:
+        typeof moduleNameOrMainExport === 'string' && moduleNameOrMainExport !== ''
+          ? moduleNameOrMainExport
+          : 'unknown',
+    }
   }
 
   g.registerModule = function registerModule(
@@ -112,32 +166,12 @@ interface RegisterResult {
     moduleNameOrMainExport: unknown,
     exportedFunctions?: Readonly<{ readonly [key: string]: (...args: readonly any[]) => any }>,
   ): RegisterResult {
-    let module: RscModule
-    let moduleKey: string
-
-    if (arguments.length === 2 && typeof moduleKeyOrModule === 'object') {
-      module = { ...moduleKeyOrModule }
-      if (typeof moduleNameOrMainExport !== 'string')
-        throw new TypeError('registerModule requires a string module key')
-      moduleKey = moduleNameOrMainExport
-    } else if (arguments.length === 3) {
-      if (typeof moduleKeyOrModule !== 'string')
-        throw new TypeError('registerModule requires a string module key')
-      moduleKey = moduleKeyOrModule
-      const mainExport = moduleNameOrMainExport
-
-      module = { ...exportedFunctions }
-      if (mainExport != null) {
-        module.default = mainExport
-        module[moduleKey] = mainExport
-      }
-    } else {
-      module = typeof moduleKeyOrModule === 'object' ? { ...moduleKeyOrModule } : {}
-      moduleKey =
-        typeof moduleNameOrMainExport === 'string' && moduleNameOrMainExport !== ''
-          ? moduleNameOrMainExport
-          : 'unknown'
-    }
+    const { module, moduleKey } = parseRegisterModuleArgs(
+      moduleKeyOrModule,
+      moduleNameOrMainExport,
+      exportedFunctions,
+      arguments.length,
+    )
 
     rsc.modules![moduleKey] = module
 

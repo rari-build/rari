@@ -98,61 +98,62 @@ function extractValidTags(init: CachedFetchInit): string[] {
 
 function generateCacheKey(input: RequestInfo | URL, init: CachedFetchInit): string {
   const { url, method, headers } = resolveRequestMeta(input, init)
-
-  let headersStr = '{}'
-  if (headers) {
-    const headerEntries = []
-    const normalizedHeaders = new Headers(headers)
-    for (const [name, value] of normalizedHeaders.entries()) {
-      headerEntries.push([name.toLowerCase(), value])
-    }
-
-    headerEntries.sort((a, b) => a[0].localeCompare(b[0]))
-    headersStr = JSON.stringify(headerEntries)
-  }
-
-  let bodyStr = ''
-  if (init.body != null) {
-    const body: any = init.body
-    if (typeof body === 'string' || typeof body === 'number' || typeof body === 'boolean') {
-      bodyStr = String(body)
-    } else if (body instanceof Blob) {
-      bodyStr = `<blob:${body.size}:${body.type}>`
-    } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-      const size = body.byteLength
-      bodyStr = `<buffer:${size}>`
-    } else if (body instanceof FormData) {
-      const entries = []
-      for (const [key, value] of body.entries()) {
-        const val: any = value
-        if (typeof val === 'string') {
-          entries.push(`${key}=${val}`)
-        } else if (val instanceof File) {
-          entries.push(`${key}=<file:${val.name}:${val.size}:${val.type}>`)
-        } else if (val instanceof Blob) {
-          entries.push(`${key}=<blob:${val.size}:${val.type}>`)
-        }
-      }
-      bodyStr = `<formdata:${entries.join('&')}>`
-    } else if (body instanceof ReadableStream) {
-      bodyStr = `<stream:${Date.now()}:${Math.random().toString(36).slice(2)}>`
-    } else {
-      bodyStr = String(body)
-    }
-  }
-
-  const validTags = extractValidTags(init)
-  let tagsStr = ''
-  if (validTags.length > 0) {
-    const normalizedTags = [...validTags].sort((a: string, b: string) => a.localeCompare(b))
-    tagsStr = `:tags:${JSON.stringify(normalizedTags)}`
-  }
-
+  const headersStr = serializeCacheHeaders(headers != null ? new Headers(headers) : undefined)
+  const bodyStr = serializeCacheBody(init.body)
+  const tagsStr = serializeCacheTags(init)
   const timeout = init.rari?.timeout ?? 5000
   const revalidate = init.rari?.revalidate ?? init.next?.revalidate
   const optionsStr = `:timeout:${timeout}:revalidate:${revalidate}`
-
   return `${method}:${url}:${headersStr}:${bodyStr}${tagsStr}${optionsStr}`
+}
+
+function serializeCacheHeaders(headers: Headers | undefined): string {
+  if (headers == null) return '{}'
+  const headerEntries: Array<[string, string]> = []
+  for (const [name, value] of headers.entries()) {
+    headerEntries.push([name.toLowerCase(), value])
+  }
+  headerEntries.sort((a, b) => a[0].localeCompare(b[0]))
+  return JSON.stringify(headerEntries)
+}
+
+function serializeCacheBody(body: BodyInit | null | undefined): string {
+  if (body == null) return ''
+  const value: any = body
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (value instanceof Blob) return `<blob:${value.size}:${value.type}>`
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    return `<buffer:${value.byteLength}>`
+  }
+  if (value instanceof FormData) return serializeFormDataBody(value)
+  if (value instanceof ReadableStream) {
+    return `<stream:${Date.now()}:${Math.random().toString(36).slice(2)}>`
+  }
+  return String(value)
+}
+
+function serializeFormDataBody(body: FormData): string {
+  const entries = []
+  for (const [key, value] of body.entries()) {
+    const val: any = value
+    if (typeof val === 'string') {
+      entries.push(`${key}=${val}`)
+    } else if (val instanceof File) {
+      entries.push(`${key}=<file:${val.name}:${val.size}:${val.type}>`)
+    } else if (val instanceof Blob) {
+      entries.push(`${key}=<blob:${val.size}:${val.type}>`)
+    }
+  }
+  return `<formdata:${entries.join('&')}>`
+}
+
+function serializeCacheTags(init: CachedFetchInit): string {
+  const validTags = extractValidTags(init)
+  if (validTags.length === 0) return ''
+  const normalizedTags = [...validTags].sort((a: string, b: string) => a.localeCompare(b))
+  return `:tags:${JSON.stringify(normalizedTags)}`
 }
 
 // oxlint-disable typescript/prefer-readonly-parameter-types
@@ -177,6 +178,34 @@ async function fetchWithRustCache(
 ): Promise<Response> {
   ensureFetchModule()
   const { url, headers } = meta ?? resolveRequestMeta(input, init)
+  const options = buildRustFetchOptions(init, headers)
+
+  try {
+    const rariGlobal = g['~rari']
+    const result = await Deno.core.ops.op_fetch_with_cache(
+      url,
+      JSON.stringify(options),
+      rariGlobal?.currentRequestId?.() ?? '',
+    )
+
+    if (!result.ok)
+      throw new Error(result.error != null && result.error !== '' ? result.error : 'Fetch failed')
+
+    return buildCachedFetchResponse(url, result)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(
+      '[Fetch Cache] Error in fetchWithRustCache, falling back to original fetch:',
+      message,
+    )
+    return originalFetch(input, init)
+  }
+}
+
+function buildRustFetchOptions(
+  init: CachedFetchInit,
+  headers: HeadersInit | undefined,
+): Record<string, string> {
   const options: Record<string, string> = {}
 
   if (headers) {
@@ -197,71 +226,63 @@ async function fetchWithRustCache(
   const rawTimeout = init.rari?.timeout ?? init.fetchOptions?.timeout
   const timeoutMs = rawTimeout ?? 5000
   options.timeout = String(typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 5000)
+  return options
+}
 
-  try {
-    const rariGlobal = g['~rari']
-    const result = await Deno.core.ops.op_fetch_with_cache(
-      url,
-      JSON.stringify(options),
-      rariGlobal?.currentRequestId?.() ?? '',
-    )
-
-    if (!result.ok)
-      throw new Error(result.error != null && result.error !== '' ? result.error : 'Fetch failed')
-
-    const responseHeaders = new Headers()
-    if (result.headers && typeof result.headers === 'object') {
-      for (const [name, value] of Object.entries(result.headers)) {
-        if (typeof value === 'string') responseHeaders.set(name, value)
-        else responseHeaders.set(name, String(value))
-      }
+function buildCachedFetchResponse(
+  url: string,
+  result: {
+    readonly body?: string
+    readonly status: number
+    readonly statusText?: string
+    readonly headers?: Record<string, unknown>
+  },
+): Response {
+  const responseHeaders = new Headers()
+  if (result.headers && typeof result.headers === 'object') {
+    for (const [name, value] of Object.entries(result.headers)) {
+      if (typeof value === 'string') responseHeaders.set(name, value)
+      else responseHeaders.set(name, String(value))
     }
-
-    if (!responseHeaders.has('content-type')) {
-      let detectedType = 'text/plain'
-      const urlPath = url.split('?')[0].split('#')[0]
-      const extensionMatch = FILE_EXTENSION_REGEX.exec(urlPath)
-      const extension = extensionMatch ? extensionMatch[1].toLowerCase() : null
-
-      if (extension === 'json') {
-        detectedType = 'application/json'
-      } else if (extension === 'html' || extension === 'htm') {
-        detectedType = 'text/html'
-      } else if (extension === 'xml') {
-        detectedType = 'application/xml'
-      } else if (extension === 'txt') {
-        detectedType = 'text/plain'
-      } else if (result.body != null && result.body.length > 0 && result.body.length < 10000) {
-        const trimmed = result.body.trim()
-        if (
-          (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))
-        ) {
-          detectedType = 'application/json'
-        }
-      }
-
-      responseHeaders.set('content-type', detectedType)
-    }
-
-    return new Response(result.body, {
-      status: result.status,
-      statusText:
-        result.statusText != null && result.statusText !== ''
-          ? result.statusText
-          : result.status === 200
-            ? 'OK'
-            : '',
-      headers: responseHeaders,
-    })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(
-      '[Fetch Cache] Error in fetchWithRustCache, falling back to original fetch:',
-      message,
-    )
-    return originalFetch(input, init)
   }
+
+  if (!responseHeaders.has('content-type')) {
+    responseHeaders.set('content-type', detectContentType(url, result.body))
+  }
+
+  return new Response(result.body, {
+    status: result.status,
+    statusText:
+      result.statusText != null && result.statusText !== ''
+        ? result.statusText
+        : result.status === 200
+          ? 'OK'
+          : '',
+    headers: responseHeaders,
+  })
+}
+
+function detectContentType(url: string, body: string | undefined): string {
+  const urlPath = url.split('?')[0].split('#')[0]
+  const extensionMatch = FILE_EXTENSION_REGEX.exec(urlPath)
+  const extension = extensionMatch ? extensionMatch[1].toLowerCase() : null
+
+  if (extension === 'json') return 'application/json'
+  if (extension === 'html' || extension === 'htm') return 'text/html'
+  if (extension === 'xml') return 'application/xml'
+  if (extension === 'txt') return 'text/plain'
+
+  if (body != null && body.length > 0 && body.length < 10000) {
+    const trimmed = body.trim()
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      return 'application/json'
+    }
+  }
+
+  return 'text/plain'
 }
 // oxlint-enable typescript/prefer-readonly-parameter-types
 

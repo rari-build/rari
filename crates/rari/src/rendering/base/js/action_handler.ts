@@ -34,6 +34,104 @@ interface FlightServerActions {
   ) => Promise<unknown>
 }
 
+type ServerManifest = Record<string, { id: string; name?: string; chunks: string[] }>
+
+async function buildFormDataFromActionRequest(
+  contentType: string,
+  bodyBase64: string,
+  formEntries: ReadonlyArray<readonly [string, string]>,
+): Promise<FormData> {
+  if (contentType && bodyBase64) {
+    const binary = Uint8Array.from(atob(bodyBase64), char => char.charCodeAt(0))
+    const request = new Request('http://rari.invalid', {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body: binary,
+    })
+    return request.formData()
+  }
+  const formData = new FormData()
+  for (const [key, value] of formEntries) formData.append(key, value)
+  return formData
+}
+
+function wrapFormActionResult(actionResult: unknown, formState: unknown): unknown {
+  if (actionResult != null && typeof actionResult === 'object' && !Array.isArray(actionResult)) {
+    return {
+      ...Object.fromEntries(Object.entries(actionResult)),
+      '~rariFormState': formState,
+      '~rariSkipRefresh': true,
+    }
+  }
+
+  return {
+    'value': actionResult,
+    '~rariFormState': formState,
+    '~rariSkipRefresh': true,
+  }
+}
+
+async function handleFormActionMode(
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  flightServer: FlightServerActions,
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  serverManifest: ServerManifest,
+): Promise<unknown> {
+  const contentType = __RARI_ACTION_CONTENT_TYPE__
+  const bodyBase64 = __RARI_ACTION_BODY_B64__
+  const formEntries = __RARI_ACTION_FORM_ENTRIES__
+
+  const formData = await buildFormDataFromActionRequest(contentType, bodyBase64, formEntries)
+  validateFormData(formData)
+
+  const runFormAction = await flightServer.decodeAction(formData, serverManifest)
+  if (!runFormAction) throw new TypeError('Failed to decode server action from form data')
+
+  const actionResult = await runFormAction()
+  const formState = await flightServer.decodeFormState(actionResult, formData, serverManifest)
+
+  if (formState != null) {
+    const rari = (g['~rari'] ??= {})
+    rari.actionFormState = formState
+    return wrapFormActionResult(actionResult, formState)
+  }
+
+  return actionResult
+}
+
+async function handleReplyActionMode(
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  flightServer: FlightServerActions,
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  serverManifest: ServerManifest,
+): Promise<unknown> {
+  const mode = __RARI_ACTION_MODE__
+  const actionId = __RARI_ACTION_ID__
+  const bodyText = __RARI_ACTION_BODY__
+  const bodyBase64 = __RARI_ACTION_BODY_B64__
+  const contentType = __RARI_ACTION_CONTENT_TYPE__
+
+  let decoded: unknown
+  if (mode === 'reply-multipart') {
+    const binary = Uint8Array.from(atob(bodyBase64), char => char.charCodeAt(0))
+    const request = new Request('http://rari.invalid', {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body: binary,
+    })
+    const formData = await request.formData()
+    decoded = await flightServer.decodeReply(formData, serverManifest)
+  } else {
+    decoded = await flightServer.decodeReply(bodyText, serverManifest)
+  }
+
+  const args = Array.isArray(decoded) ? decoded : [decoded]
+  const sanitizedArgs = validateActionArgs(args)
+  const actionFn = resolveActionFn(actionId, serverManifest)
+  const result = await actionFn(...sanitizedArgs)
+  return stashRpcActionResult(result)
+}
+
 void (async () => {
   try {
     if (typeof g['~rari']?.loadRscReactVendors === 'function') g['~rari'].loadRscReactVendors()
@@ -48,84 +146,12 @@ void (async () => {
       throw new TypeError('Flight server action helpers not loaded')
     }
 
-    type ServerManifest = Record<string, { id: string; name?: string; chunks: string[] }>
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const serverManifest = (g['~rari']?.serverManifest ?? {}) as ServerManifest
     const mode = __RARI_ACTION_MODE__
-    const actionId = __RARI_ACTION_ID__
-    const bodyText = __RARI_ACTION_BODY__
-    const bodyBase64 = __RARI_ACTION_BODY_B64__
-    const contentType = __RARI_ACTION_CONTENT_TYPE__
-    const formEntries = __RARI_ACTION_FORM_ENTRIES__
 
-    if (mode === 'form') {
-      let formData: FormData
-      if (contentType && bodyBase64) {
-        const binary = Uint8Array.from(atob(bodyBase64), char => char.charCodeAt(0))
-        const request = new Request('http://rari.invalid', {
-          method: 'POST',
-          headers: { 'Content-Type': contentType },
-          body: binary,
-        })
-        formData = await request.formData()
-      } else {
-        formData = new FormData()
-        for (const [key, value] of formEntries) formData.append(key, value)
-      }
-
-      validateFormData(formData)
-
-      const runFormAction = await flightServer.decodeAction(formData, serverManifest)
-      if (!runFormAction) throw new TypeError('Failed to decode server action from form data')
-
-      const actionResult = await runFormAction()
-      const formState = await flightServer.decodeFormState(actionResult, formData, serverManifest)
-
-      if (formState != null) {
-        const rari = (g['~rari'] ??= {})
-        rari.actionFormState = formState
-
-        if (
-          actionResult != null &&
-          typeof actionResult === 'object' &&
-          !Array.isArray(actionResult)
-        ) {
-          return {
-            ...Object.fromEntries(Object.entries(actionResult)),
-            '~rariFormState': formState,
-            '~rariSkipRefresh': true,
-          }
-        }
-
-        return {
-          'value': actionResult,
-          '~rariFormState': formState,
-          '~rariSkipRefresh': true,
-        }
-      }
-
-      return actionResult
-    }
-
-    let decoded: unknown
-    if (mode === 'reply-multipart') {
-      const binary = Uint8Array.from(atob(bodyBase64), char => char.charCodeAt(0))
-      const request = new Request('http://rari.invalid', {
-        method: 'POST',
-        headers: { 'Content-Type': contentType },
-        body: binary,
-      })
-      const formData = await request.formData()
-      decoded = await flightServer.decodeReply(formData, serverManifest)
-    } else {
-      decoded = await flightServer.decodeReply(bodyText, serverManifest)
-    }
-
-    const args = Array.isArray(decoded) ? decoded : [decoded]
-    const sanitizedArgs = validateActionArgs(args)
-    const actionFn = resolveActionFn(actionId, serverManifest)
-    const result = await actionFn(...sanitizedArgs)
-    return stashRpcActionResult(result)
+    if (mode === 'form') return await handleFormActionMode(flightServer, serverManifest)
+    return await handleReplyActionMode(flightServer, serverManifest)
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`Server action error: ${errorMessage}`)

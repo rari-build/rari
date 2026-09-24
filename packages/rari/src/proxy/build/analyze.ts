@@ -48,6 +48,7 @@ type ScanFrame =
   | { readonly kind: 'regex' }
   | { readonly kind: 'regex-class' }
 
+// oxlint-disable typescript/prefer-readonly-parameter-types
 const REGEX_AFTER_KEYWORDS = new Set([
   'return',
   'throw',
@@ -69,47 +70,52 @@ function isLineTerminator(ch: string): boolean {
   return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
 }
 
-function canStartRegexLiteral(code: string, slashIndex: number): boolean {
-  let i = slashIndex - 1
+function skipBackwardBlockCommentInCode(code: string, i: number): number {
+  i -= 2
+  while (i >= 1) {
+    if (code.charAt(i - 1) === '/' && code.charAt(i) === '*') return i - 2
+    i -= 1
+  }
+  return i
+}
 
+function findLineCommentStartInRange(code: string, lineStart: number, i: number): number {
+  for (let j = lineStart; j < i; j++) {
+    if (code.charAt(j) === '/' && code.charAt(j + 1) === '/') return j
+    if (code.charAt(j) === '/' && code.charAt(j + 1) === '*') {
+      j += 2
+      while (j < i && (code.charAt(j) !== '*' || code.charAt(j + 1) !== '/')) j += 1
+      j += 1
+    }
+  }
+  return -1
+}
+
+function skipBackwardTriviaForRegex(code: string, slashIndex: number): number {
+  let i = slashIndex - 1
   while (i >= 0) {
     while (i >= 0 && /\s/.test(code.charAt(i))) i -= 1
-    if (i < 0) return true
+    if (i < 0) return i
 
     if (code.charAt(i) === '/' && i > 0 && code.charAt(i - 1) === '*') {
-      i -= 2
-      while (i >= 1) {
-        if (code.charAt(i - 1) === '/' && code.charAt(i) === '*') {
-          i -= 2
-          break
-        }
-        i -= 1
-      }
+      i = skipBackwardBlockCommentInCode(code, i)
       continue
     }
 
     let lineStart = i
     while (lineStart > 0 && !isLineTerminator(code.charAt(lineStart - 1))) lineStart -= 1
-    let lineCommentAt = -1
-    for (let j = lineStart; j < i; j++) {
-      if (code.charAt(j) === '/' && code.charAt(j + 1) === '/') {
-        lineCommentAt = j
-        break
-      }
-      if (code.charAt(j) === '/' && code.charAt(j + 1) === '*') {
-        j += 2
-        while (j < i && (code.charAt(j) !== '*' || code.charAt(j + 1) !== '/')) j += 1
-        j += 1
-      }
-    }
+    const lineCommentAt = findLineCommentStartInRange(code, lineStart, i)
     if (lineCommentAt !== -1) {
       i = lineCommentAt - 1
       continue
     }
-
     break
   }
+  return i
+}
 
+function canStartRegexLiteral(code: string, slashIndex: number): boolean {
+  const i = skipBackwardTriviaForRegex(code, slashIndex)
   if (i < 0) return true
 
   const prev = code.charAt(i)
@@ -118,12 +124,79 @@ function canStartRegexLiteral(code: string, slashIndex: number): boolean {
 
   let start = i
   while (start >= 0 && /[\w$]/.test(code.charAt(start))) start -= 1
-  const ident = code.slice(start + 1, i + 1)
-  return REGEX_AFTER_KEYWORDS.has(ident)
+  return REGEX_AFTER_KEYWORDS.has(code.slice(start + 1, i + 1))
 }
 
 function isLineContinuationBreak(ch: string): boolean {
   return ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029'
+}
+
+function decodeSimpleEscape(escaped: string): string | null {
+  switch (escaped) {
+    case 'n':
+      return '\n'
+    case 'r':
+      return '\r'
+    case 't':
+      return '\t'
+    case 'b':
+      return '\b'
+    case 'f':
+      return '\f'
+    case 'v':
+      return '\v'
+    case '0':
+      return '\0'
+    case '\\':
+    case "'":
+    case '"':
+    case '`':
+    case '/':
+      return escaped
+    default:
+      return null
+  }
+}
+
+function decodeHexOrUnicodeEscape(
+  raw: string,
+  i: number,
+  escaped: string,
+): { readonly char: string; readonly end: number } | null {
+  if (escaped === 'x') {
+    const hex = raw.slice(i + 1, i + 3)
+    if (!/^[\da-f]{2}$/i.test(hex)) return null
+    return { char: String.fromCharCode(Number.parseInt(hex, 16)), end: i + 2 }
+  }
+  if (escaped !== 'u') return null
+  if (raw.charAt(i + 1) === '{') {
+    const end = raw.indexOf('}', i + 2)
+    if (end === -1) return null
+    const hex = raw.slice(i + 2, end)
+    if (!/^[\da-f]+$/i.test(hex)) return null
+    return { char: String.fromCodePoint(Number.parseInt(hex, 16)), end }
+  }
+  const hex = raw.slice(i + 1, i + 5)
+  if (!/^[\da-f]{4}$/i.test(hex)) return null
+  return { char: String.fromCharCode(Number.parseInt(hex, 16)), end: i + 4 }
+}
+
+function appendDecodedEscape(
+  raw: string,
+  i: number,
+  escaped: string,
+  out: string,
+): { readonly out: string; readonly i: number } | null {
+  if (isLineContinuationBreak(escaped)) {
+    let nextI = i
+    if (escaped === '\r' && raw.charAt(i + 1) === '\n') nextI = i + 1
+    return { out, i: nextI }
+  }
+  const simple = decodeSimpleEscape(escaped)
+  if (simple != null) return { out: out + simple, i }
+  const hex = decodeHexOrUnicodeEscape(raw, i, escaped)
+  if (hex == null) return { out: out + escaped, i }
+  return { out: out + hex.char, i: hex.end }
 }
 
 function decodeJsStringLiteral(raw: string, quote: "'" | '"' | '`'): string | null {
@@ -137,66 +210,10 @@ function decodeJsStringLiteral(raw: string, quote: "'" | '"' | '`'): string | nu
     }
     i += 1
     if (i >= raw.length) return null
-    const escaped = raw.charAt(i)
-    if (isLineContinuationBreak(escaped)) {
-      if (escaped === '\r' && raw.charAt(i + 1) === '\n') i += 1
-      continue
-    }
-    switch (escaped) {
-      case 'n':
-        out += '\n'
-        break
-      case 'r':
-        out += '\r'
-        break
-      case 't':
-        out += '\t'
-        break
-      case 'b':
-        out += '\b'
-        break
-      case 'f':
-        out += '\f'
-        break
-      case 'v':
-        out += '\v'
-        break
-      case '0':
-        out += '\0'
-        break
-      case '\\':
-      case "'":
-      case '"':
-      case '`':
-      case '/':
-        out += escaped
-        break
-      case 'x': {
-        const hex = raw.slice(i + 1, i + 3)
-        if (!/^[\da-f]{2}$/i.test(hex)) return null
-        out += String.fromCharCode(Number.parseInt(hex, 16))
-        i += 2
-        break
-      }
-      case 'u': {
-        if (raw.charAt(i + 1) === '{') {
-          const end = raw.indexOf('}', i + 2)
-          if (end === -1) return null
-          const hex = raw.slice(i + 2, end)
-          if (!/^[\da-f]+$/i.test(hex)) return null
-          out += String.fromCodePoint(Number.parseInt(hex, 16))
-          i = end
-          break
-        }
-        const hex = raw.slice(i + 1, i + 5)
-        if (!/^[\da-f]{4}$/i.test(hex)) return null
-        out += String.fromCharCode(Number.parseInt(hex, 16))
-        i += 4
-        break
-      }
-      default:
-        out += escaped
-    }
+    const decoded = appendDecodedEscape(raw, i, raw.charAt(i), out)
+    if (decoded == null) return null
+    out = decoded.out
+    i = decoded.i
   }
   return out
 }
@@ -214,257 +231,396 @@ function skipStringLike(code: string, start: number, quote: "'" | '"' | '`'): nu
   return null
 }
 
+function advanceStringFrame(
+  stack: ScanFrame[],
+  kind: 'single' | 'double',
+  ch: string,
+  i: number,
+): number {
+  if (ch === '\\') return i + 2
+  if ((kind === 'single' && ch === "'") || (kind === 'double' && ch === '"')) stack.pop()
+  return i + 1
+}
+
+function advanceTemplateFrame(stack: ScanFrame[], ch: string, next: string, i: number): number {
+  if (ch === '\\') return i + 2
+  if (ch === '`') {
+    stack.pop()
+    return i + 1
+  }
+  if (ch === '$' && next === '{') {
+    stack.push({ kind: 'code', braceDepth: 1 })
+    return i + 2
+  }
+  return i + 1
+}
+
+function advanceRegexFrame(
+  stack: ScanFrame[],
+  code: string,
+  ch: string,
+  i: number,
+  endLimit: number,
+): number {
+  if (ch === '\\') return i + 2
+  if (ch === '[') {
+    stack.push({ kind: 'regex-class' })
+    return i + 1
+  }
+  if (ch === '/') {
+    stack.pop()
+    let j = i + 1
+    while (j < endLimit && /[a-z]/i.test(code.charAt(j))) j += 1
+    return j
+  }
+  return i + 1
+}
+
+function advanceRegexClassFrame(stack: ScanFrame[], ch: string, i: number): number {
+  if (ch === '\\') return i + 2
+  if (ch === ']') stack.pop()
+  return i + 1
+}
+
+function advanceNonCodeFrame(
+  stack: ScanFrame[],
+  code: string,
+  i: number,
+  endLimit: number = code.length,
+): number | null {
+  const frame = stack.at(-1)
+  if (frame === undefined || frame.kind === 'code') return null
+
+  const ch = code.charAt(i)
+  const next = code.charAt(i + 1)
+
+  if (frame.kind === 'line-comment') {
+    if (ch === '\n') stack.pop()
+    return i + 1
+  }
+  if (frame.kind === 'block-comment') {
+    if (ch === '*' && next === '/') {
+      stack.pop()
+      return i + 2
+    }
+    return i + 1
+  }
+  if (frame.kind === 'single' || frame.kind === 'double') {
+    return advanceStringFrame(stack, frame.kind, ch, i)
+  }
+  if (frame.kind === 'template') return advanceTemplateFrame(stack, ch, next, i)
+  if (frame.kind === 'regex') return advanceRegexFrame(stack, code, ch, i, endLimit)
+  return advanceRegexClassFrame(stack, ch, i)
+}
+
+function tryEnterNonCodeToken(stack: ScanFrame[], code: string, i: number): number | null {
+  const ch = code.charAt(i)
+  const next = code.charAt(i + 1)
+
+  if (ch === '/' && next === '/') {
+    stack.push({ kind: 'line-comment' })
+    return i + 2
+  }
+  if (ch === '/' && next === '*') {
+    stack.push({ kind: 'block-comment' })
+    return i + 2
+  }
+  if (ch === '/' && canStartRegexLiteral(code, i)) {
+    stack.push({ kind: 'regex' })
+    return i + 1
+  }
+  if (ch === "'") {
+    stack.push({ kind: 'single' })
+    return i + 1
+  }
+  if (ch === '"') {
+    stack.push({ kind: 'double' })
+    return i + 1
+  }
+  if (ch === '`') {
+    stack.push({ kind: 'template' })
+    return i + 1
+  }
+  return null
+}
+
+function applyCodeBraceChar(frame: CodeFrame, stack: ScanFrame[], ch: string): boolean {
+  if (ch === '{') {
+    frame.braceDepth += 1
+    return true
+  }
+  if (ch === '}') {
+    frame.braceDepth -= 1
+    if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
+    return true
+  }
+  return false
+}
+
+function applyBalancedBraceClose(
+  frame: CodeFrame,
+  stack: ScanFrame[],
+  code: string,
+  braceStart: number,
+  i: number,
+): { readonly i: number; readonly done: string | null } {
+  frame.braceDepth -= 1
+  const nextI = i + 1
+  if (frame.braceDepth !== 0) return { i: nextI, done: null }
+  if (stack.length === 1) return { i: nextI, done: code.slice(braceStart, nextI) }
+  stack.pop()
+  return { i: nextI, done: null }
+}
+
+function advanceBalancedBraceScan(
+  stack: ScanFrame[],
+  code: string,
+  i: number,
+  braceStart: number,
+): { readonly i: number; readonly done: string | null } | null {
+  const frame = stack.at(-1)
+  if (frame === undefined) return null
+
+  const nonCode = advanceNonCodeFrame(stack, code, i)
+  if (nonCode != null) return { i: nonCode, done: null }
+
+  if (frame.kind !== 'code') return null
+
+  const entered = tryEnterNonCodeToken(stack, code, i)
+  if (entered != null) return { i: entered, done: null }
+
+  const ch = code.charAt(i)
+  if (ch === '{') {
+    frame.braceDepth += 1
+    return { i: i + 1, done: null }
+  }
+  if (ch === '}') return applyBalancedBraceClose(frame, stack, code, braceStart, i)
+  return { i: i + 1, done: null }
+}
+
 function extractBalancedBraces(code: string, braceStart: number): string | null {
   const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
 
   for (let i = braceStart; i < code.length;) {
-    const frame = stack.at(-1)
-    if (frame === undefined) return null
-
-    const ch = code[i]
-    const next = code[i + 1]
-
-    if (frame.kind === 'line-comment') {
-      if (ch === '\n') stack.pop()
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'block-comment') {
-      if (ch === '*' && next === '/') {
-        stack.pop()
-        i += 2
-      } else {
-        i += 1
-      }
-      continue
-    }
-
-    if (frame.kind === 'single' || frame.kind === 'double') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
-        stack.pop()
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'template') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '`') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      if (ch === '$' && next === '{') {
-        stack.push({ kind: 'code', braceDepth: 1 })
-        i += 2
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'regex') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '[') {
-        stack.push({ kind: 'regex-class' })
-        i += 1
-        continue
-      }
-      if (ch === '/') {
-        stack.pop()
-        i += 1
-        while (i < code.length && /[a-z]/i.test(code.charAt(i))) i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'regex-class') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === ']') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (ch === '/' && next === '/') {
-      stack.push({ kind: 'line-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      stack.push({ kind: 'block-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && canStartRegexLiteral(code, i)) {
-      stack.push({ kind: 'regex' })
-      i += 1
-      continue
-    }
-    if (ch === "'") {
-      stack.push({ kind: 'single' })
-      i += 1
-      continue
-    }
-    if (ch === '"') {
-      stack.push({ kind: 'double' })
-      i += 1
-      continue
-    }
-    if (ch === '`') {
-      stack.push({ kind: 'template' })
-      i += 1
-      continue
-    }
-    if (ch === '{') {
-      frame.braceDepth += 1
-      i += 1
-      continue
-    }
-    if (ch === '}') {
-      frame.braceDepth -= 1
-      i += 1
-      if (frame.braceDepth === 0) {
-        if (stack.length === 1) return code.slice(braceStart, i)
-        stack.pop()
-      }
-      continue
-    }
-
-    i += 1
+    const step = advanceBalancedBraceScan(stack, code, i, braceStart)
+    if (step == null) return null
+    if (step.done != null) return step.done
+    i = step.i
   }
 
   return null
 }
 
-function readStaticMatcherValue(
-  code: string,
-  equalsIndex: number,
-): {
+interface MatcherValueResult {
   readonly matcher?: ProxyConfig['matcher']
   readonly forceRuntime: boolean
   readonly endIndex: number
-} | null {
+}
+
+function readStaticStringMatcher(code: string, i: number, ch: "'" | '"' | '`'): MatcherValueResult {
+  if (ch === '`') {
+    const uncertain = skipStringLike(code, i, '`')
+    if (uncertain == null) return { forceRuntime: true, endIndex: code.length }
+  }
+  const end = skipStringLike(code, i, ch)
+  if (end == null) return { forceRuntime: true, endIndex: code.length }
+  const raw = code.slice(i + 1, end - 1)
+  if (ch === '`' && raw.includes('${')) return { forceRuntime: true, endIndex: end }
+  const decoded = decodeJsStringLiteral(raw, ch)
+  if (decoded == null || decoded === '') return { forceRuntime: true, endIndex: end }
+  return { matcher: decoded, forceRuntime: false, endIndex: end }
+}
+
+function advanceArrayStringFrame(
+  stack: ScanFrame[],
+  frame: ScanFrame,
+  code: string,
+  j: number,
+): { j: number; forceRuntime?: true } {
+  const c = code[j]
+  const n = code[j + 1]
+  if (c === '\\') return { j: j + 2 }
+  if (frame.kind === 'template' && c === '$' && n === '{') return { j, forceRuntime: true }
+  if (
+    (frame.kind === 'single' && c === "'") ||
+    (frame.kind === 'double' && c === '"') ||
+    (frame.kind === 'template' && c === '`')
+  )
+    stack.pop()
+  return { j: j + 1 }
+}
+
+function advanceArrayScanFrame(
+  stack: ScanFrame[],
+  code: string,
+  j: number,
+): { j: number; forceRuntime?: true } | null {
+  const frame = stack.at(-1)
+  if (frame === undefined) return { j, forceRuntime: true }
+
+  if (frame.kind === 'line-comment') {
+    if (code[j] === '\n') stack.pop()
+    return { j: j + 1 }
+  }
+  if (frame.kind === 'block-comment') {
+    if (code[j] === '*' && code[j + 1] === '/') {
+      stack.pop()
+      return { j: j + 2 }
+    }
+    return { j: j + 1 }
+  }
+  if (frame.kind === 'single' || frame.kind === 'double' || frame.kind === 'template') {
+    return advanceArrayStringFrame(stack, frame, code, j)
+  }
+  return null
+}
+
+function tryEnterArrayStringOrComment(stack: ScanFrame[], code: string, j: number): number | null {
+  const c = code[j]
+  const n = code[j + 1]
+  if (c === '/' && n === '/') {
+    stack.push({ kind: 'line-comment' })
+    return j + 2
+  }
+  if (c === '/' && n === '*') {
+    stack.push({ kind: 'block-comment' })
+    return j + 2
+  }
+  if (c === "'") {
+    stack.push({ kind: 'single' })
+    return j + 1
+  }
+  if (c === '"') {
+    stack.push({ kind: 'double' })
+    return j + 1
+  }
+  if (c === '`') {
+    stack.push({ kind: 'template' })
+    return j + 1
+  }
+  return null
+}
+
+function advanceArrayBracketDepth(
+  code: string,
+  j: number,
+  depth: number,
+): { readonly j: number; readonly depth: number; readonly forceRuntime?: true } {
+  const c = code[j]
+  if (c === '[') return { j: j + 1, depth: depth + 1 }
+  if (c === ']') return { j: j + 1, depth: depth - 1 }
+  if (c === '{') return { j, depth, forceRuntime: true }
+  return { j: j + 1, depth }
+}
+
+function readStaticArrayMatcher(code: string, i: number): MatcherValueResult {
+  const bodyStart = i + 1
+  let depth = 1
+  let j = bodyStart
+  const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
+
+  for (; j < code.length && depth > 0;) {
+    const advanced = advanceArrayScanFrame(stack, code, j)
+    if (advanced != null) {
+      if (advanced.forceRuntime) return { forceRuntime: true, endIndex: code.length }
+      j = advanced.j
+      continue
+    }
+
+    const entered = tryEnterArrayStringOrComment(stack, code, j)
+    if (entered != null) {
+      j = entered
+      continue
+    }
+
+    const step = advanceArrayBracketDepth(code, j, depth)
+    if (step.forceRuntime) return { forceRuntime: true, endIndex: step.j }
+    j = step.j
+    depth = step.depth
+  }
+
+  if (depth !== 0) return { forceRuntime: true, endIndex: code.length }
+  return { ...parseStaticStringArrayBody(code.slice(bodyStart, j - 1)), endIndex: j }
+}
+
+function readStaticMatcherValue(code: string, equalsIndex: number): MatcherValueResult | null {
   let i = equalsIndex + 1
   while (i < code.length && /\s/.test(code[i])) i += 1
   if (i >= code.length) return null
 
   const ch = code[i]
-  if (ch === "'" || ch === '"' || ch === '`') {
-    if (ch === '`') {
-      const uncertain = skipStringLike(code, i, '`')
-      if (uncertain == null) return { forceRuntime: true, endIndex: code.length }
-    }
-    const end = skipStringLike(code, i, ch)
-    if (end == null) return { forceRuntime: true, endIndex: code.length }
-    const raw = code.slice(i + 1, end - 1)
-    if (ch === '`' && raw.includes('${')) return { forceRuntime: true, endIndex: end }
-    const decoded = decodeJsStringLiteral(raw, ch)
-    if (decoded == null || decoded === '') return { forceRuntime: true, endIndex: end }
-    return { matcher: decoded, forceRuntime: false, endIndex: end }
-  }
-
-  if (ch === '[') {
-    const bodyStart = i + 1
-    let depth = 1
-    let j = bodyStart
-    const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
-    for (; j < code.length && depth > 0;) {
-      const frame = stack.at(-1)
-      if (frame === undefined) return { forceRuntime: true, endIndex: code.length }
-      const c = code[j]
-      const n = code[j + 1]
-
-      if (frame.kind === 'line-comment') {
-        if (c === '\n') stack.pop()
-        j += 1
-        continue
-      }
-      if (frame.kind === 'block-comment') {
-        if (c === '*' && n === '/') {
-          stack.pop()
-          j += 2
-        } else j += 1
-        continue
-      }
-      if (frame.kind === 'single' || frame.kind === 'double' || frame.kind === 'template') {
-        if (c === '\\') {
-          j += 2
-          continue
-        }
-        if (frame.kind === 'template' && c === '$' && n === '{')
-          return { forceRuntime: true, endIndex: code.length }
-        if (
-          (frame.kind === 'single' && c === "'") ||
-          (frame.kind === 'double' && c === '"') ||
-          (frame.kind === 'template' && c === '`')
-        )
-          stack.pop()
-        j += 1
-        continue
-      }
-
-      if (c === '/' && n === '/') {
-        stack.push({ kind: 'line-comment' })
-        j += 2
-        continue
-      }
-      if (c === '/' && n === '*') {
-        stack.push({ kind: 'block-comment' })
-        j += 2
-        continue
-      }
-      if (c === "'") {
-        stack.push({ kind: 'single' })
-        j += 1
-        continue
-      }
-      if (c === '"') {
-        stack.push({ kind: 'double' })
-        j += 1
-        continue
-      }
-      if (c === '`') {
-        stack.push({ kind: 'template' })
-        j += 1
-        continue
-      }
-      if (c === '[') {
-        depth += 1
-        j += 1
-        continue
-      }
-      if (c === ']') {
-        depth -= 1
-        j += 1
-        continue
-      }
-      if (c === '{') return { forceRuntime: true, endIndex: j }
-      j += 1
-    }
-    if (depth !== 0) return { forceRuntime: true, endIndex: code.length }
-    return { ...parseStaticStringArrayBody(code.slice(bodyStart, j - 1)), endIndex: j }
-  }
-
+  if (ch === "'" || ch === '"' || ch === '`') return readStaticStringMatcher(code, i, ch)
+  if (ch === '[') return readStaticArrayMatcher(code, i)
   return { forceRuntime: true, endIndex: i + 1 }
+}
+
+function tryResolveConstMatcherBinding(
+  code: string,
+  i: number,
+  frame: CodeFrame,
+  stack: ScanFrame[],
+): {
+  readonly nextI: number
+  readonly binding?: { readonly matcher?: ProxyConfig['matcher']; readonly forceRuntime: boolean }
+  readonly forceRuntime?: true
+} | null {
+  const prev = i === 0 ? '' : code.charAt(i - 1)
+  const atBoundary = i === 0 || /[\s;{}]/.test(prev)
+  if (frame.braceDepth !== 0 || stack.length !== 1 || !atBoundary) return null
+
+  if (code.startsWith('let matcher', i) || code.startsWith('var matcher', i)) {
+    return { nextI: i, forceRuntime: true }
+  }
+
+  if (!code.startsWith('const matcher', i)) return null
+
+  const afterName = i + 'const matcher'.length
+  if (afterName < code.length && /[\w$]/.test(code.charAt(afterName))) {
+    return { nextI: i + 1 }
+  }
+  let j = afterName
+  while (j < code.length && /\s/.test(code.charAt(j))) j += 1
+  if (code.charAt(j) !== '=') return { nextI: i + 1 }
+
+  const resolved = readStaticMatcherValue(code, j)
+  if (resolved == null || resolved.forceRuntime) return { nextI: i, forceRuntime: true }
+  return {
+    nextI: resolved.endIndex,
+    binding: { matcher: resolved.matcher, forceRuntime: false },
+  }
+}
+
+function resolveMatcherBindingStep(
+  stack: ScanFrame[],
+  code: string,
+  i: number,
+  bindings: Array<{
+    readonly matcher?: ProxyConfig['matcher']
+    readonly forceRuntime: boolean
+  }>,
+): { readonly nextI: number; readonly forceRuntime?: true } | null {
+  const frame = stack.at(-1)
+  if (frame === undefined) return { nextI: i, forceRuntime: true }
+
+  const nonCode = advanceNonCodeFrame(stack, code, i)
+  if (nonCode != null) return { nextI: nonCode }
+
+  if (frame.kind !== 'code') return { nextI: i, forceRuntime: true }
+
+  const entered = tryEnterNonCodeToken(stack, code, i)
+  if (entered != null) return { nextI: entered }
+
+  const ch = code.charAt(i)
+  if (applyCodeBraceChar(frame, stack, ch)) return { nextI: i + 1 }
+
+  const resolved = tryResolveConstMatcherBinding(code, i, frame, stack)
+  if (resolved != null) {
+    if (resolved.forceRuntime) return { nextI: i, forceRuntime: true }
+    if (resolved.binding) bindings.push(resolved.binding)
+    return { nextI: resolved.nextI }
+  }
+
+  return { nextI: i + 1 }
 }
 
 function resolveModuleLevelMatcherBinding(code: string): {
@@ -478,165 +634,10 @@ function resolveModuleLevelMatcherBinding(code: string): {
   }> = []
 
   for (let i = 0; i < code.length;) {
-    const frame = stack.at(-1)
-    if (frame === undefined) return { forceRuntime: true }
-
-    const ch = code[i]
-    const next = code[i + 1]
-
-    if (frame.kind === 'line-comment') {
-      if (ch === '\n') stack.pop()
-      i += 1
-      continue
-    }
-    if (frame.kind === 'block-comment') {
-      if (ch === '*' && next === '/') {
-        stack.pop()
-        i += 2
-      } else i += 1
-      continue
-    }
-    if (frame.kind === 'single' || frame.kind === 'double') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
-        stack.pop()
-      i += 1
-      continue
-    }
-    if (frame.kind === 'template') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '`') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      if (ch === '$' && next === '{') {
-        stack.push({ kind: 'code', braceDepth: 1 })
-        i += 2
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'regex') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '[') {
-        stack.push({ kind: 'regex-class' })
-        i += 1
-        continue
-      }
-      if (ch === '/') {
-        stack.pop()
-        i += 1
-        while (i < code.length && /[a-z]/i.test(code.charAt(i))) i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-    if (frame.kind === 'regex-class') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === ']') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (ch === '/' && next === '/') {
-      stack.push({ kind: 'line-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      stack.push({ kind: 'block-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && canStartRegexLiteral(code, i)) {
-      stack.push({ kind: 'regex' })
-      i += 1
-      continue
-    }
-    if (ch === "'") {
-      stack.push({ kind: 'single' })
-      i += 1
-      continue
-    }
-    if (ch === '"') {
-      stack.push({ kind: 'double' })
-      i += 1
-      continue
-    }
-    if (ch === '`') {
-      stack.push({ kind: 'template' })
-      i += 1
-      continue
-    }
-    if (ch === '{') {
-      frame.braceDepth += 1
-      i += 1
-      continue
-    }
-    if (ch === '}') {
-      frame.braceDepth -= 1
-      i += 1
-      if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
-      continue
-    }
-
-    const prev = i === 0 ? '' : code.charAt(i - 1)
-    const atBoundary = i === 0 || /[\s;{}]/.test(prev)
-
-    if (
-      frame.braceDepth === 0 &&
-      stack.length === 1 &&
-      atBoundary &&
-      code.startsWith('const matcher', i)
-    ) {
-      const afterName = i + 'const matcher'.length
-      if (afterName < code.length && /[\w$]/.test(code.charAt(afterName))) {
-        i += 1
-        continue
-      }
-      let j = afterName
-      while (j < code.length && /\s/.test(code.charAt(j))) j += 1
-      if (code.charAt(j) !== '=') {
-        i += 1
-        continue
-      }
-      const resolved = readStaticMatcherValue(code, j)
-      if (resolved == null || resolved.forceRuntime) return { forceRuntime: true }
-      bindings.push({ matcher: resolved.matcher, forceRuntime: false })
-      i = resolved.endIndex
-      continue
-    }
-
-    if (
-      frame.braceDepth === 0 &&
-      stack.length === 1 &&
-      atBoundary &&
-      (code.startsWith('let matcher', i) || code.startsWith('var matcher', i))
-    ) {
-      return { forceRuntime: true }
-    }
-
-    i += 1
+    const step = resolveMatcherBindingStep(stack, code, i, bindings)
+    if (step == null) return { forceRuntime: true }
+    if (step.forceRuntime) return { forceRuntime: true }
+    i = step.nextI
   }
 
   if (bindings.length === 0) return null
@@ -737,128 +738,23 @@ function getCodeBraceDepthAt(configObject: string, index: number): number | null
     const frame = stack.at(-1)
     if (frame === undefined) return null
 
+    const nonCode = advanceNonCodeFrame(stack, configObject, i, index)
+    if (nonCode != null) {
+      i = nonCode
+      continue
+    }
+
+    if (frame.kind !== 'code') return null
+
+    const entered = tryEnterNonCodeToken(stack, configObject, i)
+    if (entered != null) {
+      i = entered
+      continue
+    }
+
     const ch = configObject.charAt(i)
-    const next = configObject.charAt(i + 1)
-
-    if (frame.kind === 'line-comment') {
-      if (ch === '\n') stack.pop()
+    if (applyCodeBraceChar(frame, stack, ch)) {
       i += 1
-      continue
-    }
-
-    if (frame.kind === 'block-comment') {
-      if (ch === '*' && next === '/') {
-        stack.pop()
-        i += 2
-      } else {
-        i += 1
-      }
-      continue
-    }
-
-    if (frame.kind === 'single' || frame.kind === 'double') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
-        stack.pop()
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'template') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '`') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      if (ch === '$' && next === '{') {
-        stack.push({ kind: 'code', braceDepth: 1 })
-        i += 2
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'regex') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '[') {
-        stack.push({ kind: 'regex-class' })
-        i += 1
-        continue
-      }
-      if (ch === '/') {
-        stack.pop()
-        i += 1
-        while (i < index && /[a-z]/i.test(configObject.charAt(i))) i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (frame.kind === 'regex-class') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === ']') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (ch === '/' && next === '/') {
-      stack.push({ kind: 'line-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      stack.push({ kind: 'block-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && canStartRegexLiteral(configObject, i)) {
-      stack.push({ kind: 'regex' })
-      i += 1
-      continue
-    }
-    if (ch === "'") {
-      stack.push({ kind: 'single' })
-      i += 1
-      continue
-    }
-    if (ch === '"') {
-      stack.push({ kind: 'double' })
-      i += 1
-      continue
-    }
-    if (ch === '`') {
-      stack.push({ kind: 'template' })
-      i += 1
-      continue
-    }
-    if (ch === '{') {
-      frame.braceDepth += 1
-      i += 1
-      continue
-    }
-    if (ch === '}') {
-      frame.braceDepth -= 1
-      i += 1
-      if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
       continue
     }
 
@@ -895,66 +791,47 @@ function findTopLevelMatcherMatch(configObject: string, pattern: RegExp): RegExp
 function isMatcherPropertyDelimiter(configObject: string, index: number): boolean {
   let i = index
   while (i < configObject.length) {
+    const skipped = skipWhitespaceOrCommentAt(configObject, i)
+    if (skipped != null) {
+      i = skipped
+      continue
+    }
     const ch = configObject.charAt(i)
-    const next = configObject.charAt(i + 1)
-
-    if (/\s/.test(ch)) {
-      i += 1
-      continue
-    }
-
-    if (ch === '/' && next === '/') {
-      i += 2
-      while (i < configObject.length && !isLineTerminator(configObject.charAt(i))) i += 1
-      continue
-    }
-
-    if (ch === '/' && next === '*') {
-      i += 2
-      while (
-        i + 1 < configObject.length &&
-        (configObject.charAt(i) !== '*' || configObject.charAt(i + 1) !== '/')
-      ) {
-        i += 1
-      }
-      i += 2
-      continue
-    }
-
     return ch === ',' || ch === '}'
   }
-
   return true
 }
 
 function skipWhitespaceAndComments(configObject: string, start: number): number {
   let i = start
   while (i < configObject.length) {
-    const ch = configObject.charAt(i)
-    const next = configObject.charAt(i + 1)
-    if (/\s/.test(ch)) {
-      i += 1
-      continue
-    }
-    if (ch === '/' && next === '/') {
-      i += 2
-      while (i < configObject.length && !isLineTerminator(configObject.charAt(i))) i += 1
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      i += 2
-      while (
-        i + 1 < configObject.length &&
-        (configObject.charAt(i) !== '*' || configObject.charAt(i + 1) !== '/')
-      ) {
-        i += 1
-      }
-      i += 2
-      continue
-    }
-    break
+    const skipped = skipWhitespaceOrCommentAt(configObject, i)
+    if (skipped == null) break
+    i = skipped
   }
   return i
+}
+
+function skipWhitespaceOrCommentAt(configObject: string, i: number): number | null {
+  const ch = configObject.charAt(i)
+  const next = configObject.charAt(i + 1)
+  if (/\s/.test(ch)) return i + 1
+  if (ch === '/' && next === '/') {
+    let j = i + 2
+    while (j < configObject.length && !isLineTerminator(configObject.charAt(j))) j += 1
+    return j
+  }
+  if (ch === '/' && next === '*') {
+    let j = i + 2
+    while (
+      j + 1 < configObject.length &&
+      (configObject.charAt(j) !== '*' || configObject.charAt(j + 1) !== '/')
+    ) {
+      j += 1
+    }
+    return j + 2
+  }
+  return null
 }
 
 function parseComputedPropertyKey(
@@ -981,166 +858,149 @@ function parseComputedPropertyKey(
   return { endIndex: openBracketIndex + 1, forceRuntime: true }
 }
 
+function tryEnterQuotedPropertyKey(
+  stack: ScanFrame[],
+  frame: CodeFrame,
+  ch: string,
+  expectPropertyKey: boolean,
+): { readonly entered: boolean; readonly expectPropertyKey: boolean } {
+  if (ch === "'") {
+    return {
+      entered: true,
+      expectPropertyKey: expectPropertyKey && frame.braceDepth === 1 ? false : expectPropertyKey,
+    }
+  }
+  if (ch === '"') {
+    return {
+      entered: true,
+      expectPropertyKey: expectPropertyKey && frame.braceDepth === 1 ? false : expectPropertyKey,
+    }
+  }
+  if (ch === '`') {
+    return {
+      entered: true,
+      expectPropertyKey: expectPropertyKey && frame.braceDepth === 1 ? false : expectPropertyKey,
+    }
+  }
+  return { entered: false, expectPropertyKey }
+}
+
+function applyUnsafeKeyBraceOrPunct(
+  frame: CodeFrame,
+  stack: ScanFrame[],
+  ch: string,
+  expectPropertyKey: boolean,
+): { readonly handled: boolean; readonly expectPropertyKey: boolean } {
+  if (ch === '{') {
+    frame.braceDepth += 1
+    return { handled: true, expectPropertyKey: frame.braceDepth === 1 ? true : expectPropertyKey }
+  }
+  if (ch === '}') {
+    frame.braceDepth -= 1
+    if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
+    return { handled: true, expectPropertyKey: false }
+  }
+  if (ch === ',' && frame.braceDepth === 1) {
+    return { handled: true, expectPropertyKey: true }
+  }
+  if (ch === ':' && frame.braceDepth === 1) {
+    return { handled: true, expectPropertyKey: false }
+  }
+  return { handled: false, expectPropertyKey }
+}
+
+function checkUnsafeComputedPropertyAt(
+  configObject: string,
+  i: number,
+  frame: CodeFrame,
+  expectPropertyKey: boolean,
+  ch: string,
+  next: string,
+): { readonly unsafe: boolean; readonly nextI?: number; readonly clearExpect?: boolean } | null {
+  if (!expectPropertyKey || frame.braceDepth !== 1 || /\s/.test(ch)) return null
+
+  if (ch === '.' && next === '.' && configObject.charAt(i + 2) === '.') {
+    return { unsafe: true }
+  }
+  if (ch === '[') {
+    const parsed = parseComputedPropertyKey(configObject, i)
+    if (parsed?.forceRuntime === true) return { unsafe: true }
+    if (parsed != null) return { unsafe: false, nextI: parsed.endIndex, clearExpect: true }
+    return { unsafe: true }
+  }
+  return { unsafe: false, clearExpect: true }
+}
+
+function advanceUnsafeMatcherKeyScan(
+  stack: ScanFrame[],
+  configObject: string,
+  i: number,
+  expectPropertyKey: boolean,
+): { readonly nextI: number; readonly expectPropertyKey: boolean; readonly unsafe?: true } | null {
+  const frame = stack.at(-1)
+  if (frame === undefined) return null
+
+  const nonCode = advanceNonCodeFrame(stack, configObject, i)
+  if (nonCode != null) return { nextI: nonCode, expectPropertyKey }
+
+  if (frame.kind !== 'code') return null
+
+  const ch = configObject.charAt(i)
+  const next = configObject.charAt(i + 1)
+
+  const quoteEnter = tryEnterQuotedPropertyKey(stack, frame, ch, expectPropertyKey)
+  if (quoteEnter.entered) {
+    const entered = tryEnterNonCodeToken(stack, configObject, i)
+    return { nextI: entered ?? i + 1, expectPropertyKey: quoteEnter.expectPropertyKey }
+  }
+
+  const entered = tryEnterNonCodeToken(stack, configObject, i)
+  if (entered != null) return { nextI: entered, expectPropertyKey }
+
+  const punct = applyUnsafeKeyBraceOrPunct(frame, stack, ch, expectPropertyKey)
+  if (punct.handled) return { nextI: i + 1, expectPropertyKey: punct.expectPropertyKey }
+
+  const unsafe = checkUnsafeComputedPropertyAt(configObject, i, frame, expectPropertyKey, ch, next)
+  if (unsafe != null) {
+    if (unsafe.unsafe) return { nextI: i, expectPropertyKey, unsafe: true }
+    return {
+      nextI: unsafe.nextI ?? i + 1,
+      expectPropertyKey: unsafe.clearExpect ? false : expectPropertyKey,
+    }
+  }
+
+  return { nextI: i + 1, expectPropertyKey }
+}
+
 function hasUnsafeTopLevelComputedMatcherKey(configObject: string): boolean {
   const stack: ScanFrame[] = [{ kind: 'code', braceDepth: 0 }]
   let expectPropertyKey = false
 
   for (let i = 0; i < configObject.length;) {
-    const frame = stack.at(-1)
-    if (frame === undefined) return false
-
-    const ch = configObject.charAt(i)
-    const next = configObject.charAt(i + 1)
-
-    if (frame.kind === 'line-comment') {
-      if (ch === '\n') stack.pop()
-      i += 1
-      continue
-    }
-    if (frame.kind === 'block-comment') {
-      if (ch === '*' && next === '/') {
-        stack.pop()
-        i += 2
-      } else i += 1
-      continue
-    }
-    if (frame.kind === 'single' || frame.kind === 'double') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if ((frame.kind === 'single' && ch === "'") || (frame.kind === 'double' && ch === '"'))
-        stack.pop()
-      i += 1
-      continue
-    }
-    if (frame.kind === 'template') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '`') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      if (ch === '$' && next === '{') {
-        stack.push({ kind: 'code', braceDepth: 1 })
-        i += 2
-        continue
-      }
-      i += 1
-      continue
-    }
-    if (frame.kind === 'regex') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === '[') {
-        stack.push({ kind: 'regex-class' })
-        i += 1
-        continue
-      }
-      if (ch === '/') {
-        stack.pop()
-        i += 1
-        while (i < configObject.length && /[a-z]/i.test(configObject.charAt(i))) i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-    if (frame.kind === 'regex-class') {
-      if (ch === '\\') {
-        i += 2
-        continue
-      }
-      if (ch === ']') {
-        stack.pop()
-        i += 1
-        continue
-      }
-      i += 1
-      continue
-    }
-
-    if (ch === '/' && next === '/') {
-      stack.push({ kind: 'line-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      stack.push({ kind: 'block-comment' })
-      i += 2
-      continue
-    }
-    if (ch === '/' && canStartRegexLiteral(configObject, i)) {
-      stack.push({ kind: 'regex' })
-      i += 1
-      continue
-    }
-    if (ch === "'") {
-      if (expectPropertyKey && frame.braceDepth === 1) expectPropertyKey = false
-      stack.push({ kind: 'single' })
-      i += 1
-      continue
-    }
-    if (ch === '"') {
-      if (expectPropertyKey && frame.braceDepth === 1) expectPropertyKey = false
-      stack.push({ kind: 'double' })
-      i += 1
-      continue
-    }
-    if (ch === '`') {
-      if (expectPropertyKey && frame.braceDepth === 1) expectPropertyKey = false
-      stack.push({ kind: 'template' })
-      i += 1
-      continue
-    }
-    if (ch === '{') {
-      frame.braceDepth += 1
-      if (frame.braceDepth === 1) expectPropertyKey = true
-      i += 1
-      continue
-    }
-    if (ch === '}') {
-      frame.braceDepth -= 1
-      expectPropertyKey = false
-      i += 1
-      if (frame.braceDepth === 0 && stack.length > 1) stack.pop()
-      continue
-    }
-    if (ch === ',' && frame.braceDepth === 1) {
-      expectPropertyKey = true
-      i += 1
-      continue
-    }
-    if (ch === ':' && frame.braceDepth === 1) {
-      expectPropertyKey = false
-      i += 1
-      continue
-    }
-
-    if (expectPropertyKey && frame.braceDepth === 1 && !/\s/.test(ch)) {
-      if (ch === '.' && next === '.' && configObject.charAt(i + 2) === '.') return true
-      if (ch === '[') {
-        const parsed = parseComputedPropertyKey(configObject, i)
-        if (parsed?.forceRuntime === true) return true
-        if (parsed != null) {
-          expectPropertyKey = false
-          i = parsed.endIndex
-          continue
-        }
-        return true
-      }
-      expectPropertyKey = false
-    }
-
-    i += 1
+    const step = advanceUnsafeMatcherKeyScan(stack, configObject, i, expectPropertyKey)
+    if (step == null) return false
+    if (step.unsafe) return true
+    expectPropertyKey = step.expectPropertyKey
+    i = step.nextI
   }
 
   return false
+}
+
+function extractStringMatcherFromMatch(
+  configObject: string,
+  stringMatch: RegExpExecArray,
+): { readonly matcher?: ProxyConfig['matcher']; readonly forceRuntime: boolean } | null {
+  const isQuotedKey = isQuotedMatcherKeyMatch(stringMatch[0])
+  const quote = isQuotedKey ? stringMatch[2] : stringMatch[1]
+  const raw = isQuotedKey ? stringMatch[3] : stringMatch[2]
+  if (quote !== "'" && quote !== '"' && quote !== '`') return null
+  if (quote === '`' && raw.includes('${')) return { forceRuntime: true }
+  const matchEnd = stringMatch.index + stringMatch[0].length
+  if (!isMatcherPropertyDelimiter(configObject, matchEnd)) return { forceRuntime: true }
+  const decoded = decodeJsStringLiteral(raw, quote)
+  if (decoded == null || decoded === '') return { forceRuntime: true }
+  return { matcher: decoded, forceRuntime: false }
 }
 
 function extractMatcher(code: string): {
@@ -1148,12 +1008,10 @@ function extractMatcher(code: string): {
   readonly forceRuntime: boolean
 } {
   if (!CONFIG_EXPORT_REGEX.test(code)) return { forceRuntime: false }
-
   if (!CONFIG_OBJECT_EXPORT_REGEX.test(code)) return { forceRuntime: false }
 
   const configObject = extractExportedConfigObject(code)
   if (configObject == null) return { forceRuntime: true }
-
   if (hasUnsafeTopLevelComputedMatcherKey(configObject)) return { forceRuntime: true }
 
   if (
@@ -1167,17 +1025,7 @@ function extractMatcher(code: string): {
     findTopLevelMatcherMatch(configObject, STRING_MATCHER_REGEX) ??
     findTopLevelMatcherMatch(configObject, QUOTED_STRING_MATCHER_REGEX)
   if (stringMatch != null) {
-    const isQuotedKey = isQuotedMatcherKeyMatch(stringMatch[0])
-    const quote = isQuotedKey ? stringMatch[2] : stringMatch[1]
-    const raw = isQuotedKey ? stringMatch[3] : stringMatch[2]
-    if (quote === "'" || quote === '"' || quote === '`') {
-      if (quote === '`' && raw.includes('${')) return { forceRuntime: true }
-      const matchEnd = stringMatch.index + stringMatch[0].length
-      if (!isMatcherPropertyDelimiter(configObject, matchEnd)) return { forceRuntime: true }
-      const decoded = decodeJsStringLiteral(raw, quote)
-      if (decoded == null || decoded === '') return { forceRuntime: true }
-      return { matcher: decoded, forceRuntime: false }
-    }
+    return extractStringMatcherFromMatch(configObject, stringMatch) ?? { forceRuntime: false }
   }
 
   const arrayMatch =
@@ -1203,6 +1051,7 @@ function extractMatcher(code: string): {
 
   return { forceRuntime: false }
 }
+// oxlint-enable typescript/prefer-readonly-parameter-types
 
 export function analyzeProxySource(code: string): ProxyAnalysis {
   const { matcher, forceRuntime } = extractMatcher(code)

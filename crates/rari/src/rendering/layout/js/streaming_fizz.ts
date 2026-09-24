@@ -423,6 +423,90 @@ declare function rariCreateHtmlBoundaryTracker(): {
     return `<div class=rari-error style=color:red;border:1px_solid_red;padding:10px;border-radius:4px;background-color:#fff5f5><strong>Error loading content: </strong>${errMsg}</div>`
   }
 
+  function isHtmlTagNameTerminator(ch: string): boolean {
+    return ch === '>' || ch === '/' || ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
+  }
+
+  function rariTryEnterRawTag(
+    html: string,
+    i: number,
+    open: string,
+    close: string,
+  ): { readonly i: number; readonly rawClose: string | null } | null {
+    if (html.slice(i, i + open.length).toLowerCase() !== open) return null
+    const after = i + open.length
+    if (after < html.length && !isHtmlTagNameTerminator(html.charAt(after))) return null
+    const gt = html.indexOf('>', i)
+    if (gt === -1) return { i: -1, rawClose: null }
+    const openEnd = gt + 1
+    if (gt >= 1 && html.charAt(gt - 1) === '/') return { i: openEnd, rawClose: null }
+    return { i: openEnd, rawClose: close }
+  }
+
+  type HeadDataStep =
+    | { readonly kind: 'comment'; readonly i: number }
+    | { readonly kind: 'found'; readonly i: number }
+    | { readonly kind: 'error' }
+    | { readonly kind: 'raw'; readonly i: number; readonly rawClose: string | null }
+    | { readonly kind: 'advance'; readonly i: number }
+
+  function rariScanHeadDataState(
+    html: string,
+    i: number,
+    headClose: string,
+    rawTags: ReadonlyArray<{ readonly open: string; readonly close: string }>,
+  ): HeadDataStep {
+    if (html.startsWith('<!--', i)) return { kind: 'comment', i: i + 4 }
+    if (html.slice(i, i + headClose.length).toLowerCase() === headClose) {
+      return { kind: 'found', i }
+    }
+    for (const { open, close } of rawTags) {
+      const entered = rariTryEnterRawTag(html, i, open, close)
+      if (entered == null) continue
+      if (entered.i === -1) return { kind: 'error' }
+      return { kind: 'raw', i: entered.i, rawClose: entered.rawClose }
+    }
+    return { kind: 'advance', i: i + 1 }
+  }
+
+  type HeadScanState = 'data' | 'comment' | { readonly rawClose: string }
+
+  function rariAdvanceCommentState(
+    html: string,
+    i: number,
+  ): { readonly i: number; readonly done: boolean } {
+    if (html.startsWith('-->', i)) return { i: i + 3, done: true }
+    return { i: i + 1, done: false }
+  }
+
+  function rariAdvanceRawCloseState(
+    html: string,
+    i: number,
+    close: string,
+  ): { readonly i: number; readonly done: boolean } {
+    if (html.slice(i, i + close.length).toLowerCase() === close) {
+      return { i: i + close.length, done: true }
+    }
+    return { i: i + 1, done: false }
+  }
+
+  function rariApplyHeadDataStep(
+    state: HeadScanState,
+    step: HeadDataStep,
+  ): { readonly state: HeadScanState; readonly i: number; readonly result: number | null } {
+    if (step.kind === 'found') return { state, i: step.i, result: step.i }
+    if (step.kind === 'error') return { state, i: 0, result: -1 }
+    if (step.kind === 'comment') return { state: 'comment', i: step.i, result: null }
+    if (step.kind === 'raw') {
+      return {
+        state: step.rawClose != null ? { rawClose: step.rawClose } : state,
+        i: step.i,
+        result: null,
+      }
+    }
+    return { state, i: step.i, result: null }
+  }
+
   function rariFindClosingHeadTag(html: string): number {
     const HEAD_CLOSE = '</head>'
     const RAW_TAGS: ReadonlyArray<{ readonly open: string; readonly close: string }> = [
@@ -433,74 +517,31 @@ declare function rariCreateHtmlBoundaryTracker(): {
       { open: '<noscript', close: '</noscript>' },
     ]
 
-    type ScanState = 'data' | 'comment' | { readonly rawClose: string }
-    let state: ScanState = 'data'
+    let state: HeadScanState = 'data'
     let i = 0
 
     while (i < html.length) {
       if (state === 'data') {
-        if (html.startsWith('<!--', i)) {
-          state = 'comment'
-          i += 4
-          continue
-        }
-
-        if (html.slice(i, i + HEAD_CLOSE.length).toLowerCase() === HEAD_CLOSE) {
-          return i
-        }
-
-        let enteredRaw = false
-        for (const { open, close } of RAW_TAGS) {
-          if (html.slice(i, i + open.length).toLowerCase() !== open) continue
-          const after = i + open.length
-          if (after < html.length) {
-            const next = html.charAt(after)
-            if (
-              next !== '>' &&
-              next !== '/' &&
-              next !== ' ' &&
-              next !== '\t' &&
-              next !== '\n' &&
-              next !== '\r'
-            ) {
-              continue
-            }
-          }
-          const gt = html.indexOf('>', i)
-          if (gt === -1) return -1
-          const openEnd = gt + 1
-          if (gt >= 1 && html.charAt(gt - 1) === '/') {
-            i = openEnd
-          } else {
-            state = { rawClose: close }
-            i = openEnd
-          }
-          enteredRaw = true
-          break
-        }
-        if (enteredRaw) continue
-
-        i++
+        const applied = rariApplyHeadDataStep(
+          state,
+          rariScanHeadDataState(html, i, HEAD_CLOSE, RAW_TAGS),
+        )
+        if (applied.result != null) return applied.result
+        state = applied.state
+        i = applied.i
         continue
       }
 
       if (state === 'comment') {
-        if (html.startsWith('-->', i)) {
-          state = 'data'
-          i += 3
-        } else {
-          i++
-        }
+        const step = rariAdvanceCommentState(html, i)
+        if (step.done) state = 'data'
+        i = step.i
         continue
       }
 
-      const close = state.rawClose
-      if (html.slice(i, i + close.length).toLowerCase() === close) {
-        state = 'data'
-        i += close.length
-      } else {
-        i++
-      }
+      const step = rariAdvanceRawCloseState(html, i, state.rawClose)
+      if (step.done) state = 'data'
+      i = step.i
     }
 
     return -1
@@ -672,18 +713,43 @@ declare function rariCreateHtmlBoundaryTracker(): {
       return true
     }
 
+    const handleFizzDone = async (): Promise<boolean> => {
+      const tail = decoder.decode()
+      if (tail && !(await pumpFizzText(tail))) return false
+      if (!(await flushHeadPending())) return false
+      if (!finalPackageSent && session.safeToInjectFlight() && !(await pumpPendingFlight())) {
+        return false
+      }
+      rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
+      return true
+    }
+
+    const drainRemainingFlight = async (): Promise<void> => {
+      if (finalPackageSent) return
+      rariStreamLog('mux.drainRemaining.start')
+      if (!session.safeToInjectFlight()) session.resetHtmlState()
+      if (ensureSourceComplete) await ensureSourceComplete()
+      const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText(nonce))
+      const complete = takeCompleteScript()
+      const tail = takeErrorHtml() + flight + complete
+      if (tail) {
+        const status = Deno.core.ops.op_fizz_chunk_try(session.streamId, tail)
+        if (status === 2) {
+          session.disconnected = true
+          return
+        }
+        if (status === 1 && !(await session.pumpFizzChunk(tail))) return
+      }
+      markFinalPackageSent()
+      rariStreamLog('mux.drainRemaining.done')
+    }
+
     const pumpFizzLoop = async () => {
       rariStreamLog('mux.fizzLoop.start')
       for (;;) {
         const { done, value } = await reader.read()
         if (done) {
-          const tail = decoder.decode()
-          if (tail && !(await pumpFizzText(tail))) return
-          if (!(await flushHeadPending())) return
-          if (!finalPackageSent && session.safeToInjectFlight() && !(await pumpPendingFlight())) {
-            return
-          }
-          rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
+          if (!(await handleFizzDone())) return
           break
         }
         htmlChunkCount++
@@ -699,24 +765,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
           return
         }
       }
-      if (!finalPackageSent) {
-        rariStreamLog('mux.drainRemaining.start')
-        if (!session.safeToInjectFlight()) session.resetHtmlState()
-        if (ensureSourceComplete) await ensureSourceComplete()
-        const flight = takeFlightBootstrap() + (await liveFlight.collectAllRemainingText(nonce))
-        const complete = takeCompleteScript()
-        const tail = takeErrorHtml() + flight + complete
-        if (tail) {
-          const status = Deno.core.ops.op_fizz_chunk_try(session.streamId, tail)
-          if (status === 2) {
-            session.disconnected = true
-            return
-          }
-          if (status === 1 && !(await session.pumpFizzChunk(tail))) return
-        }
-        markFinalPackageSent()
-        rariStreamLog('mux.drainRemaining.done')
-      }
+      await drainRemainingFlight()
     }
 
     if (fizzStream.allReady) {

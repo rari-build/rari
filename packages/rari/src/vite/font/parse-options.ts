@@ -91,17 +91,9 @@ function readObject(
   let i = skipWs(source, index + 1)
   if (source[i] === '}') return { json: obj, end: i + 1 }
   while (i < source.length) {
-    let key: string
-    if (source[i] === "'" || source[i] === '"') {
-      const parsed = readString(source, i)
-      key = parsed.json
-      i = skipWs(source, parsed.end)
-    } else {
-      const match = /^[A-Z_$][\w$]*/i.exec(source.slice(i))
-      if (match == null) throw new Error('Expected property name')
-      key = match[0]
-      i = skipWs(source, i + key.length)
-    }
+    const keyResult = readObjectKey(source, i)
+    const key = keyResult.key
+    i = keyResult.end
     if (source[i] !== ':') throw new Error('Expected :')
     const value = readValue(source, i + 1)
     obj[key] = value.json
@@ -115,4 +107,15 @@ function readObject(
     throw new Error('Expected comma or }')
   }
   throw new Error('Unterminated object')
+}
+
+function readObjectKey(source: string, index: number): { key: string; end: number } {
+  const i = index
+  if (source[i] === "'" || source[i] === '"') {
+    const parsed = readString(source, i)
+    return { key: parsed.json, end: skipWs(source, parsed.end) }
+  }
+  const match = /^[A-Z_$][\w$]*/i.exec(source.slice(i))
+  if (match == null) throw new Error('Expected property name')
+  return { key: match[0], end: skipWs(source, i + match[0].length) }
 }

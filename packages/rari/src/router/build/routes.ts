@@ -317,94 +317,13 @@ class AppRouteGenerator {
   ): Promise<void> {
     const routePath = this.pathToRoute(relativePath)
 
-    const pageFile = this.findFile(files, SPECIAL_FILES.PAGE)
-    if (pageFile != null && pageFile !== '') {
-      const segments = this.parseRouteSegments(relativePath)
-      const params = this.extractParams(segments)
-
-      routes.push({
-        path: routePath,
-        filePath: toPosixPath(path.join(relativePath, pageFile)),
-        segments,
-        params,
-        isDynamic: params.length > 0,
-      })
-    }
-
-    const layoutFile = this.findFile(files, SPECIAL_FILES.LAYOUT)
-    if (layoutFile != null && layoutFile !== '') {
-      const parentPath = this.getParentPath(relativePath)
-      layouts.push({
-        path: routePath,
-        filePath: toPosixPath(path.join(relativePath, layoutFile)),
-        parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
-      })
-    }
-
-    const loadingFile = this.findFile(files, SPECIAL_FILES.LOADING)
-    if (loadingFile != null && loadingFile !== '') {
-      loading.push({
-        path: routePath,
-        filePath: toPosixPath(path.join(relativePath, loadingFile)),
-      })
-    }
-
-    const errorFile = this.findFile(files, SPECIAL_FILES.ERROR)
-    if (errorFile != null && errorFile !== '') {
-      errors.push({
-        path: routePath,
-        filePath: toPosixPath(path.join(relativePath, errorFile)),
-      })
-    }
-
-    const notFoundFile = this.findFile(files, SPECIAL_FILES.NOT_FOUND)
-    if (notFoundFile != null && notFoundFile !== '') {
-      notFound.push({
-        path: routePath,
-        filePath: toPosixPath(path.join(relativePath, notFoundFile)),
-      })
-    }
-
-    const templateFile = this.findFile(files, SPECIAL_FILES.TEMPLATE)
-    if (templateFile != null && templateFile !== '') {
-      const parentPath = this.getParentPath(relativePath)
-      templates.push({
-        path: routePath,
-        filePath: toPosixPath(path.join(relativePath, templateFile)),
-        parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
-      })
-    }
-
-    const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
-    if (ogImageFile != null && ogImageFile !== '') {
-      const filePath = toPosixPath(path.join(relativePath, ogImageFile))
-      const fullFilePath = path.join(this.appDir, filePath)
-
-      let width: number | undefined
-      let height: number | undefined
-      let contentType: string | undefined
-
-      try {
-        const content = await fs.readFile(fullFilePath, 'utf-8')
-
-        const sizeMatch = SIZE_EXPORT_REGEX.exec(content)
-        if (sizeMatch) {
-          width = Number.parseInt(sizeMatch[1], 10)
-          height = Number.parseInt(sizeMatch[2], 10)
-        }
-
-        const contentTypeMatch = CONTENT_TYPE_EXPORT_REGEX.exec(content)
-        if (contentTypeMatch) contentType = contentTypeMatch[1]
-      } catch {}
-
-      ogImages.push({
-        path: routePath,
-        filePath,
-        width,
-        height,
-        contentType,
-      })
-    }
+    this.pushPageRoute(relativePath, files, routePath, routes)
+    this.pushLayoutEntry(relativePath, files, routePath, layouts)
+    this.pushNamedSpecial(relativePath, files, routePath, SPECIAL_FILES.LOADING, loading)
+    this.pushNamedSpecial(relativePath, files, routePath, SPECIAL_FILES.ERROR, errors)
+    this.pushNamedSpecial(relativePath, files, routePath, SPECIAL_FILES.NOT_FOUND, notFound)
+    this.pushTemplateEntry(relativePath, files, routePath, templates)
+    await this.pushOgImageEntry(relativePath, files, routePath, ogImages)
 
     const discoveredIcons = await discoverAppIconsInDir({
       appDir: this.appDir,
@@ -419,6 +338,110 @@ class AppRouteGenerator {
       const apiRoute = await this.processApiRouteFile(relativePath, routeFile)
       apiRoutes.push(apiRoute)
     }
+  }
+
+  private pushPageRoute(
+    relativePath: string,
+    files: string[],
+    routePath: string,
+    routes: AppRouteEntry[],
+  ): void {
+    const pageFile = this.findFile(files, SPECIAL_FILES.PAGE)
+    if (pageFile == null || pageFile === '') return
+    const segments = this.parseRouteSegments(relativePath)
+    const params = this.extractParams(segments)
+    routes.push({
+      path: routePath,
+      filePath: toPosixPath(path.join(relativePath, pageFile)),
+      segments,
+      params,
+      isDynamic: params.length > 0,
+    })
+  }
+
+  private pushLayoutEntry(
+    relativePath: string,
+    files: string[],
+    routePath: string,
+    layouts: LayoutEntry[],
+  ): void {
+    const layoutFile = this.findFile(files, SPECIAL_FILES.LAYOUT)
+    if (layoutFile == null || layoutFile === '') return
+    const parentPath = this.getParentPath(relativePath)
+    layouts.push({
+      path: routePath,
+      filePath: toPosixPath(path.join(relativePath, layoutFile)),
+      parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
+    })
+  }
+
+  private pushNamedSpecial(
+    relativePath: string,
+    files: string[],
+    routePath: string,
+    baseName: string,
+    entries: Array<{ path: string; filePath: string }>,
+  ): void {
+    const file = this.findFile(files, baseName)
+    if (file == null || file === '') return
+    entries.push({
+      path: routePath,
+      filePath: toPosixPath(path.join(relativePath, file)),
+    })
+  }
+
+  private pushTemplateEntry(
+    relativePath: string,
+    files: string[],
+    routePath: string,
+    templates: TemplateEntry[],
+  ): void {
+    const templateFile = this.findFile(files, SPECIAL_FILES.TEMPLATE)
+    if (templateFile == null || templateFile === '') return
+    const parentPath = this.getParentPath(relativePath)
+    templates.push({
+      path: routePath,
+      filePath: toPosixPath(path.join(relativePath, templateFile)),
+      parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
+    })
+  }
+
+  private async pushOgImageEntry(
+    relativePath: string,
+    files: string[],
+    routePath: string,
+    ogImages: OgImageEntry[],
+  ): Promise<void> {
+    const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
+    if (ogImageFile == null || ogImageFile === '') return
+
+    const filePath = toPosixPath(path.join(relativePath, ogImageFile))
+    const fullFilePath = path.join(this.appDir, filePath)
+
+    let width: number | undefined
+    let height: number | undefined
+    let contentType: string | undefined
+
+    try {
+      const content = await fs.readFile(fullFilePath, 'utf-8')
+
+      const sizeMatch = SIZE_EXPORT_REGEX.exec(content)
+      if (sizeMatch) {
+        width = Number.parseInt(sizeMatch[1], 10)
+        height = Number.parseInt(sizeMatch[2], 10)
+      }
+
+      const contentTypeMatch = CONTENT_TYPE_EXPORT_REGEX.exec(content)
+      if (contentTypeMatch) contentType = contentTypeMatch[1]
+    } catch {}
+
+    ogImages.push({
+      path: routePath,
+      filePath,
+      width,
+      height,
+      contentType,
+    })
   }
 
   private findFile(files: string[], baseName: string): string | undefined {

@@ -8,41 +8,8 @@ export function applyFormDataToForm(form: HTMLFormElement, formData: FormData): 
     processedKeys.add(key)
 
     try {
-      const values = formData.getAll(key)
-      const stringValues = values.filter((value): value is string => typeof value === 'string')
-      const valueSet = new Set(stringValues)
-      const elements = form.elements.namedItem(key)
-
-      if (elements instanceof RadioNodeList) {
-        elements.forEach(element => {
-          if (!(element instanceof HTMLInputElement)) return
-
-          if (element.type === 'radio' || element.type === 'checkbox')
-            element.checked = valueSet.has(element.value)
-          else if (stringValues.length === 1) element.value = stringValues[0]
-        })
-        continue
-      }
-
-      if (elements instanceof HTMLSelectElement && elements.multiple) {
-        for (const option of elements.options) {
-          option.selected = valueSet.has(option.value)
-        }
-        continue
-      }
-
-      if (
-        elements instanceof HTMLInputElement ||
-        elements instanceof HTMLTextAreaElement ||
-        elements instanceof HTMLSelectElement
-      ) {
-        if (
-          elements instanceof HTMLInputElement &&
-          (elements.type === 'checkbox' || elements.type === 'radio')
-        )
-          elements.checked = valueSet.has(elements.value)
-        else if (stringValues.length > 0) elements.value = stringValues[0]
-      }
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+      applyFormKey(form, formData, key)
     } catch {
       allSucceeded = false
     }
@@ -50,26 +17,69 @@ export function applyFormDataToForm(form: HTMLFormElement, formData: FormData): 
 
   for (const element of form.elements) {
     try {
-      if (
-        element instanceof HTMLInputElement &&
-        (element.type === 'checkbox' || element.type === 'radio')
-      ) {
-        if (element.name !== '' && !processedKeys.has(element.name)) element.checked = false
-        continue
-      }
-
-      if (element instanceof HTMLSelectElement && element.multiple) {
-        if (element.name === '' || processedKeys.has(element.name)) continue
-        for (const option of element.options) {
-          option.selected = false
-        }
-      }
+      clearUnprocessedControl(element, processedKeys)
     } catch {
       allSucceeded = false
     }
   }
 
   return allSucceeded
+}
+
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+function applyFormKey(form: HTMLFormElement, formData: FormData, key: string): void {
+  const values = formData.getAll(key)
+  const stringValues = values.filter((value): value is string => typeof value === 'string')
+  const valueSet = new Set(stringValues)
+  const elements = form.elements.namedItem(key)
+
+  if (elements instanceof RadioNodeList) {
+    elements.forEach(element => {
+      if (!(element instanceof HTMLInputElement)) return
+
+      if (element.type === 'radio' || element.type === 'checkbox')
+        element.checked = valueSet.has(element.value)
+      else if (stringValues.length === 1) element.value = stringValues[0]
+    })
+    return
+  }
+
+  if (elements instanceof HTMLSelectElement && elements.multiple) {
+    for (const option of elements.options) {
+      option.selected = valueSet.has(option.value)
+    }
+    return
+  }
+
+  if (
+    elements instanceof HTMLInputElement ||
+    elements instanceof HTMLTextAreaElement ||
+    elements instanceof HTMLSelectElement
+  ) {
+    if (
+      elements instanceof HTMLInputElement &&
+      (elements.type === 'checkbox' || elements.type === 'radio')
+    )
+      elements.checked = valueSet.has(elements.value)
+    else if (stringValues.length > 0) elements.value = stringValues[0]
+  }
+}
+
+function clearUnprocessedControl(element: Element, processedKeys: ReadonlySet<string>): void {
+  if (
+    element instanceof HTMLInputElement &&
+    (element.type === 'checkbox' || element.type === 'radio')
+  ) {
+    if (element.name !== '' && !processedKeys.has(element.name)) element.checked = false
+    return
+  }
+
+  if (element instanceof HTMLSelectElement && element.multiple) {
+    if (element.name === '' || processedKeys.has(element.name)) return
+    for (const option of element.options) {
+      option.selected = false
+    }
+  }
 }
 
 export function captureIndexedFormData(): Map<string, FormData> {

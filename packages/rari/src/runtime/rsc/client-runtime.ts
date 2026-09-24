@@ -134,8 +134,10 @@ if (import.meta.hot) {
     return isRecord(data)
   }
 
-  function isAppRouterUpdatedPayload(data: unknown): data is AppRouterUpdatedPayload {
-    return isRecord(data)
+  function isAppRouterUpdatedPayload(
+    data: unknown,
+  ): data is AppRouterUpdatedPayload & { filePath: string } {
+    return isRecord(data) && typeof data.filePath === 'string' && data.filePath !== ''
   }
 
   function hasActionFilePath(
@@ -206,80 +208,90 @@ if (import.meta.hot) {
     isServerComponentUpdatedPayload,
   )
 
-  registerHandler(
-    'rari:app-router-updated',
-    async data => {
-      if (
-        (data.routePath == null || data.routePath === '') &&
-        (data.affectedRoutes == null || data.affectedRoutes.length === 0)
+  function applyHmrMetadataUpdate(metadata: {
+    readonly title?: string
+    readonly description?: string
+  }): void {
+    if (metadata.title != null && metadata.title !== '') document.title = metadata.title
+    if (metadata.description == null || metadata.description === '') return
+    let metaDesc = document.querySelector('meta[name="description"]')
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta')
+      metaDesc.setAttribute('name', 'description')
+      document.head.appendChild(metaDesc)
+    }
+    metaDesc.setAttribute('content', metadata.description)
+  }
+
+  function parseHmrReloadResult(result: unknown): {
+    readonly ok: boolean
+    readonly contentUnchanged: boolean
+    readonly errorMessage: string
+  } {
+    const success = isRecord(result) && result.success === true
+    const reloaded = isRecord(result) && result.reloaded === true
+    const contentUnchanged = isRecord(result) && result.content_unchanged === true
+    const errorMessage =
+      isRecord(result) && typeof result.error === 'string'
+        ? result.error
+        : 'Component reload unsuccessful'
+    return { ok: success || reloaded, contentUnchanged, errorMessage }
+  }
+
+  async function handleAppRouterUpdated(
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+    data: AppRouterUpdatedPayload & { filePath: string },
+  ): Promise<void> {
+    if (
+      (data.routePath == null || data.routePath === '') &&
+      (data.affectedRoutes == null || data.affectedRoutes.length === 0)
+    )
+      return
+
+    try {
+      const rariServerUrl = resolveRariServerUrl()
+
+      const reloadResponse = await fetch(`${rariServerUrl}/_rari/hmr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', file_path: data.filePath }),
+      })
+
+      if (!reloadResponse.ok) throw new Error(`Component reload failed: ${reloadResponse.status}`)
+
+      const parsed = parseHmrReloadResult(await reloadResponse.json())
+      if (!parsed.ok) throw new Error(parsed.errorMessage)
+      if (parsed.contentUnchanged) return
+
+      await fetch(`${rariServerUrl}/_rari/hmr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'invalidate',
+          componentId:
+            data.routePath != null && data.routePath !== '' ? data.routePath : data.filePath,
+          filePath: data.filePath,
+        }),
+      })
+
+      if (data.metadataChanged && data.metadata) applyHmrMetadataUpdate(data.metadata)
+
+      window.dispatchEvent(
+        new CustomEvent('rari:app-router-rerender', {
+          detail: {
+            routePath: data.routePath,
+            affectedRoutes: data.affectedRoutes ?? (data.routePath != null ? [data.routePath] : []),
+            currentPath: window.location.pathname,
+            preserveParams: true,
+          },
+        }),
       )
-        return
+    } catch (error) {
+      console.error('[rari] HMR: App router update failed:', error)
+    }
+  }
 
-      try {
-        const rariServerUrl = resolveRariServerUrl()
-
-        const reloadResponse = await fetch(`${rariServerUrl}/_rari/hmr`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'register', file_path: data.filePath }),
-        })
-
-        if (!reloadResponse.ok) throw new Error(`Component reload failed: ${reloadResponse.status}`)
-
-        const result: unknown = await reloadResponse.json()
-        const success = isRecord(result) && result.success === true
-        const reloaded = isRecord(result) && result.reloaded === true
-        const contentUnchanged = isRecord(result) && result.content_unchanged === true
-        const errorMessage =
-          isRecord(result) && typeof result.error === 'string'
-            ? result.error
-            : 'Component reload unsuccessful'
-        if (!success && !reloaded) throw new Error(errorMessage)
-
-        if (contentUnchanged) return
-
-        await fetch(`${rariServerUrl}/_rari/hmr`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'invalidate',
-            componentId:
-              data.routePath != null && data.routePath !== '' ? data.routePath : data.filePath,
-            filePath: data.filePath,
-          }),
-        })
-
-        if (data.metadataChanged && data.metadata) {
-          if (data.metadata.title != null && data.metadata.title !== '')
-            document.title = data.metadata.title
-          if (data.metadata.description != null && data.metadata.description !== '') {
-            let metaDesc = document.querySelector('meta[name="description"]')
-            if (!metaDesc) {
-              metaDesc = document.createElement('meta')
-              metaDesc.setAttribute('name', 'description')
-              document.head.appendChild(metaDesc)
-            }
-            metaDesc.setAttribute('content', data.metadata.description)
-          }
-        }
-
-        window.dispatchEvent(
-          new CustomEvent('rari:app-router-rerender', {
-            detail: {
-              routePath: data.routePath,
-              affectedRoutes:
-                data.affectedRoutes ?? (data.routePath != null ? [data.routePath] : []),
-              currentPath: window.location.pathname,
-              preserveParams: true,
-            },
-          }),
-        )
-      } catch (error) {
-        console.error('[rari] HMR: App router update failed:', error)
-      }
-    },
-    isAppRouterUpdatedPayload,
-  )
+  registerHandler('rari:app-router-updated', handleAppRouterUpdated, isAppRouterUpdatedPayload)
 
   registerHandler(
     'rari:server-action-updated',

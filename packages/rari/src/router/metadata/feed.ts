@@ -62,14 +62,22 @@ function generateAuthorXml(author: FeedEntry['author']): string {
 }
 
 function generateItemXml(item: FeedEntry): string {
-  const lines: string[] = ['    <item>']
-
-  lines.push(`      <title>${escapeXml(item.title)}</title>`)
-  lines.push(`      <link>${escapeXml(item.url)}</link>`)
+  const lines: string[] = [
+    '    <item>',
+    `      <title>${escapeXml(item.title)}</title>`,
+    `      <link>${escapeXml(item.url)}</link>`,
+  ]
 
   if (item.description != null && item.description !== '')
     lines.push(`      <description>${escapeXml(item.description)}</description>`)
 
+  lines.push(...itemContentLines(item), ...itemMetaLines(item), ...itemEnclosureLines(item))
+  lines.push('    </item>')
+  return lines.join('\n')
+}
+
+function itemContentLines(item: FeedEntry): string[] {
+  const lines: string[] = []
   if (item.content != null && item.content !== '')
     lines.push(
       `      <content:encoded><![CDATA[${item.content.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></content:encoded>`,
@@ -77,7 +85,11 @@ function generateItemXml(item: FeedEntry): string {
 
   const authorXml = generateAuthorXml(item.author)
   if (authorXml) lines.push(authorXml)
+  return lines
+}
 
+function itemMetaLines(item: FeedEntry): string[] {
+  const lines: string[] = []
   if (item.pubDate != null) lines.push(`      <pubDate>${formatRfc822Date(item.pubDate)}</pubDate>`)
 
   lines.push(
@@ -88,18 +100,17 @@ function generateItemXml(item: FeedEntry): string {
     for (const category of item.categories)
       lines.push(`      <category>${escapeXml(category)}</category>`)
   }
+  return lines
+}
 
-  if (item.enclosure) {
-    const attrs = [`url="${escapeXml(item.enclosure.url)}"`]
-    if (item.enclosure.length !== undefined) attrs.push(`length="${item.enclosure.length}"`)
-    attrs.push(
-      `type="${escapeXml(item.enclosure.type != null && item.enclosure.type !== '' ? item.enclosure.type : 'application/octet-stream')}"`,
-    )
-    lines.push(`      <enclosure ${attrs.join(' ')} />`)
-  }
-
-  lines.push('    </item>')
-  return lines.join('\n')
+function itemEnclosureLines(item: FeedEntry): string[] {
+  if (!item.enclosure) return []
+  const attrs = [`url="${escapeXml(item.enclosure.url)}"`]
+  if (item.enclosure.length !== undefined) attrs.push(`length="${item.enclosure.length}"`)
+  attrs.push(
+    `type="${escapeXml(item.enclosure.type != null && item.enclosure.type !== '' ? item.enclosure.type : 'application/octet-stream')}"`,
+  )
+  return [`      <enclosure ${attrs.join(' ')} />`]
 }
 
 export function generateFeedXml(feed: Feed): string {

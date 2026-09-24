@@ -155,8 +155,17 @@ export function buildClientHeadFromBundle(bundle: Readonly<Record<string, Bundle
     tags.push(tag)
   }
 
-  let hasEntryCssMeta = false
+  const hasEntryCssMeta = pushEntryChunkTags(bundle, push)
+  if (!hasEntryCssMeta) pushFallbackCssTags(bundle, push)
 
+  return tags.length > 0 ? `${tags.join('\n')}\n` : ''
+}
+
+function pushEntryChunkTags(
+  bundle: Readonly<Record<string, BundleItem>>,
+  push: (tag: string) => void,
+): boolean {
+  let hasEntryCssMeta = false
   for (const [fileName, item] of Object.entries(bundle)) {
     if (item.type !== 'chunk' || item.isEntry !== true) continue
 
@@ -171,16 +180,18 @@ export function buildClientHeadFromBundle(bundle: Readonly<Record<string, Bundle
 
     push(`<script type="module" src="${assetHref(fileName)}"></script>`)
   }
+  return hasEntryCssMeta
+}
 
-  if (!hasEntryCssMeta) {
-    for (const [fileName, item] of Object.entries(bundle)) {
-      if (item.type === 'asset' && fileName.endsWith('.css') && !fileName.includes('/server/')) {
-        push(`<link rel="stylesheet" href="${assetHref(fileName)}" />`)
-      }
+function pushFallbackCssTags(
+  bundle: Readonly<Record<string, BundleItem>>,
+  push: (tag: string) => void,
+): void {
+  for (const [fileName, item] of Object.entries(bundle)) {
+    if (item.type === 'asset' && fileName.endsWith('.css') && !fileName.includes('/server/')) {
+      push(`<link rel="stylesheet" href="${assetHref(fileName)}" />`)
     }
   }
-
-  return tags.length > 0 ? `${tags.join('\n')}\n` : ''
 }
 
 export function buildDevClientHead(

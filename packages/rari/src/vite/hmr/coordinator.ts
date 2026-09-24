@@ -262,17 +262,40 @@ export class HMRCoordinator {
     return Promise.resolve()
   }
 
-  private async notifyRustServer(componentId: string, bundlePath: string): Promise<void> {
-    let relativeBundlePath = toPosixPath(bundlePath)
-    if (path.isAbsolute(bundlePath)) {
-      const relative = toPosixPath(
-        path.relative(this.serverComponentBuilder.getProjectRoot(), bundlePath),
-      )
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        throw new Error(`Bundle path must be inside the project root: ${bundlePath}`)
-      }
-      relativeBundlePath = relative
+  private relativeBundlePathInsideProject(bundlePath: string): string {
+    const relativeBundlePath = toPosixPath(bundlePath)
+    if (!path.isAbsolute(bundlePath)) return relativeBundlePath
+
+    const relative = toPosixPath(
+      path.relative(this.serverComponentBuilder.getProjectRoot(), bundlePath),
+    )
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(`Bundle path must be inside the project root: ${bundlePath}`)
     }
+    return relative
+  }
+
+  private assertSuccessfulHmrResponse(parsed: unknown, responseText: string, status: number): void {
+    if (!isRecord(parsed)) {
+      throw new Error(
+        `Invalid server response (status ${status}): expected object, got ${typeof parsed}. ` +
+          `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
+      )
+    }
+
+    if (parsed.success === true) return
+
+    const message =
+      typeof parsed.message === 'string' && parsed.message !== ''
+        ? parsed.message
+        : typeof parsed.error === 'string' && parsed.error !== ''
+          ? parsed.error
+          : 'Component reload failed'
+    throw new Error(message)
+  }
+
+  private async notifyRustServer(componentId: string, bundlePath: string): Promise<void> {
+    const relativeBundlePath = this.relativeBundlePathInsideProject(bundlePath)
 
     try {
       const response = await fetch(`${this.rustServerUrl}/_rari/hmr`, {
@@ -301,22 +324,7 @@ export class HMRCoordinator {
         )
       }
 
-      if (!isRecord(parsed)) {
-        throw new Error(
-          `Invalid server response (status ${response.status}): expected object, got ${typeof parsed}. ` +
-            `Response body: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`,
-        )
-      }
-
-      if (parsed.success !== true) {
-        const message =
-          typeof parsed.message === 'string' && parsed.message !== ''
-            ? parsed.message
-            : typeof parsed.error === 'string' && parsed.error !== ''
-              ? parsed.error
-              : 'Component reload failed'
-        throw new Error(message)
-      }
+      this.assertSuccessfulHmrResponse(parsed, responseText, response.status)
     } catch (error) {
       console.error(`[rari] HMR: Failed to notify Rust server:`, error)
       throw error

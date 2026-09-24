@@ -77,65 +77,90 @@
     }
   }
 
-  function validateActionValue(
-    value: unknown,
+  function validateActionString(
+    value: string,
+    config: ActionValidationConfig,
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+    ctx: ActionValidationContext,
+  ): string {
+    if (value.length > config.maxStringLength) {
+      throw new TypeError(`String too long: ${value.length} > ${config.maxStringLength}`)
+    }
+    bumpActionValidationCount(ctx, value.length, config)
+    return value
+  }
+
+  function validateActionNumber(value: number): number {
+    if (!Number.isFinite(value)) throw new TypeError('Invalid number: Infinity or NaN not allowed')
+
+    const absValue = Math.abs(value)
+    if (absValue > 1e100) {
+      const estimatedDigits = estimatedDigitCount(absValue)
+      if (estimatedDigits > MAX_BIGINT_DIGITS) {
+        throw new TypeError(
+          `Number too large. Estimated ${estimatedDigits} digits but the limit is ${MAX_BIGINT_DIGITS}.`,
+        )
+      }
+    }
+
+    return value
+  }
+
+  function validateActionBigInt(
+    value: bigint,
+    config: ActionValidationConfig,
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+    ctx: ActionValidationContext,
+  ): bigint {
+    const digits = value < 0n ? value.toString().slice(1) : value.toString()
+    if (digits.length > MAX_BIGINT_DIGITS) {
+      throw new TypeError(
+        `BigInt too large: ${digits.length} digits but the limit is ${MAX_BIGINT_DIGITS}.`,
+      )
+    }
+    bumpActionValidationCount(ctx, digits.length, config)
+    return value
+  }
+
+  function validateActionArray(
+    value: readonly unknown[],
     config: ActionValidationConfig,
     depth: number,
     // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
     ctx: ActionValidationContext,
-  ): unknown {
-    if (isOpaqueActionArg(value)) return value
+  ): unknown[] {
+    if (value.length > config.maxArrayLength) {
+      throw new TypeError(`Array too large: ${value.length} > ${config.maxArrayLength}`)
+    }
+    if (value.length > 1) ctx.hasFork = true
+    bumpActionValidationCount(ctx, value.length + 1, config)
+    return value.map(item => validateActionValue(item, config, depth + 1, ctx))
+  }
 
-    if (depth > config.maxDepth)
-      throw new TypeError(`Maximum nesting depth exceeded: ${depth} > ${config.maxDepth}`)
-
-    if (value === null || typeof value === 'boolean') return value
-
-    if (typeof value === 'string') {
-      if (value.length > config.maxStringLength) {
-        throw new TypeError(`String too long: ${value.length} > ${config.maxStringLength}`)
-      }
-      bumpActionValidationCount(ctx, value.length, config)
-      return value
+  function validateActionObject(
+    value: object,
+    config: ActionValidationConfig,
+    depth: number,
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+    ctx: ActionValidationContext,
+  ): Record<string, unknown> {
+    const entries = Object.entries(value)
+    if (entries.length > config.maxObjectKeys) {
+      throw new TypeError(`Too many object keys: ${entries.length} > ${config.maxObjectKeys}`)
     }
 
-    if (typeof value === 'number') {
-      if (!Number.isFinite(value))
-        throw new TypeError('Invalid number: Infinity or NaN not allowed')
-
-      const absValue = Math.abs(value)
-      if (absValue > 1e100) {
-        const estimatedDigits = estimatedDigitCount(absValue)
-        if (estimatedDigits > MAX_BIGINT_DIGITS) {
-          throw new TypeError(
-            `Number too large. Estimated ${estimatedDigits} digits but the limit is ${MAX_BIGINT_DIGITS}.`,
-          )
-        }
-      }
-
-      return value
+    const sanitized: Record<string, unknown> = {}
+    for (const [key, entryValue] of entries) {
+      if (isDangerousActionProperty(key)) continue
+      sanitized[key] = validateActionValue(entryValue, config, depth + 1, ctx)
     }
 
-    if (Array.isArray(value)) {
-      if (value.length > config.maxArrayLength) {
-        throw new TypeError(`Array too large: ${value.length} > ${config.maxArrayLength}`)
-      }
-      if (value.length > 1) ctx.hasFork = true
-      bumpActionValidationCount(ctx, value.length + 1, config)
-      return value.map(item => validateActionValue(item, config, depth + 1, ctx))
-    }
+    return sanitized
+  }
 
-    if (typeof value === 'bigint') {
-      const digits = value < 0n ? value.toString().slice(1) : value.toString()
-      if (digits.length > MAX_BIGINT_DIGITS) {
-        throw new TypeError(
-          `BigInt too large: ${digits.length} digits but the limit is ${MAX_BIGINT_DIGITS}.`,
-        )
-      }
-      bumpActionValidationCount(ctx, digits.length, config)
-      return value
-    }
+  const VALIDATE_CONTINUE = Symbol('validate-continue')
 
+  function validateBuiltinActionValue(value: unknown): unknown {
     if (typeof Date !== 'undefined' && value instanceof Date) return value
 
     if (typeof Map !== 'undefined' && value instanceof Map)
@@ -150,20 +175,32 @@
     )
       return value
 
-    if (typeof value === 'object') {
-      const entries = Object.entries(value)
-      if (entries.length > config.maxObjectKeys) {
-        throw new TypeError(`Too many object keys: ${entries.length} > ${config.maxObjectKeys}`)
-      }
+    return VALIDATE_CONTINUE
+  }
 
-      const sanitized: Record<string, unknown> = {}
-      for (const [key, entryValue] of entries) {
-        if (isDangerousActionProperty(key)) continue
-        sanitized[key] = validateActionValue(entryValue, config, depth + 1, ctx)
-      }
+  function validateActionValue(
+    value: unknown,
+    config: ActionValidationConfig,
+    depth: number,
+    // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+    ctx: ActionValidationContext,
+  ): unknown {
+    if (isOpaqueActionArg(value)) return value
 
-      return sanitized
-    }
+    if (depth > config.maxDepth)
+      throw new TypeError(`Maximum nesting depth exceeded: ${depth} > ${config.maxDepth}`)
+
+    if (value === null || typeof value === 'boolean') return value
+
+    if (typeof value === 'string') return validateActionString(value, config, ctx)
+    if (typeof value === 'number') return validateActionNumber(value)
+    if (Array.isArray(value)) return validateActionArray(value, config, depth, ctx)
+    if (typeof value === 'bigint') return validateActionBigInt(value, config, ctx)
+
+    const builtin = validateBuiltinActionValue(value)
+    if (builtin !== VALIDATE_CONTINUE) return builtin
+
+    if (typeof value === 'object') return validateActionObject(value, config, depth, ctx)
 
     return value
   }

@@ -733,7 +733,91 @@ export class ServerComponentBuilder {
 
     const allRscEntries = [...this.serverComponents.entries(), ...this.serverActions.entries()]
     const viteBuilt = await this.buildRscEntriesWithVite(allRscEntries)
+    await this.writeViteBuiltRscEntries(manifest, viteBuilt)
 
+    if (useCacheEnabled) {
+      this.useCacheBuildId = contentHash(JSON.stringify(manifest.components), 16)
+      manifest.useCacheBuildId = this.useCacheBuildId
+    }
+
+    const manifestPath = path.join(this.options.outDir, this.options.manifestPath)
+    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
+    await this.writeRouteCssEntries(manifest)
+
+    const serverConfig = this.buildServerConfigObject()
+    await this.persistServerConfig(serverConfig)
+
+    return manifest
+  }
+
+  private buildServerConfigObject(): ServerConfig {
+    const serverConfig: ServerConfig = {}
+    if (this.options.csp) serverConfig.csp = this.options.csp
+    if (this.options.cacheControl) serverConfig.cacheControl = this.options.cacheControl
+    if (this.options.cache) serverConfig.cache = this.options.cache
+    if (this.options.action) serverConfig.action = this.options.action
+    if (this.options.jsPoolSize != null) serverConfig.jsPoolSize = this.options.jsPoolSize
+    const origin = this.options.origin?.trim().replace(/\/+$/, '')
+    if (origin != null && origin !== '') serverConfig.origin = origin
+    if (this.options.htmlLimitedBots != null)
+      serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
+    this.applyUseCacheServerConfig(serverConfig)
+    return serverConfig
+  }
+
+  private applyUseCacheServerConfig(serverConfig: ServerConfig): void {
+    if (
+      this.options.experimental?.useCacheRemote == null &&
+      (this.useCacheBuildId == null || this.useCacheBuildId === '')
+    ) {
+      return
+    }
+    serverConfig.useCache = {
+      ...(this.options.experimental?.useCacheRemote
+        ? { remote: this.options.experimental.useCacheRemote }
+        : {}),
+      ...(this.useCacheBuildId != null && this.useCacheBuildId !== ''
+        ? { buildId: this.useCacheBuildId }
+        : {}),
+    }
+    if (!this.options.experimental?.useCache && this.options.experimental?.useCacheRemote) {
+      console.warn(
+        "[server-build] experimental.useCacheRemote is set without experimental.useCache; the 'use cache' transform will still run because useCacheRemote is configured.",
+      )
+    }
+  }
+
+  private async persistServerConfig(serverConfig: ServerConfig): Promise<void> {
+    const serverConfigPath = path.join(this.options.outDir, this.options.serverConfigPath)
+
+    if (Object.keys(serverConfig).length === 0) {
+      try {
+        await fs.promises.unlink(serverConfigPath)
+      } catch (error: unknown) {
+        if (getErrnoCode(error) !== 'ENOENT')
+          console.warn(`Failed to remove server config file:`, error)
+      }
+      return
+    }
+    await fs.promises.writeFile(serverConfigPath, JSON.stringify(serverConfig), 'utf-8')
+  }
+
+  private async writeViteBuiltRscEntries(
+    manifest: ServerComponentManifest,
+    viteBuilt: {
+      readonly entries: Map<
+        string,
+        {
+          readonly code: string
+          readonly cssAssetSources: readonly string[]
+        }
+      >
+      readonly extraFiles: ReadonlyArray<{
+        readonly fileName: string
+        readonly code: string | Uint8Array
+      }>
+    },
+  ): Promise<void> {
     for (const file of viteBuilt.extraFiles) {
       const fullPath = this.resolveExtraFileOutPath(file.fileName)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
@@ -769,59 +853,6 @@ export class ServerComponentBuilder {
         css,
       }
     }
-
-    if (useCacheEnabled) {
-      this.useCacheBuildId = contentHash(JSON.stringify(manifest.components), 16)
-      manifest.useCacheBuildId = this.useCacheBuildId
-    }
-
-    const manifestPath = path.join(this.options.outDir, this.options.manifestPath)
-    await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
-    await this.writeRouteCssEntries(manifest)
-
-    const serverConfig: ServerConfig = {}
-    if (this.options.csp) serverConfig.csp = this.options.csp
-    if (this.options.cacheControl) serverConfig.cacheControl = this.options.cacheControl
-    if (this.options.cache) serverConfig.cache = this.options.cache
-    if (this.options.action) serverConfig.action = this.options.action
-    if (this.options.jsPoolSize != null) serverConfig.jsPoolSize = this.options.jsPoolSize
-    const origin = this.options.origin?.trim().replace(/\/+$/, '')
-    if (origin != null && origin !== '') serverConfig.origin = origin
-    if (this.options.htmlLimitedBots != null)
-      serverConfig.htmlLimitedBots = this.options.htmlLimitedBots
-    if (
-      this.options.experimental?.useCacheRemote != null ||
-      (this.useCacheBuildId != null && this.useCacheBuildId !== '')
-    ) {
-      serverConfig.useCache = {
-        ...(this.options.experimental?.useCacheRemote
-          ? { remote: this.options.experimental.useCacheRemote }
-          : {}),
-        ...(this.useCacheBuildId != null && this.useCacheBuildId !== ''
-          ? { buildId: this.useCacheBuildId }
-          : {}),
-      }
-      if (!this.options.experimental?.useCache && this.options.experimental?.useCacheRemote) {
-        console.warn(
-          "[server-build] experimental.useCacheRemote is set without experimental.useCache; the 'use cache' transform will still run because useCacheRemote is configured.",
-        )
-      }
-    }
-
-    const serverConfigPath = path.join(this.options.outDir, this.options.serverConfigPath)
-
-    if (Object.keys(serverConfig).length === 0) {
-      try {
-        await fs.promises.unlink(serverConfigPath)
-      } catch (error: unknown) {
-        if (getErrnoCode(error) !== 'ENOENT')
-          console.warn(`Failed to remove server config file:`, error)
-      }
-    } else {
-      await fs.promises.writeFile(serverConfigPath, JSON.stringify(serverConfig), 'utf-8')
-    }
-
-    return manifest
   }
 
   private async buildRscEntriesWithVite(
@@ -936,10 +967,7 @@ export class ServerComponentBuilder {
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8')
   }
 
-  async buildSSRClientComponents(): Promise<void> {
-    const ssrOutDir = path.join(this.options.outDir, 'ssr')
-    await fs.promises.mkdir(ssrOutDir, { recursive: true })
-
+  private collectSsrClientFiles(): Array<{ filePath: string; code: string }> {
     const clientFiles: Array<{ filePath: string; code: string }> = [
       ...this.getClientComponentFiles(),
     ]
@@ -960,6 +988,16 @@ export class ServerComponentBuilder {
       }
     } catch {}
 
+    return clientFiles
+  }
+
+  private collectExternalSsrSources(): Array<{
+    componentId: string
+    filePath: string
+    code: string
+    exports: string[]
+    bundleName: string
+  }> {
     const externalSources: Array<{
       componentId: string
       filePath: string
@@ -986,6 +1024,15 @@ export class ServerComponentBuilder {
         })
       } catch {}
     }
+    return externalSources
+  }
+
+  async buildSSRClientComponents(): Promise<void> {
+    const ssrOutDir = path.join(this.options.outDir, 'ssr')
+    await fs.promises.mkdir(ssrOutDir, { recursive: true })
+
+    const clientFiles = this.collectSsrClientFiles()
+    const externalSources = this.collectExternalSsrSources()
 
     const manifest: Record<
       string,
