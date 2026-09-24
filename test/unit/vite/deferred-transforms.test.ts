@@ -251,7 +251,7 @@ export default async function Page({ id }) {
 export default async function Page({ fallback }) {
   async function save({ count = fallback }) {
     'use server'
-    await db.write(count, fallback)
+    await db.write(count)
   }
   return save
 }
@@ -268,6 +268,7 @@ export default function Page() {
   return async function save(formData) {
     'use server'
     await db.write(formData)
+    if (!formData) return save(new FormData())
   }
 }
 `
@@ -275,6 +276,8 @@ export default function Page() {
     const result = transformInlineServerActions(input, 'page')
     expect(result!.code).toContain('return $$ACTION_0_save')
     expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
+    expect(result!.code).toContain('return $$ACTION_0_save(new FormData())')
+    expect(result!.code).not.toContain('$$ACTION_0_save.bind(')
     expect(result!.code).not.toContain('const save =')
     expect(result!.code).not.toContain('return const ')
   })
@@ -295,5 +298,25 @@ export default function Page() {
     expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
     expect(result!.code).not.toContain('const save =')
     expect(result!.code).not.toContain('register(const ')
+  })
+
+  it('keeps named functions in JSX action attributes as expressions', () => {
+    const input = `import { db } from './db'
+export default function Page() {
+  return <form action={async function save(formData) {
+    'use server'
+    await db.write(formData)
+  }} />
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result).not.toBeNull()
+    expect(result!.code).toContain('action={$$ACTION_0_save}')
+    expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
+    expect(result!.code).not.toContain('action={const ')
+    expect(result!.code).not.toContain('const save =')
+    const attr = /action=\{([^}]+)\}/.exec(result!.code)
+    expect(attr?.[1]).toMatch(/^\$\$ACTION_\d+_\w+$/)
   })
 })

@@ -456,10 +456,81 @@ function collectModuleBindings(source: string): Set<string> {
   return names
 }
 
+function collectIdentsInRange(
+  source: string,
+  start: number,
+  end: number,
+  bound: ReadonlySet<string>,
+  used: Set<string>,
+): void {
+  let i = start
+  while (i < end) {
+    const skipped = skipNonCodeToken(source, i, end)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+
+    if (!isIdentStart(source.charCodeAt(i))) {
+      i++
+      continue
+    }
+
+    const ident = readIdent(source, i)
+    if (ident == null) {
+      i++
+      continue
+    }
+
+    if (i > 0 && source.charCodeAt(i - 1) === 46) {
+      i = ident.end
+      continue
+    }
+
+    if (isObjectLiteralKey(source, i, ident.end)) {
+      i = ident.end
+      continue
+    }
+
+    if (!bound.has(ident.name)) used.add(ident.name)
+    i = ident.end
+  }
+}
+
+function collectFreeVarsFromParamDefaults(
+  paramsRaw: string,
+  bound: ReadonlySet<string>,
+  used: Set<string>,
+): void {
+  let i = 0
+  const len = paramsRaw.length
+  while (i < len) {
+    const skipped = skipNonCodeToken(paramsRaw, i, len)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+    const ch = paramsRaw.charCodeAt(i)
+    if (ch === 61) {
+      const next = paramsRaw.charCodeAt(i + 1)
+      if (next === 62 /* > */ || next === 61 /* = */) {
+        i++
+        continue
+      }
+      const valueEnd = skipDefaultValueExpr(paramsRaw, i, len)
+      collectIdentsInRange(paramsRaw, i + 1, valueEnd, bound, used)
+      i = valueEnd
+      continue
+    }
+    i++
+  }
+}
+
 function collectFreeVars(
   body: string,
   paramsRaw: string,
   moduleBindings: ReadonlySet<string>,
+  selfName?: string | null,
 ): string[] {
   const bound = new Set<string>([
     ...collectParamNames(paramsRaw),
@@ -468,46 +539,46 @@ function collectFreeVars(
     ...KNOWN_GLOBALS,
     ...JS_KEYWORDS,
   ])
+  if (selfName != null && selfName !== '') bound.add(selfName)
 
   const used = new Set<string>()
-  let i = 0
-  const len = body.length
+  collectIdentsInRange(body, 0, body.length, bound, used)
+  collectFreeVarsFromParamDefaults(paramsRaw, bound, used)
+  return [...used]
+}
 
+function rewriteIdentRefs(source: string, from: string, to: string): string {
+  if (from === to) return source
+  let out = ''
+  let i = 0
+  let last = 0
+  const len = source.length
   while (i < len) {
-    const skipped = skipNonCodeToken(body, i, len)
+    const skipped = skipNonCodeToken(source, i, len)
     if (skipped !== -1) {
       i = skipped
       continue
     }
-
-    if (!isIdentStart(body.charCodeAt(i))) {
+    if (!isIdentStart(source.charCodeAt(i))) {
       i++
       continue
     }
-
-    const ident = readIdent(body, i)
+    const ident = readIdent(source, i)
     if (ident == null) {
       i++
       continue
     }
-
-    // Member access: skip `obj.prop` / `obj?.prop` property names.
-    if (i > 0 && body.charCodeAt(i - 1) === 46) {
-      i = ident.end
-      continue
+    if (
+      ident.name === from &&
+      (i <= 0 || source.charCodeAt(i - 1) !== 46) &&
+      !isObjectLiteralKey(source, i, ident.end)
+    ) {
+      out += source.slice(last, i) + to
+      last = ident.end
     }
-
-    // Object-literal keys in `key: value` pairs (not ternary / labels alone).
-    if (isObjectLiteralKey(body, i, ident.end)) {
-      i = ident.end
-      continue
-    }
-
-    if (!bound.has(ident.name)) used.add(ident.name)
     i = ident.end
   }
-
-  return [...used]
+  return out + source.slice(last)
 }
 
 function skipWsBack(source: string, i: number): number {
@@ -560,7 +631,11 @@ function isFunctionDeclarationContext(source: string, start: number): boolean {
   if (keywordEndsAt(source, beforeStart, 'export') != null) return true
 
   const prev = source.charCodeAt(beforeStart - 1)
-  if (prev === 59 /* ; */ || prev === 123 /* { */ || prev === 125 /* } */) return true
+  if (prev === 59 /* ; */ || prev === 125 /* } */) return true
+  if (prev === 123 /* { */) {
+    const beforeBrace = skipWsBack(source, beforeStart - 1)
+    return beforeBrace <= 0 || source.charCodeAt(beforeBrace - 1) !== 61
+  }
 
   let hasLineBreak = false
   for (let i = beforeStart; i < start; i++) {
@@ -874,8 +949,10 @@ export function transformInlineServerActions(
     actionIndex--
     actionNames.unshift(hoistedName)
 
-    const body = stripUseServerPrologue(result, action.bodyOpen, action.bodyClose)
-    const freeVars = collectFreeVars(body, action.paramsRaw, moduleBindings)
+    const rawBody = stripUseServerPrologue(result, action.bodyOpen, action.bodyClose)
+    const selfName = action.kind === 'expression' && action.name != null ? action.name : null
+    const freeVars = collectFreeVars(rawBody, action.paramsRaw, moduleBindings, selfName)
+    const body = selfName != null ? rewriteIdentRefs(rawBody, selfName, hoistedName) : rawBody
     const params = [...freeVars, action.paramsRaw.trim()].filter(p => p !== '').join(', ')
     const asyncKw = action.isAsync ? 'async ' : ''
     const bindExpr =
