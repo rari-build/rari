@@ -1,6 +1,8 @@
 import { Image as ImageComponent } from './image'
 
 export {
+  BLUR_PLACEHOLDER_QUALITY,
+  BLUR_PLACEHOLDER_WIDTH,
   DEFAULT_DEVICE_SIZES,
   DEFAULT_FORMATS,
   DEFAULT_IMAGE_SIZES,

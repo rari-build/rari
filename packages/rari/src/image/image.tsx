@@ -2,7 +2,12 @@
 
 import type { ImageFormat } from './constants'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_DEVICE_SIZES, DEFAULT_FORMATS } from './constants'
+import {
+  BLUR_PLACEHOLDER_QUALITY,
+  BLUR_PLACEHOLDER_WIDTH,
+  DEFAULT_DEVICE_SIZES,
+  DEFAULT_FORMATS,
+} from './constants'
 import { resolveOptimizedSizePlan } from './size-plan'
 
 export interface ImageProps {
@@ -162,22 +167,36 @@ function resolveImageDimensions(options: {
   readonly width: number | undefined
   readonly height: number | undefined
   readonly fill: boolean
+  readonly placeholder: 'blur' | 'empty'
   readonly blurDataURL: string | undefined
+  readonly loader: ImageProps['loader']
 }): {
   readonly imgSrc: string
   readonly imgWidth: number | undefined
   readonly imgHeight: number | undefined
   readonly imgBlurDataURL: string | undefined
 } {
-  const { src, width, height, fill, blurDataURL } = options
+  const { src, width, height, fill, placeholder, blurDataURL, loader } = options
   const imgSrc = typeof src === 'string' ? src : src.src
   const intrinsicWidth = typeof src !== 'string' ? src.width : undefined
   const intrinsicHeight = typeof src !== 'string' ? src.height : undefined
-  const imgBlurDataURL =
+  const explicitBlur =
     blurDataURL != null && blurDataURL !== ''
       ? blurDataURL
       : typeof src !== 'string'
         ? src.blurDataURL
+        : undefined
+  const imgBlurDataURL =
+    explicitBlur != null && explicitBlur !== ''
+      ? explicitBlur
+      : placeholder === 'blur'
+        ? resolveLoaderOrBuiltUrl(
+            loader,
+            imgSrc,
+            BLUR_PLACEHOLDER_WIDTH,
+            BLUR_PLACEHOLDER_QUALITY,
+            'jpeg',
+          )
         : undefined
   return {
     imgSrc,
@@ -199,7 +218,7 @@ function fillImageStyle(style: React.CSSProperties | undefined): React.CSSProper
 
 function blurPendingStyle(imgBlurDataURL: string): React.CSSProperties {
   return {
-    backgroundImage: `url(${imgBlurDataURL})`,
+    backgroundImage: `url("${imgBlurDataURL}")`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     filter: 'blur(20px)',
@@ -343,7 +362,9 @@ export function Image({
     width,
     height,
     fill,
+    placeholder,
     blurDataURL,
+    loader,
   })
   const finalSrc = overrideSrc != null && overrideSrc !== '' ? overrideSrc : imgSrc
   const shouldPreload = preload

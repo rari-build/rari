@@ -242,6 +242,11 @@ impl Server {
 
         let layout_layer = config.cache.layer(CACHE_LAYER_LAYOUT);
 
+        let image_cache =
+            Arc::new(ImageCache::with_handler(Arc::clone(&image_handler), &project_root));
+        let image_optimizer =
+            Arc::new(ImageOptimizer::with_cache(config.images.clone(), &project_root, image_cache));
+
         let state = ServerState {
             renderer: renderer_arc,
             ssr_renderer,
@@ -262,7 +267,7 @@ impl Server {
             og_generator,
             app_icons,
             project_root,
-            image_optimizer: None,
+            image_optimizer: Some(Arc::clone(&image_optimizer)),
             cache_registry: Arc::clone(&cache_registry),
             image_handler,
         };
@@ -314,20 +319,20 @@ impl Server {
         }
     }
 
-    fn build_router(config: &Config, mut state: ServerState) -> Router {
+    fn build_router(config: &Config, state: ServerState) -> Router {
         let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
 
-        let image_cache = Arc::new(ImageCache::with_handler(
-            Arc::clone(&state.image_handler),
-            &state.project_root,
-        ));
-        let image_optimizer = Arc::new(ImageOptimizer::with_cache(
-            config.images.clone(),
-            &state.project_root,
-            image_cache,
-        ));
-
-        state.image_optimizer = Some(Arc::clone(&image_optimizer));
+        let image_optimizer = state.image_optimizer.clone().unwrap_or_else(|| {
+            let image_cache = Arc::new(ImageCache::with_handler(
+                Arc::clone(&state.image_handler),
+                &state.project_root,
+            ));
+            Arc::new(ImageOptimizer::with_cache(
+                config.images.clone(),
+                &state.project_root,
+                image_cache,
+            ))
+        });
 
         let image_state = ImageState { optimizer: image_optimizer };
 
