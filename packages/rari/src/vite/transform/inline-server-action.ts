@@ -277,10 +277,87 @@ function isKeywordAt(source: string, i: number, keyword: string): boolean {
   return true
 }
 
+function isAtDefaultExprBoundary(
+  depthParen: number,
+  depthBrace: number,
+  depthBracket: number,
+): boolean {
+  return depthParen === 0 && depthBrace === 0 && depthBracket === 0
+}
+
+function advanceDefaultValueDepth(
+  ch: number,
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  depth: { paren: number; brace: number; bracket: number },
+): number | null {
+  if (ch === 40) {
+    depth.paren++
+    return null
+  }
+  if (ch === 41) {
+    depth.paren = Math.max(0, depth.paren - 1)
+    return null
+  }
+  if (ch === 123) {
+    depth.brace++
+    return null
+  }
+  if (ch === 125) {
+    if (isAtDefaultExprBoundary(depth.paren, depth.brace, depth.bracket)) return -1
+    depth.brace = Math.max(0, depth.brace - 1)
+    return null
+  }
+  if (ch === 91) {
+    depth.bracket++
+    return null
+  }
+  if (ch === 93) {
+    if (isAtDefaultExprBoundary(depth.paren, depth.brace, depth.bracket)) return -1
+    depth.bracket = Math.max(0, depth.bracket - 1)
+    return null
+  }
+  if (ch === 44 && isAtDefaultExprBoundary(depth.paren, depth.brace, depth.bracket)) return -1
+  return null
+}
+
+function skipDefaultValueExpr(source: string, eqAt: number, end: number): number {
+  let i = skipWhitespaceAndComments(source, eqAt + 1)
+  const depth = { paren: 0, brace: 0, bracket: 0 }
+  while (i < end) {
+    const skipped = skipNonCodeToken(source, i, end)
+    if (skipped !== -1) {
+      i = skipped
+      continue
+    }
+    if (advanceDefaultValueDepth(source.charCodeAt(i), depth) === -1) return i
+    i++
+  }
+  return i
+}
+
+function collectDestructuredBindingAt(
+  paramsRaw: string,
+  j: number,
+  open: number,
+  end: number,
+  names: Set<string>,
+): number {
+  const ident = readIdent(paramsRaw, j)
+  if (ident == null) return j + 1
+  const afterIdent = skipWhitespaceAndComments(paramsRaw, ident.end)
+  if (open === 123 && paramsRaw.charCodeAt(afterIdent) === 58) return afterIdent + 1
+  names.add(ident.name)
+  let next = ident.end
+  const afterBinding = skipWhitespaceAndComments(paramsRaw, next)
+  if (paramsRaw.charCodeAt(afterBinding) === 61) {
+    next = skipDefaultValueExpr(paramsRaw, afterBinding, end - 1)
+  }
+  return next
+}
+
 function collectDestructuredParamNames(paramsRaw: string, i: number, names: Set<string>): number {
   const open = paramsRaw.charCodeAt(i)
-  const close = open === 123 ? 125 : 93
-  const end = skipBalanced(paramsRaw, i, open, close)
+  const end = skipBalanced(paramsRaw, i, open, open === 123 ? 125 : 93)
   let j = i + 1
   while (j < end - 1) {
     j = skipWhitespaceAndComments(paramsRaw, j)
@@ -294,18 +371,7 @@ function collectDestructuredParamNames(paramsRaw: string, i: number, names: Set<
       j = collectRestParamName(paramsRaw, j, names)
       continue
     }
-    const ident = readIdent(paramsRaw, j)
-    if (ident == null) {
-      j++
-      continue
-    }
-    const afterIdent = skipWhitespaceAndComments(paramsRaw, ident.end)
-    if (open === 123 && paramsRaw.charCodeAt(afterIdent) === 58) {
-      j = afterIdent + 1
-      continue
-    }
-    names.add(ident.name)
-    j = ident.end
+    j = collectDestructuredBindingAt(paramsRaw, j, open, end, names)
   }
   return end
 }
@@ -460,6 +526,55 @@ function keywordEndsAt(source: string, end: number, keyword: string): number | n
   return start
 }
 
+const EXPR_CONTINUATION_CHARS = new Set([
+  40, // (
+  91, // [
+  44, // ,
+  61, // =
+  58, // :
+  63, // ?
+  46, // .
+  43, // +
+  45, // -
+  42, // *
+  47, // /
+  37, // %
+  38, // &
+  124, // |
+  94, // ^
+  33, // !
+  126, // ~
+  60, // <
+  62, // >
+])
+
+function isFunctionDeclarationContext(source: string, start: number): boolean {
+  const beforeStart = skipWsBack(source, start)
+  if (beforeStart <= 0) return true
+
+  const defaultStart = keywordEndsAt(source, beforeStart, 'default')
+  if (defaultStart != null) {
+    const beforeDefault = skipWsBack(source, defaultStart)
+    return keywordEndsAt(source, beforeDefault, 'export') != null
+  }
+  if (keywordEndsAt(source, beforeStart, 'export') != null) return true
+
+  const prev = source.charCodeAt(beforeStart - 1)
+  if (prev === 59 /* ; */ || prev === 123 /* { */ || prev === 125 /* } */) return true
+
+  let hasLineBreak = false
+  for (let i = beforeStart; i < start; i++) {
+    const c = source.charCodeAt(i)
+    if (c === 10 || c === 13) {
+      hasLineBreak = true
+      break
+    }
+  }
+  if (!hasLineBreak) return false
+
+  return !EXPR_CONTINUATION_CHARS.has(prev)
+}
+
 /** Object key when prev significant is `{` or `,` and next significant is `:`. */
 function isObjectLiteralKey(body: string, identStart: number, identEnd: number): boolean {
   const after = skipWhitespaceAndComments(body, identEnd)
@@ -560,8 +675,7 @@ function tryLocateFunctionAction(
     return { action: null, nextI: pos + 1 }
   }
 
-  const beforeStart = skipWsBack(source, start)
-  const isAssigned = beforeStart > 0 && source.charCodeAt(beforeStart - 1) === 61 /* = */
+  const isDeclaration = name != null && isFunctionDeclarationContext(source, start)
 
   return {
     action: {
@@ -572,7 +686,7 @@ function tryLocateFunctionAction(
       paramsRaw,
       isAsync,
       name,
-      kind: name != null && !isAssigned ? 'declaration' : 'expression',
+      kind: isDeclaration ? 'declaration' : 'expression',
     },
     nextI: bodyClose + 1,
   }

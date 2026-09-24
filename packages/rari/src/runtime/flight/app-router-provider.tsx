@@ -470,6 +470,7 @@ export function AppRouterProvider({
         flightProtocol: rscFlightProtocol,
       }
     } catch (parseError) {
+      if (isError(parseError) && parseError.name === 'AbortError') throw parseError
       const error = toError(parseError)
       const wrapped = new Error(`Failed to parse RSC Flight protocol: ${error.message}`, {
         cause: error,
@@ -534,6 +535,7 @@ export function AppRouterProvider({
         pendingFetchesRef.current.delete(requestKey)
         if (
           isError(error) &&
+          error.name !== 'AbortError' &&
           !error.message.includes('Failed to fetch RSC data') &&
           !error.message.includes('Failed to parse')
         ) {
