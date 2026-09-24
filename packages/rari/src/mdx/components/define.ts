@@ -18,16 +18,10 @@ function isResolvedEntry(value: unknown): value is MdxComponentEntry {
 }
 
 // oxlint-disable typescript/prefer-readonly-parameter-types
-function isEntryArray(
-  input: readonly MdxComponentEntry[] | MdxComponentsInput,
-): input is readonly MdxComponentEntry[] {
-  return Array.isArray(input)
-}
-
 function normalizeRegistry(
   input: readonly MdxComponentEntry[] | MdxComponentsInput,
 ): MdxComponentEntry[] {
-  if (isEntryArray(input)) return [...input]
+  if (Array.isArray(input)) return [...(input as readonly MdxComponentEntry[])]
 
   return Object.entries(input).map(([name, value]) => {
     if (isResolvedEntry(value)) {
@@ -46,7 +40,6 @@ function normalizeRegistry(
     )
   })
 }
-
 // oxlint-enable typescript/prefer-readonly-parameter-types
 
 export function defineMdxComponents(

@@ -27,8 +27,9 @@ export async function initializeProxyExecutor(proxyModulePath: string, rariReque
       console.error('[rari] Proxy: RariRequest constructor not found')
       return false
     }
+    const RariRequestCtorUnknown: unknown = requestModule.RariRequest
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion packaged RariRequest constructor
-    const RariRequestCtor = requestModule.RariRequest as unknown as new (
+    const RariRequestCtor = RariRequestCtorUnknown as new (
       url: string,
       init: { method: string; headers: Headers },
     ) => RariRequest

@@ -39,10 +39,6 @@ function publicAssetPath(filePath: string, hash: string, assetsDir: string): str
   return publicHashedAssetPath(filePath, hash, assetsDir, { encodeBase: true })
 }
 
-function assetFileName(filePath: string, hash: string, assetsDir: string): string {
-  return hashedAssetFileName(filePath, hash, assetsDir)
-}
-
 function generateModuleSource(publicPath: string, width: number, height: number): string {
   return (
     `const src = ${JSON.stringify(publicPath)};\n` +
@@ -80,7 +76,7 @@ export function resolveStaticImageFilePath(
   if (id.startsWith('\0')) return null
 
   const importerPath = normalizeStaticImageImporter(importer)
-  let resolved = id
+  let resolved: string
   if (id.startsWith('.')) resolved = path.resolve(path.dirname(importerPath), id)
   else if (path.isAbsolute(id)) resolved = id
   else {
@@ -106,7 +102,7 @@ export function buildStaticImageModule(
   const source = fs.readFileSync(filePath)
   const hash = contentHash(source)
   const publicPath = publicAssetPath(filePath, hash, assetsDir)
-  const fileName = assetFileName(filePath, hash, assetsDir)
+  const fileName = hashedAssetFileName(filePath, hash, assetsDir)
   const dimensions = readImageDimensions(source)
   if (dimensions == null) {
     throw new Error(

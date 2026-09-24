@@ -667,9 +667,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
         session.disconnected = true
         return false
       }
-      if (status === 1) {
-        if (!(await session.pumpFizzChunk(combined))) return false
-      }
+      if (status === 1 && !(await session.pumpFizzChunk(combined))) return false
       markFinalPackageSent()
       return true
     }
@@ -682,8 +680,8 @@ declare function rariCreateHtmlBoundaryTracker(): {
           const tail = decoder.decode()
           if (tail && !(await pumpFizzText(tail))) return
           if (!(await flushHeadPending())) return
-          if (!finalPackageSent && session.safeToInjectFlight()) {
-            if (!(await pumpPendingFlight())) return
+          if (!finalPackageSent && session.safeToInjectFlight() && !(await pumpPendingFlight())) {
+            return
           }
           rariStreamLog('mux.fizzLoop.done', `htmlChunks=${htmlChunkCount}`)
           break
@@ -692,8 +690,13 @@ declare function rariCreateHtmlBoundaryTracker(): {
         const chunkText = decoder.decode(value, { stream: true })
         rariStreamLog('mux.htmlChunk', `n=${htmlChunkCount} bytes=${value.byteLength}`)
         if (!(await pumpFizzText(chunkText))) return
-        if (!finalPackageSent && !headPending && session.safeToInjectFlight()) {
-          if (!(await pumpPendingFlight())) return
+        if (
+          !finalPackageSent &&
+          !headPending &&
+          session.safeToInjectFlight() &&
+          !(await pumpPendingFlight())
+        ) {
+          return
         }
       }
       if (!finalPackageSent) {

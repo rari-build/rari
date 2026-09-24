@@ -41,8 +41,13 @@ function resolveCssImport(
   }
 
   const aliased = resolveAlias(bare, aliases, projectRoot)
-  if (aliased != null && aliased !== '') {
-    if (fs.existsSync(aliased) && fs.statSync(aliased).isFile()) return aliased
+  if (
+    aliased != null &&
+    aliased !== '' &&
+    fs.existsSync(aliased) &&
+    fs.statSync(aliased).isFile()
+  ) {
+    return aliased
   }
 
   return bare

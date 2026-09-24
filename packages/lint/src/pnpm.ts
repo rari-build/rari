@@ -43,6 +43,7 @@ export const pnpmConfigs: Linter.Config[] = [
         'error',
         {
           settings: {
+            minimumReleaseAgeExcludePrune: true,
             shellEmulator: true,
             trustPolicy: 'no-downgrade',
           },
@@ -50,6 +51,19 @@ export const pnpmConfigs: Linter.Config[] = [
       ],
       'pnpm/yaml-no-duplicate-catalog-item': 'error',
       'pnpm/yaml-no-unused-catalog-item': 'error',
+    },
+  },
+  {
+    name: 'rari/pnpm/pnpm-workspace-yaml-stylistic',
+    files: ['pnpm-workspace.yaml'],
+    languageOptions: {
+      parser: yamlParser,
+    },
+    plugins: {
+      pnpm: pluginPnpm,
+    },
+    rules: {
+      'pnpm/yaml-blank-lines': 'error',
     },
   },
   {
@@ -68,6 +82,7 @@ export const pnpmConfigs: Linter.Config[] = [
           order: [
             'cacheDir',
             'catalogMode',
+            'catalogPrune',
             'cleanupUnusedCatalogs',
             'dedupeDirectDeps',
             'deployAllFiles',
@@ -83,6 +98,9 @@ export const pnpmConfigs: Linter.Config[] = [
             'ignoreWorkspaceRootCheck',
             'managePackageManagerVersions',
             'minimumReleaseAge',
+            'minimumReleaseAgeIgnoreMissingTime',
+            'minimumReleaseAgeStrict',
+            'minimumReleaseAgeExcludePrune',
             'minimumReleaseAgeExclude',
             'modulesDir',
             'nodeLinker',

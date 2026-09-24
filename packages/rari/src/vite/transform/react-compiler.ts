@@ -38,10 +38,6 @@ export function matchesCompilerId(id: string): boolean {
   return DEFAULT_INCLUDE_RE.test(cleanId) && !cleanId.includes('/node_modules/')
 }
 
-function isUseServerModule(code: string): boolean {
-  return hasTopLevelUseServerDirective(code)
-}
-
 const LIBRARY_COMPONENT_RE = /\.[jt]sx$/
 
 export function createReactCompilerPlugin(
@@ -107,7 +103,7 @@ export function createReactCompilerPlugin(
       if (!matchesCompilerId(id)) return null
       const filename = stripQuery(id)
       if (mode === 'library' && !LIBRARY_COMPONENT_RE.test(filename)) return null
-      if (isUseServerModule(code)) return null
+      if (hasTopLevelUseServerDirective(code)) return null
 
       if (mode === 'app') {
         const isClient = this.environment.config.consumer !== 'server'

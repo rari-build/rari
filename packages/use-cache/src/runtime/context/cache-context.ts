@@ -10,23 +10,19 @@ export interface CacheScopeContext {
 
 const storage = new AsyncLocalStorage<CacheScopeContext>()
 
-function currentContext(): CacheScopeContext | undefined {
-  return storage.getStore()
-}
-
 export async function runWithCacheContext<T>(fn: () => T | Promise<T>): Promise<T> {
   return Promise.resolve(storage.run({ tags: [] }, fn))
 }
 
 export function getCacheContext(): CacheScopeContext {
-  const ctx = currentContext()
+  const ctx = storage.getStore()
   if (!ctx) throw new Error('[rari] cache context is only available inside a cached function call.')
 
   return ctx
 }
 
 export function setCacheLife(profile: Parameters<typeof normalizeCacheLife>[0]): void {
-  const ctx = currentContext()
+  const ctx = storage.getStore()
   if (!ctx) {
     console.warn('[rari] cacheLife() has no effect outside a cached function call.')
     return
@@ -42,7 +38,7 @@ export function registerPageCacheTags(...tags: readonly string[]): void {
 }
 
 export function addCacheTags(...tags: readonly string[]): void {
-  const ctx = currentContext()
+  const ctx = storage.getStore()
   if (!ctx) {
     console.warn('[rari] cacheTag() has no effect outside a cached function call.')
     return

@@ -223,15 +223,11 @@ function findComponentInfo(id: string): ComponentLookup | null {
   return findComponentInfoByPath(baseId, exportName, clientComponents)
 }
 
-function toLoadError(error: unknown): Error {
-  return toError(error)
-}
-
 function startComponentLoad(componentInfo: LazyComponentInfo): Promise<any> | undefined {
   if (componentInfo.component != null || componentInfo.loader == null)
     return componentInfo.loadPromise
 
-  if (componentInfo.loadError != null) return Promise.reject(toLoadError(componentInfo.loadError))
+  if (componentInfo.loadError != null) return Promise.reject(toError(componentInfo.loadError))
 
   if (!componentInfo.loadPromise) return executeLoader(componentInfo)
 
@@ -277,7 +273,7 @@ function createSuspenseModule(
   const exportKey = resolvedExport != null && resolvedExport !== '' ? resolvedExport : 'default'
 
   const SuspendingComponent = (props: any) => {
-    if (componentInfo.loadError != null) throw toLoadError(componentInfo.loadError)
+    if (componentInfo.loadError != null) throw toError(componentInfo.loadError)
 
     if (componentInfo.component != null) {
       const Component = getComponentFromInfo(componentInfo, resolvedExport)

@@ -8,7 +8,8 @@ export class LruCache<K, V> {
   private readonly maxSize: number
 
   constructor(maxSize: number) {
-    if (!(maxSize > 0)) throw new TypeError('`maxSize` must be a number greater than 0')
+    if (maxSize <= 0 || Number.isNaN(maxSize))
+      throw new TypeError('`maxSize` must be a number greater than 0')
     this.maxSize = maxSize
   }
 

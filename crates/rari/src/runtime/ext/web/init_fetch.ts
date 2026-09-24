@@ -119,7 +119,7 @@ function generateCacheKey(input: RequestInfo | URL, init: CachedFetchInit): stri
     } else if (body instanceof Blob) {
       bodyStr = `<blob:${body.size}:${body.type}>`
     } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-      const size = body instanceof ArrayBuffer ? body.byteLength : body.byteLength
+      const size = body.byteLength
       bodyStr = `<buffer:${size}>`
     } else if (body instanceof FormData) {
       const entries = []

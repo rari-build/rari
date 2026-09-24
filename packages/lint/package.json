@@ -59,6 +59,8 @@
     "eslint-plugin-pnpm": "catalog:lint",
     "eslint-plugin-react-refresh": "catalog:lint",
     "eslint-plugin-regexp": "catalog:lint",
+    "eslint-plugin-slop": "catalog:lint",
+    "eslint-plugin-sonarjs": "catalog:lint",
     "eslint-plugin-unused-imports": "catalog:lint",
     "eslint-plugin-yml": "catalog:lint",
     "jsonc-eslint-parser": "catalog:lint",

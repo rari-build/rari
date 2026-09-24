@@ -19,7 +19,7 @@ export default function React19Page() {
             Soft navigations run inside <code>startTransition</code> with{' '}
             <code>addTransitionType</code>. Two patterns in <code>page-transition.tsx</code> (on the
             page / <code>loading.tsx</code>, not template): type-keyed route enter/exit, and
-            string-prop Suspense reveal — so loading is never a shared morph target.
+            string-prop Suspense reveal, so loading is never a shared morph target.
           </p>
         </div>
 
@@ -27,7 +27,7 @@ export default function React19Page() {
           <h2 className="text-2xl font-bold text-gray-900">Context from a Server Component</h2>
           <p className="text-sm text-gray-600">
             The server page renders <code>&lt;DemoUserContext value=&#123;...&#125;&gt;</code>{' '}
-            directly — no client Provider wrapper.
+            directly, with no client Provider wrapper.
           </p>
           <DemoUserContext value={{ name: 'Ada', role: 'admin' }}>
             <DemoUserLabel />

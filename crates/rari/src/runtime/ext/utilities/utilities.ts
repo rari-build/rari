@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unnecessary-type-parameters, typescript/no-unsafe-type-assertion
 /// <reference path="../types.d.ts" />
 
 import { core } from 'ext:core/mod.js'
@@ -64,8 +65,6 @@ export function applyToDeno(properties: PropertyDescriptorMap) {
 
 const extScriptCache = new Map<string, unknown>()
 
-// Loader factories intentionally parameterize only the return type.
-// oxlint-disable typescript/no-unnecessary-type-parameters
 export function loadExtScriptOnce<T>(specifier: string): T {
   let cached = extScriptCache.get(specifier)
   if (cached === undefined) {
@@ -73,7 +72,7 @@ export function loadExtScriptOnce<T>(specifier: string): T {
     extScriptCache.set(specifier, cached)
   }
 
-  return cached as T // oxlint-disable-line typescript/no-unsafe-type-assertion
+  return cached as T
 }
 
 export function lazyExtScript<T>(specifier: string): () => T {
@@ -93,9 +92,8 @@ export function lazyExtModule<T>(specifier: string): () => T {
     extModuleLoaderCache.set(specifier, loader)
   }
 
-  return loader as () => T // oxlint-disable-line typescript/no-unsafe-type-assertion
+  return loader as () => T
 }
-// oxlint-enable typescript/no-unnecessary-type-parameters
 
 export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor {
   return {
@@ -105,7 +103,6 @@ export function nonEnumerableGetter(get: () => unknown): PropertyDescriptor {
   }
 }
 
-// oxlint-disable typescript/no-unnecessary-type-parameters
 export function propNonEnumerableLazyLoaded<T, V>(
   select: (mod: T) => V,
   load: () => T,
@@ -130,7 +127,6 @@ export function propWritableLazyLoaded<T, V>(
     configurable: true,
   }
 }
-// oxlint-enable typescript/no-unnecessary-type-parameters
 
 export function defineDenoLazyProps<T>(load: () => T, keys: ReadonlyArray<keyof T & string>): void {
   const descriptors: PropertyDescriptorMap = {}

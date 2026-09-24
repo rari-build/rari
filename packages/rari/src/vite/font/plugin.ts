@@ -726,7 +726,6 @@ export function createFontPlugin(): Plugin {
   let outDir = path.join(projectRoot, 'dist')
   const cssModules = new Map<string, string>()
   const pendingAssets = new Map<string, Buffer>()
-  const pendingPreloads = new Set<string>()
 
   return {
     name: 'rari:font',
@@ -752,7 +751,6 @@ export function createFontPlugin(): Plugin {
       for (const entry of result.cssModules) cssModules.set(entry.id, entry.css)
       for (const asset of result.assets) pendingAssets.set(asset.fileName, asset.source)
       for (const url of result.preloadUrls) {
-        pendingPreloads.add(url)
         const ext = path.extname(url).toLowerCase()
         const format =
           ext === '.woff'
