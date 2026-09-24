@@ -174,7 +174,8 @@ function resolveImageDimensions(options: {
   readonly imgSrc: string
   readonly imgWidth: number | undefined
   readonly imgHeight: number | undefined
-  readonly imgBlurDataURL: string | undefined
+  readonly inlineBlurDataURL: string | undefined
+  readonly optimizerBlurUrl: string | undefined
 } {
   const { src, width, height, fill, placeholder, blurDataURL, loader } = options
   const imgSrc = typeof src === 'string' ? src : src.src
@@ -186,23 +187,23 @@ function resolveImageDimensions(options: {
       : typeof src !== 'string'
         ? src.blurDataURL
         : undefined
-  const imgBlurDataURL =
-    explicitBlur != null && explicitBlur !== ''
-      ? explicitBlur
-      : placeholder === 'blur'
-        ? resolveLoaderOrBuiltUrl(
-            loader,
-            imgSrc,
-            BLUR_PLACEHOLDER_WIDTH,
-            BLUR_PLACEHOLDER_QUALITY,
-            'jpeg',
-          )
-        : undefined
+  const inlineBlurDataURL = explicitBlur != null && explicitBlur !== '' ? explicitBlur : undefined
+  const optimizerBlurUrl =
+    placeholder === 'blur' && inlineBlurDataURL == null
+      ? resolveLoaderOrBuiltUrl(
+          loader,
+          imgSrc,
+          BLUR_PLACEHOLDER_WIDTH,
+          BLUR_PLACEHOLDER_QUALITY,
+          'jpeg',
+        )
+      : undefined
   return {
     imgSrc,
     imgWidth: pickExplicitOrIntrinsic(width, fill, intrinsicWidth),
     imgHeight: pickExplicitOrIntrinsic(height, fill, intrinsicHeight),
-    imgBlurDataURL,
+    inlineBlurDataURL,
+    optimizerBlurUrl,
   }
 }
 
@@ -357,15 +358,16 @@ export function Image({
   overrideSrc,
   decoding,
 }: ImageProps) {
-  const { imgSrc, imgWidth, imgHeight, imgBlurDataURL } = resolveImageDimensions({
-    src,
-    width,
-    height,
-    fill,
-    placeholder,
-    blurDataURL,
-    loader,
-  })
+  const { imgSrc, imgWidth, imgHeight, inlineBlurDataURL, optimizerBlurUrl } =
+    resolveImageDimensions({
+      src,
+      width,
+      height,
+      fill,
+      placeholder,
+      blurDataURL,
+      loader,
+    })
   const finalSrc = overrideSrc != null && overrideSrc !== '' ? overrideSrc : imgSrc
   const shouldPreload = preload
   const imgDecoding = decoding ?? (preload ? 'sync' : 'async')
@@ -375,12 +377,23 @@ export function Image({
     intrinsicWidth: typeof src !== 'string' ? src.width : undefined,
   })
   const shouldUseSrcSet = sizePlan.widths.length > 1 || sizePlan.widths[0] !== sizePlan.defaultWidth
+  const shouldEagerBlur = shouldPreload || loading === 'eager'
 
   const [blurComplete, setBlurComplete] = useState(false)
   const [showAltText, setShowAltText] = useState(false)
+  const [blurSrcKey, setBlurSrcKey] = useState(finalSrc)
+  const [nearViewport, setNearViewport] = useState(shouldEagerBlur)
   const imgRef = useRef<HTMLImageElement>(null)
   const onLoadRef = useRef(onLoad)
   const pictureRef = useRef<HTMLPictureElement>(null)
+
+  if (blurSrcKey !== finalSrc) {
+    setBlurSrcKey(finalSrc)
+    setNearViewport(shouldEagerBlur)
+  }
+
+  const activeBlurUrl =
+    inlineBlurDataURL ?? (shouldEagerBlur || nearViewport ? optimizerBlurUrl : undefined)
 
   useEffect(() => {
     onLoadRef.current = onLoad
@@ -445,19 +458,22 @@ export function Image({
   ])
 
   useEffect(() => {
-    if (shouldPreload || unoptimized || loading === 'eager') return undefined
+    if (shouldEagerBlur || nearViewport || optimizerBlurUrl == null || placeholder !== 'blur') {
+      return undefined
+    }
 
     const img = imgRef.current
     if (!img) return undefined
 
     const observer = new IntersectionObserver(
       entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) observer.unobserve(img)
-        })
+        if (entries.some(entry => entry.isIntersecting)) {
+          setNearViewport(true)
+          observer.disconnect()
+        }
       },
       {
-        rootMargin: '50px',
+        rootMargin: '200px',
       },
     )
 
@@ -466,13 +482,13 @@ export function Image({
     return () => {
       observer.disconnect()
     }
-  }, [shouldPreload, unoptimized, loading])
+  }, [shouldEagerBlur, nearViewport, optimizerBlurUrl, placeholder, finalSrc])
 
   const imgStyle = buildImageStyle({
     style,
     fill,
     placeholder,
-    imgBlurDataURL,
+    imgBlurDataURL: activeBlurUrl,
     blurComplete,
   })
 

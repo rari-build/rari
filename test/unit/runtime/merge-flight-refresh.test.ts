@@ -690,4 +690,17 @@ describe('mergeFlightRefresh', () => {
     expect(main.type).toBe('main')
     expect(main.props.children).toBe('fresh')
   })
+
+  it('unwraps reuse markers when remaining siblings are only non-element nodes', () => {
+    const current = React.createElement('div', null, 'a', 'b', 'c')
+    const refresh = React.createElement(
+      'div',
+      null,
+      'prefix',
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    expect(childList(merged)).toEqual(['prefix', 'about'])
+  })
 })

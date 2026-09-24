@@ -264,6 +264,7 @@ function spliceReuseMarkerIntoRemaining(
       merged.push(child)
     }
   }
+  if (!spliced) return [unwrapLayoutReuseMarkers(refreshChild)]
   return merged
 }
 

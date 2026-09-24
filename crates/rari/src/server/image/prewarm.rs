@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, Mutex, PoisonError},
 };
 
 use regex::Regex;
@@ -16,6 +16,28 @@ static IMAGE_OPTIMIZE_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
     Regex::new(r#"/_rari/image\?([^"'\\\s>]+)"#).expect("image optimize URL regex must compile")
 });
+
+static PREWARM_IN_FLIGHT: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+struct PrewarmInFlightGuard {
+    key: String,
+}
+
+impl Drop for PrewarmInFlightGuard {
+    fn drop(&mut self) {
+        let mut in_flight = PREWARM_IN_FLIGHT.lock().unwrap_or_else(PoisonError::into_inner);
+        in_flight.remove(&self.key);
+    }
+}
+
+fn try_claim_prewarm_key(key: String) -> Option<PrewarmInFlightGuard> {
+    let mut in_flight = PREWARM_IN_FLIGHT.lock().unwrap_or_else(PoisonError::into_inner);
+    if !in_flight.insert(key.clone()) {
+        return None;
+    }
+    Some(PrewarmInFlightGuard { key })
+}
 
 pub fn extract_optimize_params_from_html(html: &str) -> Vec<OptimizeParams> {
     let mut seen = HashSet::new();
@@ -104,6 +126,12 @@ pub fn schedule_prewarm_from_html(optimizer: Arc<ImageOptimizer>, html: &str) {
         let mut failed = 0usize;
 
         for param in params {
+            let key = optimize_dedupe_key(&param);
+            let Some(_guard) = try_claim_prewarm_key(key) else {
+                skipped += 1;
+                continue;
+            };
+
             if optimizer.is_cached(&param).await {
                 skipped += 1;
                 continue;

@@ -687,6 +687,7 @@ impl ImageOptimizer {
 
         if !self.config.quality_allowlist.is_empty()
             && !self.config.quality_allowlist.contains(&params.q)
+            && !Self::is_blur_placeholder_request(&params)
         {
             return Err(ImageError::InvalidParams(format!(
                 "Quality {} not in allowlist",
@@ -727,13 +728,6 @@ impl ImageOptimizer {
         self.validate_url(&params.url)?;
 
         let source = self.fetch_image(&params.url).await?;
-        if let Err(error) = self.cache_blur_data_url_from_source(&params.url, &source).await {
-            tracing::debug!(
-                error = %error,
-                url = %params.url,
-                "[rari] Failed to cache blur data URL"
-            );
-        }
 
         let params_clone = params.clone();
         let config_clone = self.config.clone();
@@ -772,10 +766,17 @@ impl ImageOptimizer {
             return Ok(existing);
         }
 
+        let _permit = self.processing_semaphore.acquire().await.map_err(|e| {
+            ImageError::ProcessingError(format!("Failed to acquire processing permit: {e}"))
+        })?;
+
+        if let Some(existing) = self.get_blur_data_url(url).await {
+            return Ok(existing);
+        }
+
         self.validate_url(url)?;
         let source = self.fetch_image(url).await?;
-        let data_url = self.cache_blur_data_url_from_source(url, &source).await?;
-        Ok(data_url)
+        self.cache_blur_data_url_from_source(url, &source).await
     }
 
     pub fn blur_placeholder_params(url: impl Into<String>) -> OptimizeParams {
@@ -786,6 +787,12 @@ impl ImageOptimizer {
             f: Some("jpeg".to_string()),
             blur: None,
         }
+    }
+
+    fn is_blur_placeholder_request(params: &OptimizeParams) -> bool {
+        params.w == Some(BLUR_PLACEHOLDER_WIDTH)
+            && params.q == BLUR_PLACEHOLDER_QUALITY
+            && params.f.as_deref() == Some("jpeg")
     }
 
     fn blur_cache_key(url: &str) -> String {
@@ -831,6 +838,17 @@ impl ImageOptimizer {
 
         let img = image::load_from_memory(source)
             .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {e}")))?;
+
+        if img.width() > MAX_OUTPUT_WIDTH * 2 || img.height() > MAX_OUTPUT_HEIGHT * 2 {
+            return Err(ImageError::InvalidParams(format!(
+                "Source image too large: {}x{} (max {}x{})",
+                img.width(),
+                img.height(),
+                MAX_OUTPUT_WIDTH * 2,
+                MAX_OUTPUT_HEIGHT * 2
+            )));
+        }
+
         let tiny = if img.width() > BLUR_PLACEHOLDER_WIDTH {
             img.resize(BLUR_PLACEHOLDER_WIDTH, u32::MAX, FilterType::Triangle)
         } else {
@@ -1619,6 +1637,19 @@ mod tests {
         let data_url = ImageOptimizer::generate_blur_data_url(&tiny_png()).expect("blur");
         assert!(data_url.starts_with("data:image/jpeg;base64,"));
         assert!(data_url.len() > "data:image/jpeg;base64,".len());
+    }
+
+    #[test]
+    fn blur_placeholder_request_bypasses_quality_allowlist() {
+        let params = ImageOptimizer::blur_placeholder_params("/assets/hero.jpg");
+        assert!(ImageOptimizer::is_blur_placeholder_request(&params));
+        assert!(!ImageOptimizer::is_blur_placeholder_request(&OptimizeParams {
+            url: "/assets/hero.jpg".to_string(),
+            w: Some(600),
+            q: BLUR_PLACEHOLDER_QUALITY,
+            f: Some("jpeg".to_string()),
+            blur: None,
+        }));
     }
 
     fn assets_config() -> ImageConfig {
