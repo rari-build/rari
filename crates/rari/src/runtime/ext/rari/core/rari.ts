@@ -12,7 +12,7 @@ import 'ext:rari/rsc/rsc_modules.ts'
 import 'ext:rari/rsc/server_functions.ts'
 import 'ext:rari/rsc/client_registry.ts'
 
-g['~rari'] ??= {}
+const rari = (g['~rari'] ??= {})
 
-g['~rari'].loadFullReactVendors = loadFullReactVendors
-g['~rari'].loadRscReactVendors = loadRscReactVendors
+rari.loadFullReactVendors = loadFullReactVendors
+rari.loadRscReactVendors = loadRscReactVendors

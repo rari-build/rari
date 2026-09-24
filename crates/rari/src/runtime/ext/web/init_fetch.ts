@@ -155,7 +155,7 @@ function generateCacheKey(input: RequestInfo | URL, init: CachedFetchInit): stri
   return `${method}:${url}:${headersStr}:${bodyStr}${tagsStr}${optionsStr}`
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types CachedFetchInit/RequestMeta carry mutable header bags */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 function shouldCache(input: RequestInfo | URL, init: CachedFetchInit, meta?: RequestMeta): boolean {
   const { method, cacheMode } = meta ?? resolveRequestMeta(input, init)
 
@@ -263,7 +263,7 @@ async function fetchWithRustCache(
     return originalFetch(input, init)
   }
 }
-/* oxlint-enable typescript/prefer-readonly-parameter-types */
+// oxlint-enable typescript/prefer-readonly-parameter-types
 
 async function cachedFetch(
   input: RequestInfo | URL,

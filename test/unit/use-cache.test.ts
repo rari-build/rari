@@ -596,29 +596,33 @@ pluginDescribe('use-cache Vite plugin integration', () => {
     this: Readonly<{ readonly environment: { readonly name: string } }>,
     code: string,
     id: string,
-  ) => Promise<{ code?: string } | null | undefined> | { code?: string } | null | undefined
+  ) => Promise<string | null>
 
   function getTransform(plugin: Plugin): TransformHook {
     const hook = plugin.transform
-    if (typeof hook === 'function') {
-      return async function (
-        this: Readonly<{ readonly environment: { readonly name: string } }>,
-        code: string,
-        id: string,
-      ) {
-        return castMock(await hook.call(castMock(this), code, id))
+    async function run(
+      this: Readonly<{ readonly environment: { readonly name: string } }>,
+      code: string,
+      id: string,
+    ): Promise<string | null> {
+      let raw: unknown
+      if (typeof hook === 'function') {
+        raw = await hook.call(castMock(this), code, id)
+      } else if (hook && typeof hook === 'object' && typeof hook.handler === 'function') {
+        raw = await hook.handler.call(castMock(this), code, id)
+      } else {
+        throw new Error('expected transform hook on use-cache plugin')
       }
-    }
-    if (hook && typeof hook === 'object' && typeof hook.handler === 'function') {
-      return async function (
-        this: Readonly<{ readonly environment: { readonly name: string } }>,
-        code: string,
-        id: string,
-      ) {
-        return castMock(await hook.handler.call(castMock(this), code, id))
+
+      if (raw == null) return null
+      if (typeof raw === 'string') return raw
+      if (typeof raw === 'object' && 'code' in raw) {
+        const transformedCode: unknown = Reflect.get(raw, 'code')
+        if (typeof transformedCode === 'string') return transformedCode
       }
+      return null
     }
-    throw new Error('expected transform hook on use-cache plugin')
+    return run
   }
 
   beforeAll(() => {
@@ -670,11 +674,7 @@ async function getData(id) {
       filePath,
     )
 
-    // isServerComponent → true → transformServerModule returns code unchanged
-    expect(result).not.toBeNull()
-    expect(result).not.toContain('$$reactCache__')
-    expect(result).not.toContain('$$cache__')
-    expect(result).toContain('const x = 1')
+    expect(result).toBeNull()
   })
 
   it('applies use cache transform for files outside src/ (fallback path)', async () => {

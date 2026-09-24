@@ -38,6 +38,9 @@
       "types": "./dist/image.d.mts",
       "default": "./dist/image.mjs"
     },
+    "./image/static": {
+      "types": "./dist/image/static.d.mts"
+    },
     "./font": {
       "types": "./dist/font.d.mts",
       "default": "./dist/font.mjs"

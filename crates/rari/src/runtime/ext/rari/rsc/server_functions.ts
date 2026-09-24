@@ -8,20 +8,20 @@ interface ResolveResult {
 }
 
 ;(function initializeServerFunctions() {
-  g['~rari'] ??= {}
-  g['~rari'].registeredServerFunctions ??= new Set()
+  const rari = (g['~rari'] ??= {})
+  rari.registeredServerFunctions ??= new Set()
 
   g.resolveServerFunctionsForComponent = async function resolveServerFunctionsForComponent(
     componentId?: string,
   ): Promise<ResolveResult> {
     const currentComponent = componentId ?? g['~render']?.currentComponent
 
-    const manifest = g['~rari']!.serverManifest ?? {}
+    const manifest = rari.serverManifest ?? {}
     const functionNames = Object.keys(manifest).filter(
       key => key.includes('#') || key.includes(':'),
     )
 
-    const registered = g['~rari']!.registeredServerFunctions!
+    const registered = rari.registeredServerFunctions!
     const newlyRegistered: string[] = []
 
     for (const functionName of functionNames) {
@@ -75,11 +75,11 @@ interface ResolveResult {
   g.isServerFunctionRegistered = function isServerFunctionRegistered(
     functionName: string,
   ): boolean {
-    return g['~rari']!.registeredServerFunctions?.has(functionName) ?? false
+    return rari.registeredServerFunctions?.has(functionName) ?? false
   }
 
   g.clearServerFunctionCache = function clearServerFunctionCache(): void {
-    g['~rari']!.registeredServerFunctions!.clear()
+    rari.registeredServerFunctions!.clear()
   }
 
   g.ServerFunctions = {
@@ -94,6 +94,6 @@ interface ResolveResult {
     initialized: true,
     timestamp: Date.now(),
     extension: 'server_functions',
-    registeredCount: g['~rari'].registeredServerFunctions.size,
+    registeredCount: rari.registeredServerFunctions.size,
   }
 })()

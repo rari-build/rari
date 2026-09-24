@@ -150,8 +150,6 @@ async function callHandler(
   }
 }
 
-g['~rari'] ??= {}
-
-g['~rari'].apiHandler = {
+;(g['~rari'] ??= {}).apiHandler = {
   callHandler,
 }

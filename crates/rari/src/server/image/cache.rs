@@ -94,7 +94,7 @@ impl ImageCache {
             return env::temp_dir().join("rari-image-cache");
         };
 
-        let cache_dir = base.join(".cache").join("images");
+        let cache_dir = base.join("node_modules").join(".cache").join("rari-images");
         if !cache_dir.starts_with(&base) {
             return env::temp_dir().join("rari-image-cache");
         }
@@ -387,7 +387,10 @@ mod tests {
         let project = test_project_path("safe-resolve");
         let _ = fs::create_dir_all(&project);
         let resolved = ImageCache::resolve_cache_dir(&project);
-        assert!(resolved.ends_with(Path::new(".cache/images")) || resolved.ends_with("images"));
+        assert!(
+            resolved.ends_with(Path::new("node_modules/.cache/rari-images"))
+                || resolved.ends_with("rari-images")
+        );
         assert!(resolved.starts_with(fs::canonicalize(&project).unwrap()));
         let _ = fs::remove_dir_all(&project);
     }

@@ -1,16 +1,16 @@
 'use client'
 
-import type { PackageManager } from '@/providers/PackageManagerProvider'
+import type { PackageManager } from '@/providers/usePackageManager'
 import { highlightCommand } from '@/lib/mdx/highlight-command'
 import { code } from '@/lib/site/styles'
 import { useClipboard } from '@/lib/utils/use-clipboard'
-import { usePackageManager } from '@/providers/PackageManagerProvider'
-import Bun from './icons/Bun'
-import Check from './icons/Check'
-import Copy from './icons/Copy'
-import Npm from './icons/Npm'
-import Pnpm from './icons/Pnpm'
-import Yarn from './icons/Yarn'
+import { usePackageManager } from '@/providers/usePackageManager'
+import Bun from '../icons/Bun'
+import Check from '../icons/Check'
+import Copy from '../icons/Copy'
+import Npm from '../icons/Npm'
+import Pnpm from '../icons/Pnpm'
+import Yarn from '../icons/Yarn'
 
 interface PackageManagerTabsProps {
   readonly commands: {

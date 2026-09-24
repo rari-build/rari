@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types ViteBuilder embeds mutable environment config mutated during emit */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 import type { InlineConfig, Plugin, ViteBuilder } from 'vite-plus'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'

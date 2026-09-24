@@ -14,8 +14,11 @@ export function useRouter() {
 
 export function usePathname() { return ''; }
 export function useSearchParams() { return new URLSearchParams(); }
+export function useViewTransitionKey() { return 0; }
+export function navigate() { return Promise.resolve(); }
+export function RouterProvider({ children }) { return children; }
 
-export default { useRouter, usePathname, useSearchParams };
+export default { useRouter, usePathname, useSearchParams, useViewTransitionKey, navigate, RouterProvider };
 ";
 
 pub const RARI_HEADERS_STUB: &str = r"

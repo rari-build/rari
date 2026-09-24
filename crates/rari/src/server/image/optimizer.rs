@@ -1,5 +1,6 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 use std::{
+    collections::HashSet,
     io,
     path::{Path, PathBuf},
     sync::{
@@ -164,120 +165,58 @@ impl ImageOptimizer {
     }
 
     async fn preoptimize_local_images_internal(&self, dry_run: bool) -> Result<usize, ImageError> {
+        let mut total = 0usize;
+
         if !self.config.preoptimize_manifest.is_empty() {
-            return self.preoptimize_from_manifest(dry_run).await;
+            total += self.preoptimize_from_manifest(dry_run).await?;
         }
 
         if self.config.local_patterns.is_empty() {
-            tracing::debug!("No local_patterns configured, skipping local scan");
-            return Ok(0);
+            if total == 0 {
+                tracing::debug!("No local_patterns configured, skipping local scan");
+            }
+            return Ok(total);
         }
 
-        tracing::debug!(
-            "No manifest found, scanning public/ and dist/{}...",
-            self.config.assets_dir
-        );
-
+        let source_map_urls = match self.collect_source_map_image_urls().await {
+            Ok(urls) => urls,
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to collect static image source map URLs for pre-optimization: {error}; falling back to asset scan"
+                );
+                Vec::new()
+            }
+        };
         let mut image_paths = Vec::new();
-        let assets_dir = self.config.assets_dir.trim_matches('/').to_string();
-        let assets_url_prefix = format!("/{assets_dir}");
-        let scan_roots: [(PathBuf, Option<&str>); 2] = [
-            (self.project_path.join("public"), None),
-            (self.out_dir_path().join(&assets_dir), Some(assets_url_prefix.as_str())),
-        ];
 
-        for (root_dir, forced_prefix) in &scan_roots {
-            match fs::try_exists(root_dir).await {
-                Ok(false) => continue,
-                Err(e) => {
-                    tracing::warn!("Failed to check image scan directory {:?}: {}", root_dir, e);
-                    continue;
-                }
-                Ok(true) => {}
-            }
+        let public_root = self.project_path.join("public");
+        image_paths.extend(self.scan_image_dir(&public_root, None).await?);
 
-            tracing::debug!("Scanning image directory: {:?}", root_dir);
+        if source_map_urls.is_empty() {
+            let assets_dir = self.config.assets_dir.trim_matches('/').to_string();
+            let assets_url_prefix = format!("/{assets_dir}");
+            let assets_root = self.out_dir_path().join(&assets_dir);
+            image_paths
+                .extend(self.scan_image_dir(&assets_root, Some(assets_url_prefix.as_str())).await?);
+        } else {
+            image_paths.extend(source_map_urls);
+        }
 
-            let mut dirs_to_scan = vec![root_dir.clone()];
-
-            while let Some(current_dir) = dirs_to_scan.pop() {
-                let mut entries = match fs::read_dir(&current_dir).await {
-                    Ok(entries) => entries,
-                    Err(e) => {
-                        tracing::warn!("Failed to read directory {:?}: {}", current_dir, e);
-                        continue;
-                    }
-                };
-
-                loop {
-                    let entry = match entries.next_entry().await {
-                        Ok(Some(entry)) => entry,
-                        Ok(None) => break,
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to read directory entry in {:?}: {}",
-                                current_dir,
-                                e
-                            );
-                            break;
-                        }
-                    };
-                    let path = entry.path();
-
-                    let file_type = match entry.file_type().await {
-                        Ok(file_type) => file_type,
-                        Err(e) => {
-                            tracing::warn!("Failed to read file type for {:?}: {}", path, e);
-                            continue;
-                        }
-                    };
-
-                    if file_type.is_symlink() {
-                        continue;
-                    }
-
-                    #[expect(
-                        clippy::filetype_is_file,
-                        reason = "We specifically want only regular files, not FIFOs, sockets, or devices"
-                    )]
-                    if file_type.is_dir() {
-                        dirs_to_scan.push(path);
-                    } else if file_type.is_file() {
-                        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-
-                        if !matches!(
-                            extension.cow_to_lowercase().as_ref(),
-                            "jpg" | "jpeg" | "png" | "webp" | "avif" | "gif"
-                        ) {
-                            continue;
-                        }
-
-                        let Ok(relative) = path.strip_prefix(root_dir) else {
-                            continue;
-                        };
-                        let relative_url =
-                            relative.to_string_lossy().cow_replace('\\', "/").into_owned();
-                        let encoded_relative = encode_url_path_segments(&relative_url);
-                        let url_path = match forced_prefix {
-                            Some(prefix) => format!("{prefix}/{encoded_relative}"),
-                            None => format!("/{encoded_relative}"),
-                        };
-
-                        if self.matches_local_patterns(&url_path) {
-                            image_paths.push(url_path);
-                        }
-                    }
-                }
-            }
+        if !self.config.preoptimize_manifest.is_empty() {
+            let covered: HashSet<&str> = self
+                .config
+                .preoptimize_manifest
+                .iter()
+                .map(|variant| variant.src.as_str())
+                .collect();
+            image_paths.retain(|url| !covered.contains(url.as_str()));
         }
 
         if image_paths.is_empty() {
-            image_paths = self.collect_source_map_image_urls().await?;
-        }
-
-        if image_paths.is_empty() {
-            tracing::debug!("No local images found for pre-optimization");
-            return Ok(0);
+            if total == 0 {
+                tracing::debug!("No local images found for pre-optimization");
+            }
+            return Ok(total);
         }
 
         image_paths.sort_unstable();
@@ -288,7 +227,101 @@ impl ImageOptimizer {
             tracing::debug!("  - {}", path);
         }
 
-        self.optimize_image_urls_internal(image_paths, dry_run).await
+        total += self.optimize_image_urls_internal(image_paths, dry_run).await?;
+        Ok(total)
+    }
+
+    async fn scan_image_dir(
+        &self,
+        root_dir: &Path,
+        forced_prefix: Option<&str>,
+    ) -> Result<Vec<String>, ImageError> {
+        let mut image_paths = Vec::new();
+
+        match fs::try_exists(root_dir).await {
+            Ok(false) => return Ok(image_paths),
+            Err(e) => {
+                tracing::warn!("Failed to check image scan directory {:?}: {}", root_dir, e);
+                return Ok(image_paths);
+            }
+            Ok(true) => {}
+        }
+
+        tracing::debug!("Scanning image directory: {:?}", root_dir);
+
+        let mut dirs_to_scan = vec![root_dir.to_path_buf()];
+
+        while let Some(current_dir) = dirs_to_scan.pop() {
+            let mut entries = match fs::read_dir(&current_dir).await {
+                Ok(entries) => entries,
+                Err(e) => {
+                    tracing::warn!("Failed to read directory {:?}: {}", current_dir, e);
+                    continue;
+                }
+            };
+
+            loop {
+                let entry = match entries.next_entry().await {
+                    Ok(Some(entry)) => entry,
+                    Ok(None) => break,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to read directory entry in {:?}: {}",
+                            current_dir,
+                            e
+                        );
+                        break;
+                    }
+                };
+                let path = entry.path();
+
+                let file_type = match entry.file_type().await {
+                    Ok(file_type) => file_type,
+                    Err(e) => {
+                        tracing::warn!("Failed to read file type for {:?}: {}", path, e);
+                        continue;
+                    }
+                };
+
+                if file_type.is_symlink() {
+                    continue;
+                }
+
+                #[expect(
+                    clippy::filetype_is_file,
+                    reason = "We specifically want only regular files, not FIFOs, sockets, or devices"
+                )]
+                if file_type.is_dir() {
+                    dirs_to_scan.push(path);
+                } else if file_type.is_file() {
+                    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+                    if !matches!(
+                        extension.cow_to_lowercase().as_ref(),
+                        "jpg" | "jpeg" | "png" | "webp" | "avif" | "gif"
+                    ) {
+                        continue;
+                    }
+
+                    let Ok(relative) = path.strip_prefix(root_dir) else {
+                        continue;
+                    };
+                    let relative_url =
+                        relative.to_string_lossy().cow_replace('\\', "/").into_owned();
+                    let encoded_relative = encode_url_path_segments(&relative_url);
+                    let url_path = match forced_prefix {
+                        Some(prefix) => format!("{prefix}/{encoded_relative}"),
+                        None => format!("/{encoded_relative}"),
+                    };
+
+                    if self.matches_local_patterns(&url_path) {
+                        image_paths.push(url_path);
+                    }
+                }
+            }
+        }
+
+        Ok(image_paths)
     }
 
     async fn preoptimize_from_manifest(&self, dry_run: bool) -> Result<usize, ImageError> {
@@ -1463,7 +1496,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::server::image::config::LocalPattern;
+    use crate::server::image::config::{ImageVariant, LocalPattern};
 
     static TEST_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -1492,6 +1525,39 @@ mod tests {
             quality_allowlist: vec![75],
             ..ImageConfig::default()
         }
+    }
+
+    fn expected_scan_variant_count(config: &ImageConfig, url_count: usize) -> usize {
+        let mut sizes = config.device_sizes.clone();
+        sizes.extend(config.image_sizes.clone());
+        if sizes.is_empty() {
+            sizes = vec![384, 640, 750, 828, 1080, 1200, 1920];
+        }
+        sizes.sort_unstable();
+        sizes.dedup();
+        let format_count = if config.formats.is_empty() { 1 } else { config.formats.len() };
+        url_count * sizes.len() * format_count
+    }
+
+    fn expected_manifest_variant_count(config: &ImageConfig) -> usize {
+        let format_count = if config.formats.is_empty() { 1 } else { config.formats.len() };
+        let mut total = 0usize;
+        for variant in &config.preoptimize_manifest {
+            let width_count = if variant.width.is_some() {
+                1
+            } else {
+                let mut sizes = config.device_sizes.clone();
+                sizes.extend(config.image_sizes.clone());
+                if sizes.is_empty() {
+                    sizes = vec![384, 640, 750, 828, 1080, 1200, 1920];
+                }
+                sizes.sort_unstable();
+                sizes.dedup();
+                sizes.len()
+            };
+            total += width_count * format_count;
+        }
+        total
     }
 
     #[test]
@@ -1647,6 +1713,99 @@ mod tests {
         let count =
             optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
         assert!(count > 0, "source-map URLs should be preoptimized when scan roots are absent");
+    }
+
+    #[tokio::test]
+    async fn scan_prefers_source_map_over_walking_all_assets() {
+        let project = test_project("scan-source-map-prefer");
+        let assets = project.join("dist").join("assets");
+        let server_dir = project.join("dist").join("server");
+        fs::create_dir_all(&assets).expect("assets dir");
+        fs::create_dir_all(&server_dir).expect("server dir");
+
+        let used_source = project.join("used.png");
+        fs::write(&used_source, tiny_png()).expect("write used source");
+        fs::write(assets.join("unused-texture-deadbeef.avif"), tiny_png()).expect("write unused");
+
+        let map = serde_json::json!({
+            "/assets/used-deadbeef.png": used_source.to_string_lossy(),
+        });
+        fs::write(server_dir.join("static-image-sources.json"), map.to_string())
+            .expect("write source map");
+
+        let config = assets_config();
+        let optimizer = ImageOptimizer::new(config.clone(), &project);
+        let count =
+            optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
+        assert_eq!(
+            count,
+            expected_scan_variant_count(&config, 1),
+            "dry-run count must equal mapped URL × sizes × formats (unused assets must not inflate)"
+        );
+
+        let optimized = optimizer.preoptimize_local_images().await.expect("preoptimize mapped URL");
+        assert_eq!(
+            optimized,
+            expected_scan_variant_count(&config, 1),
+            "mapped URL must be fully pre-optimized for every size × format"
+        );
+        assert!(
+            optimizer.fetch_image("/assets/used-deadbeef.png").await.is_ok(),
+            "mapped URL must resolve via source map after pre-optimize"
+        );
+    }
+
+    #[tokio::test]
+    async fn scan_unions_source_map_when_manifest_is_non_empty() {
+        let project = test_project("scan-manifest-union");
+        let public = project.join("public");
+        let server_dir = project.join("dist").join("server");
+        fs::create_dir_all(&public).expect("public");
+        fs::create_dir_all(&server_dir).expect("server dir");
+        fs::write(public.join("hero.png"), tiny_png()).expect("write public");
+
+        let used_source = project.join("talk.png");
+        fs::write(&used_source, tiny_png()).expect("write talk source");
+        let map = serde_json::json!({
+            "/assets/talk-deadbeef.png": used_source.to_string_lossy(),
+        });
+        fs::write(server_dir.join("static-image-sources.json"), map.to_string())
+            .expect("write source map");
+
+        let config = ImageConfig {
+            local_patterns: vec![
+                LocalPattern { pathname: "/assets/**".to_string(), search: None },
+                LocalPattern { pathname: "/**".to_string(), search: None },
+            ],
+            preoptimize_manifest: vec![ImageVariant {
+                src: "/hero.png".to_string(),
+                width: Some(640),
+                quality: None,
+                preload: None,
+            }],
+            ..ImageConfig::default()
+        };
+        let optimizer = ImageOptimizer::new(config.clone(), &project);
+
+        let count =
+            optimizer.preoptimize_local_images_preview().await.expect("preoptimize preview");
+        let expected =
+            expected_manifest_variant_count(&config) + expected_scan_variant_count(&config, 1);
+        assert_eq!(
+            count, expected,
+            "dry-run count must equal manifest variants + static-import URL × sizes × formats"
+        );
+
+        let optimized = optimizer
+            .preoptimize_local_images()
+            .await
+            .expect("preoptimize manifest + static-import");
+        assert_eq!(
+            optimized, expected,
+            "manifest and static-import URLs must both be fully pre-optimized"
+        );
+        assert!(optimizer.fetch_image("/hero.png").await.is_ok());
+        assert!(optimizer.fetch_image("/assets/talk-deadbeef.png").await.is_ok());
     }
 
     #[tokio::test]

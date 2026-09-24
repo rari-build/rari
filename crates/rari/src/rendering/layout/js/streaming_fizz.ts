@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types stream error buffers are mutated in place */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 /// <reference path="../../types.d.ts" />
 
 declare function rariCreateHtmlBoundaryTracker(): {
@@ -919,9 +919,9 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
   }
 
-  g['~rari'] ??= {}
-  g['~rari'].renderStreamingDocument = renderStreamingDocument
-  g['~rari'].renderStaticDocument = renderStaticDocument
-  g['~rari'].injectStreamError = injectStreamError
-  g['~rari'].pumpRscElementStream = pumpRscElementStream
+  const rari = (g['~rari'] ??= {})
+  rari.renderStreamingDocument = renderStreamingDocument
+  rari.renderStaticDocument = renderStaticDocument
+  rari.injectStreamError = injectStreamError
+  rari.pumpRscElementStream = pumpRscElementStream
 })()

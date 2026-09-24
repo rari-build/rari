@@ -69,6 +69,7 @@ import {
   resetClientHeadExtras,
   VIRTUAL_CLIENT_ENTRY,
 } from './client-head'
+import { createFindSourceMapURLPlugin } from './find-source-map-url'
 import { createFontPlugin } from './font/plugin'
 import { HMRCoordinator } from './hmr/coordinator'
 import { walkImporters } from './hmr/import-graph'
@@ -87,6 +88,7 @@ import {
   ServerComponentBuilder,
 } from './server/build'
 import { clearViteEmitBuilder, getOrCreateViteEmitBuilder } from './server/rsc-vite-build'
+import { emitTransformed } from './sourcemap'
 import {
   buildClientReferenceReplacementFromImport,
   ensureNamedImportFromModule,
@@ -107,7 +109,7 @@ const PROXY_BODY_MAX_BYTES = 10 * 1024 * 1024
 const DOCUMENT_ASSET_EXT_RE =
   /\.(?:js|mjs|cjs|ts|tsx|jsx|css|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot|txt|xml|html|wasm)$/i
 
-/* oxlint-disable-next-line typescript/prefer-readonly-parameter-types IncomingMessage is a mutable Node stream */
+// oxlint-disable-next-line typescript/prefer-readonly-parameter-types
 async function readRequestBodyAsBlob(req: IncomingMessage, maxBytes: number): Promise<Blob> {
   const chunks: Uint8Array[] = []
   let totalBytes = 0
@@ -205,6 +207,7 @@ export interface RariOptions {
       readonly pathname: string
       readonly search?: string
     }>
+    readonly includeBundledAssets?: boolean
     readonly deviceSizes?: readonly number[]
     readonly imageSizes?: readonly number[]
     readonly formats?: readonly ('avif' | 'webp')[]
@@ -266,8 +269,10 @@ function mergeLocalPatterns(
       }>
     | undefined,
   assetsDir: string,
+  includeBundledAssets = true,
 ): Array<{ pathname: string; search?: string }> {
   const merged: Array<{ pathname: string; search?: string }> = [...(patterns ?? [])]
+  if (!includeBundledAssets) return merged
   for (const pattern of staticImageLocalPatterns(assetsDir)) {
     if (!merged.some(entry => entry.pathname === pattern.pathname)) merged.push({ ...pattern })
   }
@@ -440,7 +445,11 @@ async function writeImageConfig(
     ...options.images,
     assetsDir: normalizedAssetsDir,
     outDir: relativeOutDir,
-    localPatterns: mergeLocalPatterns(options.images?.localPatterns, normalizedAssetsDir),
+    localPatterns: mergeLocalPatterns(
+      options.images?.localPatterns,
+      normalizedAssetsDir,
+      options.images?.includeBundledAssets !== false,
+    ),
     preoptimizeManifest: imageManifest.images,
   }
 
@@ -967,6 +976,12 @@ if (import.meta.hot) {
         ws: true,
       }
 
+      config.server.proxy['/assets'] = {
+        target: `http://localhost:${serverPort}`,
+        changeOrigin: true,
+        secure: false,
+      }
+
       if (command === 'build') {
         config.build ??= {}
         config.build.rolldownOptions ??= {}
@@ -1075,11 +1090,12 @@ if (import.meta.hot) {
           resolvedAlias,
         })
         if (mdxTransformed != null && mdxTransformed !== '')
-          return { code: mdxTransformed, map: null }
+          return emitTransformed(mdxTransformed, code, id)
       }
 
       if (!TSX_EXT_REGEX.test(id)) return null
 
+      const originalCode = code
       let wasUseCacheTransformed = false
       if (options.experimental?.useCache || options.experimental?.useCacheRemote) {
         const transform = await getUseCacheTransform()
@@ -1091,6 +1107,8 @@ if (import.meta.hot) {
           }
         }
       }
+
+      const finish = (next: string) => emitTransformed(next, originalCode, id)
 
       const environment = this.environment
       const moduleAnalysis =
@@ -1108,9 +1126,9 @@ if (import.meta.hot) {
         setComponentType(id, 'server')
 
         if (environment.name === 'rsc') {
-          return transformServerModule(code, id, moduleAnalysis)
+          return finish(transformServerModule(code, id, moduleAnalysis))
         }
-        return transformClientModule(code, id, moduleAnalysis)
+        return finish(transformClientModule(code, id, moduleAnalysis))
       }
 
       if (moduleAnalysis.topLevelUseClient) {
@@ -1136,7 +1154,7 @@ if (import.meta.hot) {
           addTrackedClientComponent(resolvedImportPath)
         }
 
-        return transformClientModuleForClient(code, id, moduleAnalysis)
+        return finish(transformClientModuleForClient(code, id, moduleAnalysis))
       }
 
       if (
@@ -1144,7 +1162,7 @@ if (import.meta.hot) {
         environment.name !== 'ssr' &&
         (getComponentType(id) === 'client' || hasTrackedClientComponent(id))
       ) {
-        return transformClientModuleForClient(code, id, moduleAnalysis)
+        return finish(transformClientModuleForClient(code, id, moduleAnalysis))
       }
 
       function isClientBoundaryModule(filePath: string): boolean {
@@ -1214,7 +1232,7 @@ if (import.meta.hot) {
 
         if (environment.name === 'rsc' || environment.name === 'ssr') {
           const serverTransformed = transformServerModule(code, id, moduleAnalysis)
-          return rewriteClientImportsForServerEnvironment(serverTransformed, id)
+          return finish(rewriteClientImportsForServerEnvironment(serverTransformed, id))
         } else {
           let clientTransformedCode = transformClientModule(code, id, moduleAnalysis)
 
@@ -1230,7 +1248,7 @@ if (import.meta.hot) {
 
 ${clientTransformedCode}`
 
-          return clientTransformedCode
+          return finish(clientTransformedCode)
         }
       }
 
@@ -1238,12 +1256,13 @@ ${clientTransformedCode}`
       if (cachedType === 'server') {
         if (environment.name === 'rsc' || environment.name === 'ssr') {
           const serverTransformed = transformServerModule(code, id, moduleAnalysis)
-          return rewriteClientImportsForServerEnvironment(serverTransformed, id)
+          return finish(rewriteClientImportsForServerEnvironment(serverTransformed, id))
         } else {
-          return transformClientModule(code, id, moduleAnalysis)
+          return finish(transformClientModule(code, id, moduleAnalysis))
         }
       }
-      if (cachedType === 'client') return transformClientModuleForClient(code, id, moduleAnalysis)
+      if (cachedType === 'client')
+        return finish(transformClientModuleForClient(code, id, moduleAnalysis))
 
       setComponentType(id, 'unknown')
 
@@ -1346,10 +1365,10 @@ ${clientTransformedCode}`
           }
         }
 
-        return modifiedCode
+        return finish(modifiedCode)
       }
 
-      if (wasUseCacheTransformed) return code
+      if (wasUseCacheTransformed) return finish(code)
 
       return null
     },
@@ -1362,6 +1381,39 @@ ${clientTransformedCode}`
       )
       const srcDir = path.join(projectRoot, 'src')
       await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedOutDir)
+
+      const reactDevtoolsStubFiles = new Map([
+        ['/installHook.js.map', 'installHook.js'],
+        ['/react_devtools_backend_compact.js.map', 'react_devtools_backend_compact.js'],
+        ['/installHook.js', null],
+        ['/react_devtools_backend_compact.js', null],
+      ])
+      server.middlewares.use((req, res, next) => {
+        const pathname = pathnameFromUrl(req.url ?? '')
+        if (!reactDevtoolsStubFiles.has(pathname)) {
+          next()
+          return
+        }
+        const stubFile = reactDevtoolsStubFiles.get(pathname)
+        res.statusCode = 200
+        res.setHeader('Cache-Control', 'no-store')
+        if (stubFile != null) {
+          res.setHeader('Content-Type', 'application/json')
+          res.end(
+            JSON.stringify({
+              version: 3,
+              file: stubFile,
+              sources: [stubFile],
+              sourcesContent: ['/* react-devtools extension stub */'],
+              names: [],
+              mappings: 'AAAA',
+            }),
+          )
+          return
+        }
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+        res.end('/* react-devtools extension stub */\n')
+      })
 
       const discoverAndRegisterComponents = async () => {
         try {
@@ -1651,6 +1703,7 @@ ${clientTransformedCode}`
             !isReservedRoutePrefix(pathname, '/node_modules') &&
             !isReservedRoutePrefix(pathname, '/api') &&
             !isReservedRoutePrefix(pathname, '/_rari') &&
+            !isReservedRoutePrefix(pathname, '/assets') &&
             !isReservedRoutePrefix(pathname, '/vite-server') &&
             !isLikelyStaticAssetPath(pathname)
 
@@ -1882,8 +1935,6 @@ ${clientTransformedCode}`
       )
         return 'virtual:react-flight-client.ts'
 
-      if (id === './LoadingErrorBoundary' || id === './LoadingErrorBoundary.tsx')
-        return 'virtual:loading-error-boundary.tsx'
       if (id === 'react-server-dom-rari/server') return id
 
       if (
@@ -2073,15 +2124,17 @@ ${clientTransformedCode}`
               const fullId = `${ext.path}#${exportName}`
               return `
 globalThis['~clientComponents'] = globalThis['~clientComponents'] || {};
-globalThis['~clientComponents']["${fullId}"] = {
-  id: "${exportName}",
-  path: "${ext.path}",
-  type: "client",
-  component: ExternalModule${index},
-  registered: true
-};
-globalThis['~clientComponents']["${ext.path}"] = globalThis['~clientComponents']["${ext.path}"] || {};
-globalThis['~clientComponents']["${ext.path}"].component = ExternalModule${index};
+{
+  const entry = {
+    id: "${exportName}",
+    path: "${ext.path}",
+    type: "client",
+    component: ExternalModule${index},
+    registered: true
+  };
+  globalThis['~clientComponents']["${fullId}"] = entry;
+  globalThis['~clientComponents']["${ext.path}"] = entry;
+}
 globalThis['~clientComponentPaths'] = globalThis['~clientComponentPaths'] || {};
 globalThis['~clientComponentPaths']["${ext.path}"] = "${exportName}";`
             })
@@ -2125,13 +2178,6 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
         throw new Error(DIST_NOT_BUILT_ERROR)
       }
 
-      if (id === 'virtual:loading-error-boundary.tsx') {
-        const runtimeFile = resolveRuntimeDistFile('LoadingErrorBoundary.mjs')
-        if (runtimeFile != null && runtimeFile !== '') return fs.readFileSync(runtimeFile, 'utf-8')
-
-        throw new Error(DIST_NOT_BUILT_ERROR)
-      }
-
       if (id === 'virtual:error-boundary-wrapper.tsx') {
         const runtimeFile = resolveRuntimeDistFile('ErrorBoundaryWrapper.mjs')
         if (runtimeFile != null && runtimeFile !== '') {
@@ -2169,36 +2215,33 @@ import * as React from 'react';\n${content}`
       }
 
       if (id === 'virtual:react-flight-client.ts') {
+        const flightBuild = this.environment.mode === 'dev' ? 'development' : 'production'
+        const browserFile = `react-server-dom-webpack-client.browser.${flightBuild}.js`
+        const edgeFile = `react-server-dom-webpack-client.edge.${flightBuild}.js`
+
         let browserClientPath: string
         let edgeClientPath: string
         try {
           const packageDir = path.dirname(
             fileURLToPath(import.meta.resolve('react-server-dom-webpack/package.json')),
           )
-          browserClientPath = path.join(
-            packageDir,
-            'cjs/react-server-dom-webpack-client.browser.production.js',
-          )
-          edgeClientPath = path.join(
-            packageDir,
-            'cjs/react-server-dom-webpack-client.edge.production.js',
-          )
+          browserClientPath = path.join(packageDir, 'cjs', browserFile)
+          edgeClientPath = path.join(packageDir, 'cjs', edgeFile)
         } catch {
           const rariDir = path.dirname(fileURLToPath(import.meta.url))
           const nmDir = path.resolve(rariDir, '../../node_modules')
-          browserClientPath = path.join(
-            nmDir,
-            'react-server-dom-webpack/cjs/react-server-dom-webpack-client.browser.production.js',
-          )
-          edgeClientPath = path.join(
-            nmDir,
-            'react-server-dom-webpack/cjs/react-server-dom-webpack-client.edge.production.js',
-          )
+          browserClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs', browserFile)
+          edgeClientPath = path.join(nmDir, 'react-server-dom-webpack/cjs', edgeFile)
         }
 
         const browserSource = fs.readFileSync(browserClientPath, 'utf-8')
         const edgeSource = fs.readFileSync(edgeClientPath, 'utf-8')
         const cjsSource = patchBrowserClientForFormActions(browserSource, edgeSource)
+
+        const embeddedSource =
+          flightBuild === 'development'
+            ? cjsSource.replace('"production" !== process.env.NODE_ENV &&', 'true &&')
+            : cjsSource
 
         return {
           code: `
@@ -2209,25 +2252,45 @@ import { callServer as rariCallServer } from 'rari/runtime/call-server';
 const module = { exports: {} };
 const exports = module.exports;
 (function(module, exports, require) {
-${cjsSource}
+${embeddedSource}
 })(module, module.exports, function require(id) {
   if (id === 'react') return React;
   if (id === 'react-dom') return ReactDOM;
   throw new Error('Cannot require "' + id + '" from react-server-dom-webpack client bundle');
 });
+
+const rariFindSourceMapURL = import.meta.env.DEV
+  ? function rariFindSourceMapURL(filename, environmentName) {
+      const url = new URL('/__rari_findSourceMapURL', window.location.origin);
+      url.searchParams.set('filename', filename);
+      url.searchParams.set('environmentName', environmentName ?? 'Server');
+      return url.href;
+    }
+  : undefined;
+
 export function createFromFetch(promise, options) {
   return module.exports.createFromFetch(promise, {
     ...options,
     callServer: options?.callServer ?? rariCallServer,
+    findSourceMapURL: options?.findSourceMapURL ?? rariFindSourceMapURL,
   });
 }
 export function createFromReadableStream(stream, options) {
   return module.exports.createFromReadableStream(stream, {
     ...options,
     callServer: options?.callServer ?? rariCallServer,
+    findSourceMapURL: options?.findSourceMapURL ?? rariFindSourceMapURL,
   });
 }
-export const createServerReference = module.exports.createServerReference;
+export function createServerReference(id, callServer, encodeFormAction, findSourceMapURL, functionName) {
+  return module.exports.createServerReference(
+    id,
+    callServer ?? rariCallServer,
+    encodeFormAction,
+    findSourceMapURL ?? rariFindSourceMapURL,
+    functionName,
+  );
+}
 export const encodeReply = module.exports.encodeReply;
 export const createTemporaryReferenceSet = module.exports.createTemporaryReferenceSet;
 `,
@@ -2370,13 +2433,23 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
   const webpackRequirePatchPlugin: Plugin = {
     name: 'rari:patch-react-server-dom-webpack',
     transform(code) {
-      if (!code.includes('__webpack_require__') && !code.includes('__webpack_chunk_load__'))
+      if (
+        !code.includes('__webpack_require__') &&
+        !code.includes('__webpack_chunk_load__') &&
+        !code.includes('__webpack_get_script_filename__')
+      )
         return null
 
       let modifiedCode = code
 
       if (modifiedCode.includes('__webpack_chunk_load__'))
         modifiedCode = modifiedCode.replaceAll('__webpack_chunk_load__', '__rari_chunk_load__')
+
+      if (modifiedCode.includes('__webpack_get_script_filename__'))
+        modifiedCode = modifiedCode.replaceAll(
+          '__webpack_get_script_filename__',
+          '__rari_get_script_filename__',
+        )
 
       if (modifiedCode.includes('__webpack_require__.u'))
         modifiedCode = modifiedCode.replaceAll('__webpack_require__.u', '({}).u')
@@ -2407,6 +2480,11 @@ export const createTemporaryReferenceSet = module.exports.createTemporaryReferen
     createFontPlugin(),
     webpackRequirePatchPlugin,
     serverBuildPlugin,
+    createFindSourceMapURLPlugin(
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd(),
+    ),
   )
 
   if (options.proxy !== false) plugins.push(rariProxy(options.proxy ?? {}))

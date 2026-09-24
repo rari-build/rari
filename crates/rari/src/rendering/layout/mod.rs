@@ -1,10 +1,15 @@
 mod core;
+mod layout_reuse;
 mod route_composer;
 pub mod types;
 mod utils;
 
 pub use core::{LayoutHtmlCache, LayoutRenderer};
 
+pub use layout_reuse::{
+    pathname_from_router_state_header, router_state_from_headers,
+    shared_layout_paths_for_navigation,
+};
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;
 pub(crate) use utils::{component_dist_path, create_component_id, drain_chunked_stream};
@@ -18,9 +23,12 @@ mod tests {
     use rustc_hash::FxHashMap;
 
     use super::*;
-    use crate::server::routing::{
-        app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
-        types::ParamValue,
+    use crate::{
+        rendering::base::constants::ROUTE_COMPOSER_SCRIPT,
+        server::routing::{
+            app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
+            types::ParamValue,
+        },
     };
 
     #[test]
@@ -69,6 +77,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let route_match = AppRouteMatch {
@@ -125,6 +134,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script = LayoutRenderer::build_composition_script(
@@ -136,19 +146,15 @@ mod tests {
         )
         .unwrap();
 
-        assert!(script.contains("const useSuspense = true"));
+        assert!(script.contains("createPageElement"));
+        assert!(script.contains("useSuspense: true"));
+        assert!(script.contains("loadingComponentId:"));
         assert!(!script.contains("AsyncFunction"));
-        assert!(script.contains("React.Suspense"));
-        assert!(script.contains("LoadingComponent"));
         assert!(
             !script.contains("React.ViewTransition"),
             "page ViewTransition is app-owned (TSX), not injected by the layout composer"
         );
         assert!(script.contains("const pageElement = "));
-        assert!(
-            script.contains("fallback: React.createElement(LoadingComponent"),
-            "Suspense fallback is the loading component"
-        );
         assert!(
             !script.contains("const pageWithLoading ="),
             "Suspense wraps the page inside templates (Next order), not outside"
@@ -184,6 +190,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script = LayoutRenderer::build_composition_script(
@@ -195,10 +202,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(script.contains("const useSuspense = false"));
+        assert!(script.contains("createPageElement"));
+        assert!(script.contains("useSuspense: false"));
+        assert!(script.contains("loadingComponentId:"));
         assert!(!script.contains("AsyncFunction"));
         assert!(!script.contains("React.ViewTransition"));
-        assert!(script.contains("React.createElement(PageComponent, pageProps)"));
     }
 
     #[test]
@@ -238,6 +246,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script =
@@ -279,6 +288,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script_ssr =
@@ -288,17 +298,16 @@ mod tests {
             LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
                 .unwrap();
 
-        assert!(script_ssr.contains("rsc_data: rscData"));
-        assert!(script_rsc.contains("rsc_data: rscData"));
+        assert!(script_ssr.contains("composeRoute"));
+        assert!(script_rsc.contains("composeRoute"));
+        assert!(script_ssr.contains("createPageElement"));
+        assert!(script_rsc.contains("createPageElement"));
+        assert!(script_ssr.contains("metadata:"));
+        assert!(script_rsc.contains("metadata:"));
 
-        assert!(script_ssr.contains("boundaries: globalThis['~suspense']?.discoveredBoundaries"));
-        assert!(script_rsc.contains("boundaries: globalThis['~suspense']?.discoveredBoundaries"));
-
-        assert!(script_ssr.contains("pending_promises: globalThis['~suspense']?.pendingPromises"));
-        assert!(script_rsc.contains("pending_promises: globalThis['~suspense']?.pendingPromises"));
-
-        assert!(script_ssr.contains("metadata: {"));
-        assert!(script_rsc.contains("metadata: {"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("rsc_data: rscData"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("pending_promises: pendingPromises"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("boundaries,"));
     }
 
     #[test]
@@ -330,6 +339,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script_ssr = LayoutRenderer::build_composition_script(
@@ -349,15 +359,17 @@ mod tests {
         )
         .unwrap();
 
-        assert!(script_ssr.contains("const useSuspense = true"));
+        assert!(script_ssr.contains("useSuspense: true"));
         assert!(!script_ssr.contains("AsyncFunction"));
         assert!(!script_ssr.contains("React.ViewTransition"));
         assert!(script_ssr.contains("const pageElement = "));
+        assert!(script_ssr.contains("createPageElement"));
 
-        assert!(script_rsc.contains("const useSuspense = false"));
+        assert!(script_rsc.contains("useSuspense: false"));
         assert!(!script_rsc.contains("AsyncFunction"));
         assert!(!script_rsc.contains("React.ViewTransition"));
         assert!(script_rsc.contains("const pageElement = "));
+        assert!(script_rsc.contains("createPageElement"));
     }
 
     #[test]
@@ -389,6 +401,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script_ssr =
@@ -439,6 +452,7 @@ mod tests {
             pathname: "/test".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         };
 
         let script_ssr =
@@ -448,10 +462,9 @@ mod tests {
             LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
                 .unwrap();
 
-        assert!(script_ssr.contains("React.createElement"));
-        assert!(script_rsc.contains("React.createElement"));
-
-        assert!(script_ssr.contains("PageComponent"));
-        assert!(script_rsc.contains("PageComponent"));
+        assert!(script_ssr.contains("createPageElement"));
+        assert!(script_rsc.contains("createPageElement"));
+        assert!(script_ssr.contains("pageComponentId:"));
+        assert!(script_rsc.contains("pageComponentId:"));
     }
 }

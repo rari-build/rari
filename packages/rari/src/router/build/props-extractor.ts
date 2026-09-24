@@ -161,7 +161,7 @@ async function loadComponentModule(componentPath: string): Promise<ComponentModu
   return isComponentModule(module) ? module : {}
 }
 
-/* oxlint-disable typescript/prefer-readonly-parameter-types state is an intentional mutable accumulator */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 function processGetDataResult(
   result: DataFetchResult | null | undefined,
   state: ServerSidePropsResult,
@@ -210,7 +210,7 @@ async function tryGetStaticProps(
   const result = await module.getStaticProps({ params })
   processGetDataResult(result, state)
 }
-/* oxlint-enable typescript/prefer-readonly-parameter-types */
+// oxlint-enable typescript/prefer-readonly-parameter-types
 
 /* v8 ignore start - requires dynamic imports, better tested in integration/e2e */
 export async function extractServerProps(

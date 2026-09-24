@@ -26,8 +26,8 @@
     return html
   }
 
-  g['~rari'] ??= {}
-  g['~rari'].readStream = readStream
+  const rari = (g['~rari'] ??= {})
+  rari.readStream = readStream
 
   async function renderToHtmlFizz(element: unknown): Promise<string> {
     if (element === null || element === undefined) return ''

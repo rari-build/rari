@@ -80,7 +80,7 @@ export const lazyEventTargetMethods = {
   dispatchEvent: lazyEventTargetMethod('dispatchEvent'),
 } satisfies PropertyDescriptorMap
 
-/* oxlint-disable-next-line typescript/no-unnecessary-type-parameters, typescript/prefer-readonly-parameter-types */
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters, typescript/prefer-readonly-parameter-types
 function lazyLoadedEventProperty<V>(select: (mod: DenoWebEventModule) => V): PropertyDescriptor {
   return nonEnumerableGetter((): V => {
     ensureEventTargetReady()

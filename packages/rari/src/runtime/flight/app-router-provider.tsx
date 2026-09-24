@@ -3,7 +3,7 @@
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingScrollToTop } from './pending-scroll'
 import * as React from 'react'
-import { Suspense, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-state'
 import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
@@ -22,8 +22,7 @@ import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
 } from './commit-navigation-payload'
-import { FlightOutlet } from './flight-outlet'
-import { mergeFlightRefresh } from './merge-refresh'
+import { isLayoutReuseMarker, mergeFlightRefresh } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
 import { currentRouteLocation, flightRouteCache } from './route-cache'
@@ -116,6 +115,27 @@ function peekFulfilledFlightContent(
   return isReactNode(content.value) ? content.value : undefined
 }
 
+function isDocumentRoot(node: React.ReactNode): boolean {
+  return React.isValidElement(node) && node.type === 'html'
+}
+
+function isMergeableFlightRoot(node: React.ReactNode): boolean {
+  return isDocumentRoot(node) || (React.isValidElement(node) && isLayoutReuseMarker(node))
+}
+
+async function unwrapFlightContent(
+  content: React.ReactNode | PromiseLike<React.ReactNode>,
+): Promise<React.ReactNode> {
+  let current: React.ReactNode | PromiseLike<React.ReactNode> = normalizeFlightContent(content)
+  for (let i = 0; i < 10 && isFlightThenable<React.ReactNode>(current); i += 1) {
+    current = normalizeFlightContent(await current)
+  }
+  if (isFlightThenable<React.ReactNode>(current)) {
+    throw new Error('[rari] AppRouter: Flight content did not resolve to a React node')
+  }
+  return current
+}
+
 export function AppRouterProvider({
   children,
   initialPayload,
@@ -133,6 +153,8 @@ export function AppRouterProvider({
   const onNavigateRef = useRef(onNavigate)
 
   const currentNavigationIdRef = useRef<number>(0)
+  const actionRefreshGenerationRef = useRef(0)
+  const pendingFormScrollRestoreRef = useRef<RscPayload | null>(null)
   const pendingNavigateCommittedIdRef = useRef<number | null>(null)
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
   const failureHistoryRef = useRef<HmrFailure[]>([])
@@ -201,6 +223,14 @@ export function AppRouterProvider({
   const restoreFormState = () => {
     restoreIndexedFormData(formDataRef.current)
   }
+
+  useLayoutEffect(() => {
+    const pending = pendingFormScrollRestoreRef.current
+    if (pending == null || rscPayload !== pending) return
+    pendingFormScrollRestoreRef.current = null
+    window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+    restoreFormState()
+  }, [rscPayload, renderKey])
 
   const trackHMRFailure = (
     error: Error,
@@ -302,12 +332,17 @@ export function AppRouterProvider({
     }
   }
 
-  const refetchRscPayload = async (targetPath?: string, abortSignal?: AbortSignal) => {
+  const refetchRscPayload = async (
+    targetPath?: string,
+    abortSignal?: AbortSignal,
+    options?: { readonly commit?: boolean },
+  ) => {
     const pathToFetch =
       targetPath != null && targetPath !== '' ? targetPath : window.location.pathname
 
     const navigationId = currentNavigationIdRef.current
-    const requestKey = `${navigationId}:${pathToFetch}${window.location.search}`
+    const commit = options?.commit !== false
+    const requestKey = `${navigationId}:${pathToFetch}${window.location.search}:${commit ? 'commit' : 'defer'}`
     const existingFetch = pendingFetchesRef.current.get(requestKey)
     if (existingFetch) return existingFetch
 
@@ -359,9 +394,15 @@ export function AppRouterProvider({
             await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
 
             const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
+            const resolvedElement = await unwrapFlightContent(element)
+            if (!isDocumentRoot(resolvedElement)) {
+              throw new Error(
+                '[rari] AppRouter: refetched Flight content did not resolve to an <html> document root',
+              )
+            }
             parsedPayload = {
-              element,
-              rawElement: element,
+              element: resolvedElement,
+              rawElement: resolvedElement,
               flightProtocol: rscFlightProtocol,
             }
           } catch (parseError) {
@@ -377,7 +418,7 @@ export function AppRouterProvider({
 
           if (failure == null) {
             if (currentNavigationIdRef.current === navigationId) {
-              setRscPayload(parsedPayload)
+              if (commit) setRscPayload(parsedPayload)
               if (rscFlightProtocol !== '') lastSuccessfulPayloadRef.current = rscFlightProtocol
               resetFailureTracking()
             }
@@ -420,9 +461,13 @@ export function AppRouterProvider({
   const parseRscResponseRef =
     useRef<(responsePromise: Promise<Response>) => Promise<RscPayload>>(parseRscResponse)
   const refetchRscPayloadRef =
-    useRef<(targetPath?: string, abortSignal?: AbortSignal) => Promise<RscPayload | undefined>>(
-      refetchRscPayload,
-    )
+    useRef<
+      (
+        targetPath?: string,
+        abortSignal?: AbortSignal,
+        options?: { readonly commit?: boolean },
+      ) => Promise<RscPayload | undefined>
+    >(refetchRscPayload)
 
   useEffect(() => {
     parseRscFlightProtocolRef.current = parseRscFlightProtocol
@@ -460,7 +505,9 @@ export function AppRouterProvider({
         } else if (detail.rscFlightProtocol != null && detail.rscFlightProtocol !== '') {
           parsedPayload = await parseRscFlightProtocolRef.current(detail.rscFlightProtocol)
         } else if (!detail.isStreaming) {
-          parsedPayload = await refetchRscPayloadRef.current(detail.to, detail.abortSignal)
+          parsedPayload = await refetchRscPayloadRef.current(detail.to, detail.abortSignal, {
+            commit: false,
+          })
         }
       } catch (error) {
         if (isError(error) && error.name === 'AbortError') return
@@ -495,6 +542,97 @@ export function AppRouterProvider({
       }
 
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
+        let resolvedPayload = parsedPayload
+        try {
+          const resolvedElement = await unwrapFlightContent(parsedPayload.element)
+          if (currentNavigationIdRef.current !== detail.navigationId) return
+          if (!isMergeableFlightRoot(resolvedElement)) {
+            parseError = new Error(
+              '[rari] AppRouter: navigated Flight content did not resolve to an <html> document root',
+            )
+            console.error('[rari] AppRouter: Navigation failed:', parseError)
+            window.dispatchEvent(
+              new CustomEvent('rari:navigate-error', {
+                detail: {
+                  from: detail.from,
+                  to: detail.to,
+                  error: parseError,
+                  navigationId: detail.navigationId,
+                },
+              }),
+            )
+            return
+          }
+          const previousElement = rscPayloadRef.current?.element
+          const previousDocument =
+            previousElement != null &&
+            !isFlightThenable<React.ReactNode>(previousElement) &&
+            isDocumentRoot(previousElement)
+              ? previousElement
+              : null
+          if (
+            React.isValidElement(resolvedElement) &&
+            isLayoutReuseMarker(resolvedElement) &&
+            previousDocument == null
+          ) {
+            parseError = new Error(
+              '[rari] AppRouter: layout-reuse Flight marker requires a previous <html> document',
+            )
+            console.error('[rari] AppRouter: Navigation failed:', parseError)
+            window.dispatchEvent(
+              new CustomEvent('rari:navigate-error', {
+                detail: {
+                  from: detail.from,
+                  to: detail.to,
+                  error: parseError,
+                  navigationId: detail.navigationId,
+                },
+              }),
+            )
+            return
+          }
+          const mergedElement =
+            previousDocument != null
+              ? mergeFlightRefresh(previousDocument, resolvedElement)
+              : resolvedElement
+          if (!isDocumentRoot(mergedElement)) {
+            parseError = new Error(
+              '[rari] AppRouter: layout-merged Flight content did not resolve to an <html> document root',
+            )
+            console.error('[rari] AppRouter: Navigation failed:', parseError)
+            window.dispatchEvent(
+              new CustomEvent('rari:navigate-error', {
+                detail: {
+                  from: detail.from,
+                  to: detail.to,
+                  error: parseError,
+                  navigationId: detail.navigationId,
+                },
+              }),
+            )
+            return
+          }
+          resolvedPayload = {
+            ...parsedPayload,
+            element: mergedElement,
+            rawElement: mergedElement,
+          }
+        } catch (resolveError) {
+          parseError = toError(resolveError)
+          console.error('[rari] AppRouter: Navigation failed:', parseError)
+          window.dispatchEvent(
+            new CustomEvent('rari:navigate-error', {
+              detail: {
+                from: detail.from,
+                to: detail.to,
+                error: parseError,
+                navigationId: detail.navigationId,
+              },
+            }),
+          )
+          return
+        }
+
         const pendingUrl = detail.pendingHistory?.url
         const hasHash =
           pendingUrl != null && pendingUrl !== ''
@@ -507,7 +645,7 @@ export function AppRouterProvider({
         const navigationId = detail.navigationId
 
         commitNavigationPayload({
-          parsedPayload,
+          parsedPayload: resolvedPayload,
           shouldScrollToTop,
           navigationId,
           transitionTypes: resolveNavigationTransitionTypes({
@@ -526,8 +664,8 @@ export function AppRouterProvider({
           pendingNavigateCommittedIdRef,
         })
 
-        if (parsedPayload.flightProtocol != null && parsedPayload.flightProtocol !== '')
-          lastSuccessfulPayloadRef.current = parsedPayload.flightProtocol
+        if (resolvedPayload.flightProtocol != null && resolvedPayload.flightProtocol !== '')
+          lastSuccessfulPayloadRef.current = resolvedPayload.flightProtocol
 
         resetFailureTracking()
 
@@ -569,15 +707,18 @@ export function AppRouterProvider({
       )
         return
 
+      const { pathname, search } = currentRouteLocation()
+      const refreshGeneration = ++actionRefreshGenerationRef.current
+      const expectedNavigationId = currentNavigationIdRef.current
+      const expectedRoute = `${pathname}${search}`
+
       scrollPositionRef.current = {
         x: window.scrollX,
         y: window.scrollY,
       }
-
       saveFormState()
 
       try {
-        const { pathname, search } = currentRouteLocation()
         if (detail.revalidationKind === ActionDidRevalidateStaticAndDynamic)
           flightRouteCache.clear()
         else if (detail.revalidatedPath != null && detail.revalidatedPath !== '')
@@ -592,20 +733,70 @@ export function AppRouterProvider({
             ? null
             : (fallbackElement ?? null))
         const refreshElement = detail.element
-        const merged = isFlightThenable<React.ReactNode>(refreshElement)
-          ? refreshElement
-          : mergeFlightRefresh(cachedElement, refreshElement)
 
-        React.startTransition(() => {
-          setRscPayload({
-            element: merged,
-            rawElement: merged,
-          })
-          setHmrError(null)
-        })
+        void (async () => {
+          try {
+            const resolvedRefresh = await unwrapFlightContent(refreshElement)
+            if (
+              refreshGeneration !== actionRefreshGenerationRef.current ||
+              currentNavigationIdRef.current !== expectedNavigationId
+            )
+              return
+            const { pathname: currentPath, search: currentSearch } = currentRouteLocation()
+            if (`${currentPath}${currentSearch}` !== expectedRoute) return
 
-        rememberRouteCache(merged)
-        resetFailureTracking()
+            const merged = mergeFlightRefresh(cachedElement, resolvedRefresh)
+            const resolved = await unwrapFlightContent(merged)
+            if (
+              refreshGeneration !== actionRefreshGenerationRef.current ||
+              currentNavigationIdRef.current !== expectedNavigationId
+            )
+              return
+            const afterMergeLocation = currentRouteLocation()
+            if (`${afterMergeLocation.pathname}${afterMergeLocation.search}` !== expectedRoute)
+              return
+
+            if (!isDocumentRoot(resolved)) {
+              const refreshError = new Error(
+                '[rari] AppRouter: action flight refresh did not resolve to an <html> document root',
+              )
+              trackHMRFailure(
+                refreshError,
+                'parse',
+                `Action flight refresh failed: ${refreshError.message}`,
+                window.location.pathname,
+              )
+              if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
+              return
+            }
+
+            const nextPayload: RscPayload = {
+              element: resolved,
+              rawElement: resolved,
+            }
+            pendingFormScrollRestoreRef.current = nextPayload
+            React.startTransition(() => {
+              setRscPayload(nextPayload)
+              setHmrError(null)
+            })
+            rememberRouteCache(resolved)
+            resetFailureTracking()
+          } catch (error: unknown) {
+            if (
+              refreshGeneration !== actionRefreshGenerationRef.current ||
+              currentNavigationIdRef.current !== expectedNavigationId
+            )
+              return
+            const refreshError = toError(error)
+            trackHMRFailure(
+              refreshError,
+              'parse',
+              `Action flight refresh failed: ${refreshError.message}`,
+              window.location.pathname,
+            )
+            if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
+          }
+        })()
       } catch (error) {
         const refreshError = toError(error)
         trackHMRFailure(
@@ -616,11 +807,6 @@ export function AppRouterProvider({
         )
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
       }
-
-      requestAnimationFrame(() => {
-        window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
-        restoreFormState()
-      })
     }
 
     const handleRscInvalidate = async () => {
@@ -641,7 +827,9 @@ export function AppRouterProvider({
 
       preloadedModuleIdsRef.current.clear()
       currentNavigationIdRef.current = detail.navigationId
+      actionRefreshGenerationRef.current += 1
       pendingScrollPayloadRef.current = null
+      pendingFormScrollRestoreRef.current = null
     }
 
     const handleManifestUpdated = async () => {
@@ -701,25 +889,37 @@ export function AppRouterProvider({
 
   const rawContent = rscPayload?.element ?? children
   const contentToRender = normalizeFlightContent(rawContent)
-  const [committedSnapshot, setCommittedSnapshot] = useState<{
-    readonly raw: React.ReactNode | PromiseLike<React.ReactNode>
-    readonly content: React.ReactNode
-  } | null>(null)
+  const [committedDocument, setCommittedDocument] = useState<React.ReactNode | null>(null)
   const fulfilledContent = peekFulfilledFlightContent(contentToRender)
-  if (
-    fulfilledContent !== undefined &&
-    (committedSnapshot == null || !Object.is(rawContent, committedSnapshot.raw))
-  ) {
-    const snapshotContent = normalizeFlightContent(fulfilledContent)
-    if (!isFlightThenable(snapshotContent)) {
-      setCommittedSnapshot({ raw: rawContent, content: snapshotContent })
-    }
+  const isPendingFlight = isFlightThenable(contentToRender) && fulfilledContent === undefined
+  const resolvedContent =
+    fulfilledContent !== undefined
+      ? normalizeFlightContent(fulfilledContent)
+      : !isFlightThenable(contentToRender)
+        ? contentToRender
+        : null
+  const resolvedDocument =
+    resolvedContent != null && !isFlightThenable(resolvedContent) && isDocumentRoot(resolvedContent)
+      ? resolvedContent
+      : null
+
+  if (resolvedDocument != null && !Object.is(resolvedDocument, committedDocument)) {
+    setCommittedDocument(resolvedDocument)
   }
-  const committedContent = committedSnapshot?.content ?? null
+
+  if (isPendingFlight) {
+    if (committedDocument == null) {
+      throw new Error('[rari] AppRouter: expected a resolved <html> document root')
+    }
+  } else if (resolvedDocument == null) {
+    throw new Error('[rari] AppRouter: expected a resolved <html> document root')
+  }
+
+  const documentToRender = isPendingFlight ? committedDocument : resolvedDocument
 
   return (
     <>
-      {hmrError && (
+      {hmrError != null && (
         <HmrFailureBanner
           failure={hmrError}
           maxRetries={MAX_RETRIES}
@@ -731,10 +931,7 @@ export function AppRouterProvider({
           }}
         />
       )}
-
-      <Suspense fallback={committedContent}>
-        <FlightOutlet content={contentToRender} />
-      </Suspense>
+      {documentToRender}
     </>
   )
 }

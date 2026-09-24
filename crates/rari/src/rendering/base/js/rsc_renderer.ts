@@ -32,7 +32,6 @@ async function renderToRsc(element: unknown): Promise<string> {
     totalLength += value.byteLength
   }
 
-  // Concatenate into single buffer
   const fullBuffer = new Uint8Array(totalLength)
   let offset = 0
   for (const chunk of chunks) {
@@ -40,12 +39,9 @@ async function renderToRsc(element: unknown): Promise<string> {
     offset += chunk.byteLength
   }
 
-  // Store raw Flight bytes for RSC navigation responses. Text decoding is lossy
-  // when the payload contains T rows (newlines inside row content).
-  g['~rari'] ??= {}
-  g['~rari'].lastRscBinary = fullBuffer
+  const rari = (g['~rari'] ??= {})
+  rari.lastRscBinary = fullBuffer
 
-  // Text fallback for composition metadata when binary is unavailable.
   return new TextDecoder().decode(fullBuffer)
 }
 

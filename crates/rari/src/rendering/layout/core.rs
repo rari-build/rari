@@ -1298,69 +1298,53 @@ impl LayoutRenderer {
             serde_json::to_string(&context.pathname).unwrap_or_else(|_| "\"/\"".to_string());
 
         let page_render_script = if route_match.not_found.is_some() {
+            let page_component_id_json =
+                serde_json::to_string(&page_component_id).unwrap_or_else(|_| "\"\"".to_string());
             format!(
-                r#"
-                const PageComponent = globalThis["{page_component_id}"];
-                if (!PageComponent || typeof PageComponent !== 'function') {{
-                    throw new Error('Page component {page_component_id} not found');
-                }}
-                const pageElement = React.createElement(PageComponent, {{}});
+                r"
+                const pageElement = globalThis['~rari'].createPageElement({{
+                    pageComponentId: {page_component_id_json},
+                    pageProps: {{}},
+                }});
                 timings.pageRender = performance.now() - startPageRender;
-                "#
+                "
             )
         } else if let Some(loading_id) = loading_component_id {
             let loading_file_path =
                 route_match.loading.as_ref().map(|l| l.file_path.as_str()).unwrap_or("");
-            let suspense_or_page = r"(useSuspense
-                    ? React.createElement(
-                        React.Suspense,
-                        {
-                          fallback: React.createElement(LoadingComponent, {}),
-                        },
-                        React.createElement(PageComponent, pageProps)
-                      )
-                    : React.createElement(PageComponent, pageProps))"
-                .to_string();
-
+            let page_component_id_json =
+                serde_json::to_string(&page_component_id).unwrap_or_else(|_| "\"\"".to_string());
+            let loading_id_json =
+                serde_json::to_string(&loading_id).unwrap_or_else(|_| "\"\"".to_string());
+            let route_file_json = serde_json::to_string(&route_match.route.file_path)
+                .unwrap_or_else(|_| "\"\"".to_string());
+            let loading_file_json =
+                serde_json::to_string(loading_file_path).unwrap_or_else(|_| "\"\"".to_string());
+            let use_suspense_js = if use_suspense { "true" } else { "false" };
             format!(
-                r#"
-                const PageComponent = globalThis["{}"];
-                if (!PageComponent || typeof PageComponent !== 'function') {{
-                    throw new Error('Page component {} not found in route {}');
-                }}
-
-                const LoadingComponent = globalThis["{}"];
-                if (!LoadingComponent || typeof LoadingComponent !== 'function') {{
-                    throw new Error('Loading component {} not found in route {}');
-                }}
-
-                const pageProps = {};
-                const useSuspense = {};
-                const pageElement = {};
-
+                r"
+                const pageElement = globalThis['~rari'].createPageElement({{
+                    pageComponentId: {page_component_id_json},
+                    pageProps: {page_props_json},
+                    loadingComponentId: {loading_id_json},
+                    useSuspense: {use_suspense_js},
+                    routeFilePath: {route_file_json},
+                    loadingFilePath: {loading_file_json},
+                }});
                 timings.pageRender = performance.now() - startPageRender;
-                "#,
-                page_component_id,
-                page_component_id,
-                route_match.route.file_path,
-                loading_id,
-                loading_id,
-                loading_file_path,
-                page_props_json,
-                if use_suspense { "true" } else { "false" },
-                suspense_or_page,
+                "
             )
         } else {
+            let page_component_id_json =
+                serde_json::to_string(&page_component_id).unwrap_or_else(|_| "\"\"".to_string());
             format!(
-                r#"
-                const PageComponent = globalThis["{page_component_id}"];
-                if (!PageComponent || typeof PageComponent !== 'function') {{
-                    throw new Error('Page component {page_component_id} not found');
-                }}
-                const pageProps = {page_props_json};
-                const pageElement = React.createElement(PageComponent, pageProps);
+                r"
+                const pageElement = globalThis['~rari'].createPageElement({{
+                    pageComponentId: {page_component_id_json},
+                    pageProps: {page_props_json},
+                }});
                 timings.pageRender = performance.now() - startPageRender;
-                "#
+                "
             )
         };
 
@@ -1377,6 +1361,7 @@ impl LayoutRenderer {
                 component_id: utils::create_component_id(&layout.file_path),
                 is_root: layout.is_root,
                 file_path: layout.file_path.clone(),
+                path: layout.path.clone(),
             })
             .collect();
 
@@ -1419,6 +1404,7 @@ impl LayoutRenderer {
             &action_post_url_json,
             capture_stream_id,
             expand_root_layout,
+            &context.reuse_layout_paths,
         );
 
         Ok(script)

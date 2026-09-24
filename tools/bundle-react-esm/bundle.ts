@@ -333,8 +333,8 @@ function createVendorHeader(entry: BundleEntry): string {
   const sources = VENDORED_PACKAGES.map(pkg => `${pkg}@${VENDORED_VERSIONS[pkg]}`).join(', ')
 
   return [
-    `/* eslint-disable eslint-comments/no-unlimited-disable */`,
-    `/* eslint-disable */`,
+    `// eslint-disable eslint-comments/no-unlimited-disable`,
+    `// eslint-disable`,
     `// oxlint-disable`,
     `/**`,
     ` * ${kind}.`,
@@ -459,8 +459,8 @@ async function main(): Promise<void> {
   for (const entry of entries) await bundleEntry(entry)
 
   const indexLines = [
-    `/* eslint-disable eslint-comments/no-unlimited-disable */`,
-    `/* eslint-disable */`,
+    `// eslint-disable eslint-comments/no-unlimited-disable`,
+    `// eslint-disable`,
     `// oxlint-disable`,
     `/**`,
     ` * Re-exports for rari's React server vendor bundle.`,

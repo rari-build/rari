@@ -32,18 +32,6 @@ body {
   animation: none !important;
 }
 
-::view-transition-group(rari-site-nav) {
-  z-index: 100;
-}
-
-::view-transition-old(rari-site-nav) {
-  display: none !important;
-}
-
-::view-transition-new(rari-site-nav) {
-  animation: none !important;
-}
-
 ::view-transition-old(.rari-page-vt),
 ::view-transition-old(.rari-reveal-enter),
 ::view-transition-old(.rari-reveal-exit) {

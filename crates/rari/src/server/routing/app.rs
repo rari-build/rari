@@ -34,7 +34,8 @@ use crate::{
             ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
             OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult,
             TwitterMetadata, component_dist_path, create_layout_context, drain_chunked_stream,
-            sort_flight_protocol,
+            pathname_from_router_state_header, router_state_from_headers,
+            shared_layout_paths_for_navigation, sort_flight_protocol,
         },
         r#static::RscHtmlRenderer,
     },
@@ -132,27 +133,39 @@ fn response_cache_key(
     )
 }
 
+fn rsc_vary_header(cookie_header: Option<&str>, router_state_sensitive: bool) -> String {
+    let mut headers = HeaderMap::new();
+    let mut parts: Vec<&str> = Vec::new();
+    if cookie_header.is_some() {
+        parts.push("Cookie");
+    }
+    if router_state_sensitive {
+        parts.push("rari-router-state");
+    }
+    if !parts.is_empty() {
+        if let Ok(value) = HeaderValue::from_str(&parts.join(", ")) {
+            headers.insert("vary", value);
+        }
+    }
+    merge_vary_with_accept(headers.get("vary"))
+}
+
 fn insert_response_cache_vary_header(
     headers: &mut HeaderMap,
     cookie_header: Option<&str>,
     html: bool,
 ) {
-    let merged =
-        if html { static_html_vary_header(cookie_header) } else { rsc_vary_header(cookie_header) };
+    let merged = if html {
+        static_html_vary_header(cookie_header)
+    } else {
+        rsc_vary_header(cookie_header, false)
+    };
 
     if html || cookie_header.is_some() {
         if let Ok(value) = HeaderValue::from_str(&merged) {
             headers.insert("vary", value);
         }
     }
-}
-
-fn rsc_vary_header(cookie_header: Option<&str>) -> String {
-    let mut headers = HeaderMap::new();
-    if cookie_header.is_some() {
-        headers.insert("vary", HeaderValue::from_static("Cookie"));
-    }
-    merge_vary_with_accept(headers.get("vary"))
 }
 
 async fn should_store_response_cache(
@@ -498,10 +511,14 @@ pub async fn render_rsc_navigation_streaming(
                 format!("{sorted_flight_protocol}\n")
             };
 
+            let router_state_sensitive =
+                context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty();
+            let vary = rsc_vary_header(None, router_state_sensitive);
+
             let mut response_builder = Response::builder()
                 .status(status_code)
                 .header("content-type", "text/x-component")
-                .header("vary", "Accept");
+                .header("vary", vary);
 
             if let Some(ref metadata) = context.metadata
                 && let Ok(metadata_json) = serde_json::to_string(metadata)
@@ -520,10 +537,14 @@ pub async fn render_rsc_navigation_streaming(
         RenderResult::StaticBinary(binary_payload) => {
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
 
+            let router_state_sensitive =
+                context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty();
+            let vary = rsc_vary_header(None, router_state_sensitive);
+
             let mut response_builder = Response::builder()
                 .status(status_code)
                 .header("content-type", "text/x-component")
-                .header("vary", "Accept");
+                .header("vary", vary);
 
             if let Some(ref metadata) = context.metadata
                 && let Ok(metadata_json) = serde_json::to_string(metadata)
@@ -712,8 +733,20 @@ fn render_chunked_response(
         ChunkedContentType::RscFlight => CompressionEncoding::from_accept_encoding(accept_encoding),
     };
     let compressed_stream = compress_stream(byte_stream, encoding);
-    let vary =
-        if encoding.as_header_value().is_some() { "Accept, Accept-Encoding" } else { "Accept" };
+    let router_state_sensitive = matches!(content_type, ChunkedContentType::RscFlight)
+        && (context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty());
+    let vary = {
+        let mut parts: Vec<&str> = Vec::new();
+        if encoding.as_header_value().is_some() {
+            parts.push("Accept-Encoding");
+        }
+        if router_state_sensitive {
+            parts.push("rari-router-state");
+        }
+        let existing =
+            if parts.is_empty() { None } else { HeaderValue::from_str(&parts.join(", ")).ok() };
+        merge_vary_with_accept(existing.as_ref())
+    };
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
     let cache_control = state.config.get_cache_control_for_route(&context.pathname);
@@ -1212,6 +1245,15 @@ pub async fn handle_app_route(
     );
     context.template_navigation_id = utils::http::parse_navigation_id(&context.headers);
 
+    if matches!(render_mode, RenderMode::RscNavigation)
+        && context.template_navigation_id.is_some()
+        && let Some(state_header) = router_state_from_headers(&context.headers)
+        && let Some(from_pathname) = pathname_from_router_state_header(&state_header)
+    {
+        context.reuse_layout_paths =
+            shared_layout_paths_for_navigation(app_router, &from_pathname, &context.pathname);
+    }
+
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
@@ -1296,10 +1338,13 @@ pub async fn handle_app_route(
                         StatusCode::OK
                     };
 
+                    let router_state_sensitive = context.template_navigation_id.is_some()
+                        || !context.reuse_layout_paths.is_empty();
+
                     let mut response_builder = Response::builder()
                         .status(status_code)
                         .header("content-type", "text/x-component")
-                        .header("vary", rsc_vary_header(cookie_header))
+                        .header("vary", rsc_vary_header(cookie_header, router_state_sensitive))
                         .header("x-cache", "MISS");
 
                     let mut cache_headers = HeaderMap::new();
@@ -1319,7 +1364,9 @@ pub async fn handle_app_route(
                     let cache_policy =
                         response::RouteCachePolicy::from_cache_control(cache_control, path);
 
-                    if should_store_response_cache(&state, &cache_policy).await {
+                    let can_cache_rsc = !router_state_sensitive
+                        && should_store_response_cache(&state, &cache_policy).await;
+                    if can_cache_rsc {
                         let response_cache_tags =
                             merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
                         if cookie_header.is_some() {
@@ -1878,6 +1925,7 @@ mod tests {
             pathname: "/".to_string(),
             template_navigation_id: None,
             metadata: None,
+            reuse_layout_paths: Vec::new(),
         }
     }
 

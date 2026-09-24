@@ -4,14 +4,9 @@ import type * as React from 'react'
 import type { NavigationError } from './error-handler'
 import type { NavigationOptions } from './types'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { serializeRouterState } from '@/runtime/flight/serialize-router-state'
 import { normalizePath } from '@/shared/utils/path'
-import {
-  getCustomEventDetail,
-  isError,
-  isHistoryState,
-  isRecord,
-  parseJsonRecord,
-} from '@/shared/utils/type-guards'
+import { getCustomEventDetail, isError, isHistoryState, isRecord } from '@/shared/utils/type-guards'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './error-handler'
 import { extractPathname, isExternalUrl } from './match'
@@ -68,282 +63,6 @@ async function waitForNavigationSettlement(
   })
 }
 
-interface PageMetadata {
-  readonly title?: string
-  readonly description?: string
-  readonly keywords?: readonly string[]
-  readonly viewport?: string
-  readonly canonical?: string
-  readonly openGraph?: {
-    readonly title?: string
-    readonly description?: string
-    readonly url?: string
-    readonly siteName?: string
-    readonly images?: readonly string[]
-    readonly type?: string
-  }
-  readonly twitter?: {
-    readonly card?: string
-    readonly site?: string
-    readonly creator?: string
-    readonly title?: string
-    readonly description?: string
-    readonly images?: readonly string[]
-  }
-  readonly robots?: {
-    readonly index?: boolean
-    readonly follow?: boolean
-    readonly nocache?: boolean
-  }
-}
-
-function updateOrCreateMetaTag(
-  selector: string,
-  attributes: Readonly<{ readonly [key: string]: string }>,
-) {
-  let element = document.querySelector(selector)
-  if (!element) {
-    element = document.createElement('meta')
-    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value)
-
-    document.head.appendChild(element)
-  } else {
-    if (attributes.content) element.setAttribute('content', attributes.content)
-  }
-}
-
-function removeMetaTag(selector: string) {
-  const element = document.querySelector(selector)
-  if (element) element.remove()
-}
-
-function updateBasicMetadata(metadata: PageMetadata): void {
-  if (metadata.title != null && metadata.title !== '') document.title = metadata.title
-
-  if (metadata.description != null && metadata.description !== '') {
-    updateOrCreateMetaTag('meta[name="description"]', {
-      name: 'description',
-      content: metadata.description,
-    })
-  } else {
-    removeMetaTag('meta[name="description"]')
-  }
-
-  if (metadata.keywords && metadata.keywords.length > 0) {
-    updateOrCreateMetaTag('meta[name="keywords"]', {
-      name: 'keywords',
-      content: metadata.keywords.join(', '),
-    })
-  } else {
-    removeMetaTag('meta[name="keywords"]')
-  }
-
-  if (metadata.viewport != null && metadata.viewport !== '') {
-    updateOrCreateMetaTag('meta[name="viewport"]', {
-      name: 'viewport',
-      content: metadata.viewport,
-    })
-  }
-}
-
-function updateCanonicalLink(canonical: string | undefined): void {
-  const canonicalEl = document.querySelector('link[rel="canonical"]')
-
-  if (canonical === undefined) {
-    if (canonicalEl) canonicalEl.remove()
-
-    return
-  }
-
-  if (!canonicalEl) {
-    const newCanonicalEl = document.createElement('link')
-    newCanonicalEl.setAttribute('rel', 'canonical')
-    newCanonicalEl.setAttribute('href', canonical)
-    document.head.appendChild(newCanonicalEl)
-  } else {
-    canonicalEl.setAttribute('href', canonical)
-  }
-}
-
-function updateRobotsMetadata(robots: PageMetadata['robots']): void {
-  if (robots === undefined) {
-    removeMetaTag('meta[name="robots"]')
-    return
-  }
-
-  const robotsContent: string[] = []
-  if (robots.index !== undefined) robotsContent.push(robots.index ? 'index' : 'noindex')
-  if (robots.follow !== undefined) robotsContent.push(robots.follow ? 'follow' : 'nofollow')
-  if (robots.nocache) robotsContent.push('nocache')
-
-  if (robotsContent.length > 0) {
-    updateOrCreateMetaTag('meta[name="robots"]', {
-      name: 'robots',
-      content: robotsContent.join(', '),
-    })
-  } else {
-    removeMetaTag('meta[name="robots"]')
-  }
-}
-
-function updateOpenGraphMetadata(og: PageMetadata['openGraph']): void {
-  if (og === undefined) {
-    removeMetaTag('meta[property="og:title"]')
-    removeMetaTag('meta[property="og:description"]')
-    removeMetaTag('meta[property="og:url"]')
-    removeMetaTag('meta[property="og:site_name"]')
-    removeMetaTag('meta[property="og:type"]')
-    document.querySelectorAll('meta[property="og:image"]').forEach(el => {
-      el.remove()
-    })
-    return
-  }
-
-  if (og.title != null && og.title !== '') {
-    updateOrCreateMetaTag('meta[property="og:title"]', {
-      property: 'og:title',
-      content: og.title,
-    })
-  } else {
-    removeMetaTag('meta[property="og:title"]')
-  }
-
-  if (og.description != null && og.description !== '') {
-    updateOrCreateMetaTag('meta[property="og:description"]', {
-      property: 'og:description',
-      content: og.description,
-    })
-  } else {
-    removeMetaTag('meta[property="og:description"]')
-  }
-
-  if (og.url != null && og.url !== '') {
-    updateOrCreateMetaTag('meta[property="og:url"]', {
-      property: 'og:url',
-      content: og.url,
-    })
-  } else {
-    removeMetaTag('meta[property="og:url"]')
-  }
-
-  if (og.siteName != null && og.siteName !== '') {
-    updateOrCreateMetaTag('meta[property="og:site_name"]', {
-      property: 'og:site_name',
-      content: og.siteName,
-    })
-  } else {
-    removeMetaTag('meta[property="og:site_name"]')
-  }
-
-  if (og.type != null && og.type !== '') {
-    updateOrCreateMetaTag('meta[property="og:type"]', {
-      property: 'og:type',
-      content: og.type,
-    })
-  } else {
-    removeMetaTag('meta[property="og:type"]')
-  }
-
-  if (og.images && og.images.length > 0) {
-    document.querySelectorAll('meta[property="og:image"]').forEach(el => {
-      el.remove()
-    })
-    for (const image of og.images) {
-      const meta = document.createElement('meta')
-      meta.setAttribute('property', 'og:image')
-      meta.setAttribute('content', image)
-      document.head.appendChild(meta)
-    }
-  } else {
-    document.querySelectorAll('meta[property="og:image"]').forEach(el => {
-      el.remove()
-    })
-  }
-}
-
-function updateTwitterMetadata(twitter: PageMetadata['twitter']): void {
-  if (twitter === undefined) {
-    removeMetaTag('meta[name="twitter:card"]')
-    removeMetaTag('meta[name="twitter:site"]')
-    removeMetaTag('meta[name="twitter:creator"]')
-    removeMetaTag('meta[name="twitter:title"]')
-    removeMetaTag('meta[name="twitter:description"]')
-    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => {
-      el.remove()
-    })
-    return
-  }
-
-  if (twitter.card != null && twitter.card !== '') {
-    updateOrCreateMetaTag('meta[name="twitter:card"]', {
-      name: 'twitter:card',
-      content: twitter.card,
-    })
-  } else {
-    removeMetaTag('meta[name="twitter:card"]')
-  }
-
-  if (twitter.site != null && twitter.site !== '') {
-    updateOrCreateMetaTag('meta[name="twitter:site"]', {
-      name: 'twitter:site',
-      content: twitter.site,
-    })
-  } else {
-    removeMetaTag('meta[name="twitter:site"]')
-  }
-
-  if (twitter.creator != null && twitter.creator !== '') {
-    updateOrCreateMetaTag('meta[name="twitter:creator"]', {
-      name: 'twitter:creator',
-      content: twitter.creator,
-    })
-  } else {
-    removeMetaTag('meta[name="twitter:creator"]')
-  }
-
-  if (twitter.title != null && twitter.title !== '') {
-    updateOrCreateMetaTag('meta[name="twitter:title"]', {
-      name: 'twitter:title',
-      content: twitter.title,
-    })
-  } else {
-    removeMetaTag('meta[name="twitter:title"]')
-  }
-
-  if (twitter.description != null && twitter.description !== '') {
-    updateOrCreateMetaTag('meta[name="twitter:description"]', {
-      name: 'twitter:description',
-      content: twitter.description,
-    })
-  } else {
-    removeMetaTag('meta[name="twitter:description"]')
-  }
-
-  if (twitter.images && twitter.images.length > 0) {
-    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => {
-      el.remove()
-    })
-    for (const image of twitter.images) {
-      const meta = document.createElement('meta')
-      meta.setAttribute('name', 'twitter:image')
-      meta.setAttribute('content', image)
-      document.head.appendChild(meta)
-    }
-  } else {
-    document.querySelectorAll('meta[name="twitter:image"]').forEach(el => {
-      el.remove()
-    })
-  }
-}
-
-function updateDocumentMetadata(metadata: PageMetadata): void {
-  updateBasicMetadata(metadata)
-  updateCanonicalLink(metadata.canonical)
-  updateRobotsMetadata(metadata.robots)
-  updateOpenGraphMetadata(metadata.openGraph)
-  updateTwitterMetadata(metadata.twitter)
-}
-
 export interface ClientRouterProps {
   readonly children: React.ReactNode
   readonly initialRoute: string
@@ -368,10 +87,6 @@ interface HistoryState {
   scrollPosition?: { x: number; y: number }
   timestamp: number
   key: string
-}
-
-function isPageMetadata(value: unknown): value is PageMetadata {
-  return isRecord(value)
 }
 
 export function ClientRouter({ children, initialRoute }: ClientRouterProps): React.ReactNode {
@@ -471,19 +186,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
     }
 
     committedUrlRef.current = nextUrl
-  }
-
-  const processMetadata = (response: Response) => {
-    try {
-      const metadataHeader = response.headers.get('x-rari-metadata')
-      if (metadataHeader != null && metadataHeader !== '') {
-        const decodedMetadata = decodeURIComponent(metadataHeader)
-        const metadataRecord = parseJsonRecord(decodedMetadata)
-        if (metadataRecord && isPageMetadata(metadataRecord)) updateDocumentMetadata(metadataRecord)
-      }
-    } catch (error) {
-      console.warn('[rari] Router: Failed to parse x-rari-metadata header:', error)
-    }
   }
 
   const handleScrollAfterNavigation = (
@@ -623,6 +325,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
           headers: {
             'Accept': 'text/x-component',
             'rari-navigation-id': String(navigationId),
+            'rari-router-state': serializeRouterState(),
           },
           cache: 'no-store',
           signal: abortController.signal,
@@ -688,8 +391,6 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
           })
           return
         }
-
-        processMetadata(response)
 
         completeNavigation(routeIdentity, hash, options, navigationId, settledUrl)
 

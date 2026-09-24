@@ -53,10 +53,10 @@ async function registerComponent(
       }
     }
 
-    g['~rari'] ??= {}
+    const rari = (g['~rari'] ??= {})
 
-    g['~rari'].exportOwners ??= {}
-    const exportOwners = g['~rari'].exportOwners
+    rari.exportOwners ??= {}
+    const exportOwners = rari.exportOwners
 
     if (!skipGlobalBinding && !isApiRoute && !isServerAction) {
       const isDebugLogging = (() => {
@@ -91,10 +91,10 @@ async function registerComponent(
       }
     }
 
-    g['~rsc'] ??= {}
-    g['~rsc'].modules ??= {}
+    const rsc = (g['~rsc'] ??= {})
+    rsc.modules ??= {}
 
-    g['~rsc'].modules[componentId] = moduleNamespace
+    rsc.modules[componentId] = moduleNamespace
 
     const exportNames = Object.keys(moduleNamespace)
 
@@ -112,8 +112,6 @@ async function registerComponent(
   }
 }
 
-g['~rari'] ??= {}
-
-g['~rari'].componentLoader = {
+;(g['~rari'] ??= {}).componentLoader = {
   registerComponent,
 }

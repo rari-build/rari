@@ -3,48 +3,23 @@
  * Edge provides $$FORM_ACTION encoding; browser client only has callServer RPC.
  */
 
-function replaceAnchoredBlock(
-  source: string,
-  anchor: string,
-  replacement: string,
-  context: string,
-): string {
-  const first = source.indexOf(anchor)
-  if (first === -1) {
-    throw new Error(
-      `Failed to patch flight browser client: anchor for ${context} not found. ` +
-        `The react-server-dom-webpack sources likely changed shape after a version bump; ` +
-        `update the anchors in patch-flight-browser-client.ts.`,
-    )
-  }
-  if (source.includes(anchor, first + 1)) {
-    throw new Error(
-      `Failed to patch flight browser client: anchor for ${context} matched more than once. ` +
-        `Update the anchors in patch-flight-browser-client.ts to be unambiguous.`,
-    )
-  }
-  return source.slice(0, first) + replacement + source.slice(first + anchor.length)
-}
+const FORM_ACTION_RETURN_RE =
+  /return \{\s*name: referenceClosure,\s*method: "POST",\s*encType: "multipart\/form-data",\s*data: data\s*\};/
 
-export function patchBrowserClientForFormActions(
-  browserSource: string,
-  edgeSource: string,
-): string {
-  const helpersStart = edgeSource.indexOf('var boundCache = new WeakMap();')
-  const bindEnd = edgeSource.indexOf('function createBoundServerReference', helpersStart)
-  if (helpersStart === -1 || bindEnd === -1) {
-    throw new Error('Failed to locate edge client form-action helpers for browser patch')
-  }
+const REGISTER_BOUND_SERVER_REFERENCE_RE =
+  /function registerBoundServerReference\(reference, id, bound\) \{\s*knownServerReferences\.has\(reference\) \|\|\s*knownServerReferences\.set\(reference, \{\s*id: id,\s*originalBind: reference\.bind,\s*bound: bound\s*\}\);\s*\}/
 
-  const formActionBlock = replaceAnchoredBlock(
-    edgeSource.slice(helpersStart, bindEnd),
-    `return {
-    name: referenceClosure,
-    method: "POST",
-    encType: "multipart/form-data",
-    data: data
-  };`,
-    `function resolveRariFormActionUrl() {
+const DEV_VALIDATED_STORE_RE =
+  /Object\.defineProperty\(value\._store, "validated", \{\s*configurable: !1,\s*enumerable: !1,\s*writable: !0,\s*value: i\s*\}\);/
+
+const DEV_VALIDATED_STORE_REPLACEMENT = `Object.defineProperty(value._store, "validated", {
+                configurable: !1,
+                enumerable: !1,
+                writable: !0,
+                value: void 0 === i ? 1 : i
+              });`
+
+const FORM_ACTION_RETURN_REPLACEMENT = `function resolveRariFormActionUrl() {
     var g = typeof globalThis !== "undefined" ? globalThis : {};
     var rari = g["~rari"];
     if (rari && rari.actionPostUrl)
@@ -59,21 +34,91 @@ export function patchBrowserClientForFormActions(
     encType: "multipart/form-data",
     action: resolveRariFormActionUrl(),
     data: data
-  };`,
+  };`
+
+function replaceOnce(
+  source: string,
+  pattern: RegExp,
+  replacement: string,
+  context: string,
+): string {
+  const global = new RegExp(
+    pattern.source,
+    pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
+  )
+  const matches = [...source.matchAll(global)]
+  if (matches.length === 0) {
+    throw new Error(
+      `Failed to patch flight browser client: pattern for ${context} not found. ` +
+        `The react-server-dom-webpack sources likely changed shape after a version bump; ` +
+        `update the anchors in patch-flight-browser-client.ts.`,
+    )
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `Failed to patch flight browser client: pattern for ${context} matched more than once. ` +
+        `Update the anchors in patch-flight-browser-client.ts to be unambiguous.`,
+    )
+  }
+  const match = matches[0]
+  return source.slice(0, match.index) + replacement + source.slice(match.index + match[0].length)
+}
+
+function patchDevValidatedDefault(browserSource: string): string {
+  if (!DEV_VALIDATED_STORE_RE.test(browserSource)) return browserSource
+  DEV_VALIDATED_STORE_RE.lastIndex = 0
+  return replaceOnce(
+    browserSource,
+    DEV_VALIDATED_STORE_RE,
+    DEV_VALIDATED_STORE_REPLACEMENT,
+    'DEV _store.validated default for production wire',
+  )
+}
+
+function extractEdgeFormActionHelpers(edgeSource: string): string {
+  const prodBoundCache = edgeSource.indexOf('var boundCache = new WeakMap();')
+  const encodeFormData = edgeSource.indexOf('function encodeFormData')
+  const helpersStart =
+    prodBoundCache !== -1 ? prodBoundCache : encodeFormData !== -1 ? encodeFormData : -1
+  const bindEnd = edgeSource.indexOf('function createBoundServerReference', helpersStart)
+  if (helpersStart === -1 || bindEnd === -1) {
+    throw new Error('Failed to locate edge client form-action helpers for browser patch')
+  }
+
+  let block = edgeSource.slice(helpersStart, bindEnd)
+  if (!block.includes('var boundCache = new WeakMap()')) {
+    block = `var boundCache = new WeakMap();\n${block}`
+  }
+  const hasFunctionBindDecl = /FunctionBind\s*=\s*Function\.prototype\.bind/.test(block)
+  const hasArraySliceDecl = /ArraySlice\s*=\s*Array\.prototype\.slice/.test(block)
+  if (!hasFunctionBindDecl && !hasArraySliceDecl) {
+    block = `var FunctionBind = Function.prototype.bind,\n  ArraySlice = Array.prototype.slice;\n${block}`
+  } else if (!hasFunctionBindDecl) {
+    block = `var FunctionBind = Function.prototype.bind;\n${block}`
+  } else if (!hasArraySliceDecl) {
+    block = `var ArraySlice = Array.prototype.slice;\n${block}`
+  }
+
+  return replaceOnce(
+    block,
+    FORM_ACTION_RETURN_RE,
+    FORM_ACTION_RETURN_REPLACEMENT,
     'edge $$FORM_ACTION return block',
   )
+}
 
-  return replaceAnchoredBlock(
+export function patchBrowserClientForFormActions(
+  browserSource: string,
+  edgeSource: string,
+): string {
+  const formActionBlock = extractEdgeFormActionHelpers(edgeSource)
+
+  const withFormActions = replaceOnce(
     browserSource,
-    `function registerBoundServerReference(reference, id, bound) {
-  knownServerReferences.has(reference) ||
-    knownServerReferences.set(reference, {
-      id: id,
-      originalBind: reference.bind,
-      bound: bound
-    });
-}`,
+    REGISTER_BOUND_SERVER_REFERENCE_RE,
     formActionBlock,
     'browser registerBoundServerReference',
   )
+
+  return patchDevValidatedDefault(withFormActions)
 }

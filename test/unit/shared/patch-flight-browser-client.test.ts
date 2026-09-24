@@ -6,10 +6,14 @@ import { describe, expect, it } from 'vite-plus/test'
 
 const require = createRequire(import.meta.url)
 
-function resolveReactCjs(pkg: string, cjsFile: string): string {
+function resolveReactCjs(
+  pkg: string,
+  cjsFile: string,
+  build: 'production' | 'development' = 'production',
+): string {
   const pkgJson = require.resolve(`${pkg}/package.json`)
   const pkgDir = path.dirname(pkgJson)
-  return path.join(pkgDir, 'cjs', `${cjsFile}.production.js`)
+  return path.join(pkgDir, 'cjs', `${cjsFile}.${build}.js`)
 }
 
 describe('patchBrowserClientForFormActions', () => {
@@ -30,6 +34,60 @@ describe('patchBrowserClientForFormActions', () => {
     expect(patched).toContain('$$FORM_ACTION')
     expect(patched).toContain('$$IS_SIGNATURE_EQUAL')
     expect(patched).not.toContain('function registerBoundServerReference(reference, id, bound) {')
+  })
+
+  it('injects form-action helpers from the development edge and browser bundles', () => {
+    const browserSource = fs.readFileSync(
+      resolveReactCjs(
+        'react-server-dom-webpack',
+        'react-server-dom-webpack-client.browser',
+        'development',
+      ),
+      'utf-8',
+    )
+    const edgeSource = fs.readFileSync(
+      resolveReactCjs(
+        'react-server-dom-webpack',
+        'react-server-dom-webpack-client.edge',
+        'development',
+      ),
+      'utf-8',
+    )
+
+    const patched = patchBrowserClientForFormActions(browserSource, edgeSource)
+
+    expect(patched).toContain('var boundCache = new WeakMap();')
+    expect(patched).toContain('FunctionBind')
+    expect(patched).toContain('ArraySlice')
+    expect(patched).toContain('action: resolveRariFormActionUrl()')
+    expect(patched).toContain('$$FORM_ACTION')
+  })
+
+  it('prepends FunctionBind and ArraySlice when absent from the extracted edge block', () => {
+    const returnBlock = `return {
+    name: referenceClosure,
+    method: "POST",
+    encType: "multipart/form-data",
+    data: data
+  };`
+    const fakeEdgeSource = [
+      'function encodeFormData(reference) {',
+      returnBlock,
+      '}',
+      'function bind() { return FunctionBind.apply(this, arguments); }',
+      'function createBoundServerReference() {}',
+    ].join('\n')
+    const browserSource = fs.readFileSync(
+      resolveReactCjs('react-server-dom-webpack', 'react-server-dom-webpack-client.browser'),
+      'utf-8',
+    )
+
+    const patched = patchBrowserClientForFormActions(browserSource, fakeEdgeSource)
+
+    expect(patched).toContain('var boundCache = new WeakMap();')
+    expect(patched).toContain('var FunctionBind = Function.prototype.bind')
+    expect(patched).toContain('ArraySlice = Array.prototype.slice')
+    expect(patched.indexOf('FunctionBind')).toBeLessThan(patched.indexOf('function bind()'))
   })
 
   it('throws when the browser anchor is missing instead of silently no-oping', () => {

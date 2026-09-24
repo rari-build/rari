@@ -1,9 +1,12 @@
+use serde_json::{Value, json};
+
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct LayoutInfo {
     pub component_id: String,
     pub is_root: bool,
     pub file_path: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +58,7 @@ impl RouteComposer {
             pathname_json,
             None,
             true,
+            &[],
         )
     }
 
@@ -74,309 +78,87 @@ impl RouteComposer {
         action_post_url_json: &str,
         capture_stream_id: Option<&str>,
         expand_root_layout: bool,
+        reuse_layout_paths: &[String],
     ) -> String {
-        let mut script = format!(
+        let layouts_json = Self::layouts_json(layouts);
+        let templates_json = Self::templates_json(templates);
+        let error_component_id_json =
+            serde_json::to_string(error_boundary.map(|b| b.component_id.as_str()).unwrap_or(""))
+                .unwrap_or_else(|_| "\"\"".to_string());
+        let reuse_paths_json =
+            serde_json::to_string(reuse_layout_paths).unwrap_or_else(|_| "[]".to_string());
+        let capture_stream_id_json = match capture_stream_id {
+            Some(id) => serde_json::to_string(id).unwrap_or_else(|_| "null".to_string()),
+            None => "null".to_string(),
+        };
+        let defer_rsc_js = if defer_rsc { "true" } else { "false" };
+        let expand_root_js = if expand_root_layout { "true" } else { "false" };
+
+        format!(
             r"
             (async () => {{
                 const timings = {{}};
                 const startTotal = performance.now();
 
-                const React = globalThis.React;
-
                 if (!globalThis['~rari']) globalThis['~rari'] = {{}};
-                globalThis['~rari'].actionPostUrl = {action_post_url_json};
-
-                if (!globalThis['~suspense']) globalThis['~suspense'] = {{}};
-                globalThis['~suspense'].discoveredBoundaries = [];
-                globalThis['~suspense'].pendingPromises = [];
-                globalThis['~suspense'].promises = {{}};
-                globalThis['~suspense'].currentBoundaryId = null;
+                if (typeof globalThis['~rari'].composeRoute !== 'function') {{
+                    throw new Error('[rari] composeRoute not loaded');
+                }}
+                if (typeof globalThis['~rari'].createPageElement !== 'function') {{
+                    throw new Error('[rari] createPageElement not loaded');
+                }}
 
                 const startPageRender = performance.now();
                 {page_render_script}
-            "
-        );
 
-        let mut current_element = "pageElement".to_string();
-
-        for (i, template) in templates.iter().rev().enumerate() {
-            let template_var = format!("template{i}");
-            script.push_str(&Self::generate_template_wrapper(
-                i,
-                &template.component_id,
-                &template.file_path,
-                &current_element,
-                &template_var,
-                template_key_json,
-            ));
-            current_element = template_var;
-        }
-
-        let nested_layouts: Vec<&LayoutInfo> =
-            layouts.iter().filter(|layout| !layout.is_root).collect();
-        let root_layouts: Vec<&LayoutInfo> =
-            layouts.iter().filter(|layout| layout.is_root).collect();
-
-        let mut layout_index = 0usize;
-        for layout in nested_layouts.iter().rev() {
-            let layout_var = format!("layout{layout_index}");
-            script.push_str(&Self::generate_layout_wrapper(
-                layout_index,
-                &layout.component_id,
-                &current_element,
-                &layout_var,
-                pathname_json,
-                false,
-            ));
-            current_element = layout_var;
-            layout_index += 1;
-        }
-
-        script.push_str(&Self::generate_error_boundary_wrap(&current_element, error_boundary));
-        current_element = "errorBoundedElement".to_string();
-
-        for layout in root_layouts.iter().rev() {
-            let layout_var = format!("layout{layout_index}");
-            script.push_str(&Self::generate_layout_wrapper(
-                layout_index,
-                &layout.component_id,
-                &current_element,
-                &layout_var,
-                pathname_json,
-                expand_root_layout,
-            ));
-            current_element = layout_var;
-            layout_index += 1;
-        }
-
-        script.push_str(&Self::generate_rsc_conversion(
-            &current_element,
-            metadata_json,
-            defer_rsc,
-            capture_stream_id,
-        ));
-
-        script
-    }
-
-    fn generate_layout_wrapper(
-        index: usize,
-        layout_component_id: &str,
-        current_element: &str,
-        layout_var: &str,
-        pathname_json: &str,
-        expand_document: bool,
-    ) -> String {
-        let layout_result = if expand_document {
-            format!(
-                r"
-                const __layoutProps{index} = {{ children: {current_element}, pathname: {pathname_json} }};
-                let {layout_var};
-                try {{
-                    {layout_var} = LayoutComponent{index}(__layoutProps{index});
-                    if ({layout_var} != null && typeof {layout_var}.then === 'function') {{
-                        {layout_var} = await {layout_var};
-                    }}
-                }} catch (__layoutExpandError{index}) {{
-                    {layout_var} = React.createElement(LayoutComponent{index}, __layoutProps{index});
-                }}
-                "
-            )
-        } else {
-            format!(
-                r"
-                const layoutResult{index} = React.createElement(LayoutComponent{index}, {{ children: {current_element}, pathname: {pathname_json} }});
-                const {layout_var} = layoutResult{index};
-                "
-            )
-        };
-
-        format!(
-            r#"
-                const startLayout{index} = performance.now();
-                const LayoutComponent{index} = globalThis["{layout_component_id}"];
-                if (!LayoutComponent{index} || typeof LayoutComponent{index} !== 'function') {{
-                    throw new Error('Layout component {layout_component_id} not found');
-                }}
-
-                {layout_result}
-                timings.layout{index} = performance.now() - startLayout{index};
-                "#
-        )
-    }
-
-    fn generate_template_wrapper(
-        index: usize,
-        template_component_id: &str,
-        template_file_path: &str,
-        current_element: &str,
-        template_var: &str,
-        template_key_json: &str,
-    ) -> String {
-        let ssr_module_key = super::utils::normalize_route_component_path(template_file_path);
-        let ssr_module_key_json = serde_json::to_string(&ssr_module_key)
-            .unwrap_or_else(|_| format!("\"{}\"", ssr_module_key.replace('"', "\\\"")));
-
-        format!(
-            r#"
-            const startTemplate{index} = performance.now();
-            let TemplateComponent{index} = globalThis["{template_component_id}"];
-            if (typeof TemplateComponent{index} !== 'function') {{
-                const resolveTemplateExport{index} = (moduleNamespace) => {{
-                    if (moduleNamespace == null) return null;
-                    const resolved = moduleNamespace.default
-                        ?? Object.values(moduleNamespace).find((value) => typeof value === 'function');
-                    return typeof resolved === 'function' ? resolved : null;
-                }};
-                TemplateComponent{index} = resolveTemplateExport{index}(
-                    globalThis['~rsc']?.modules?.["{template_component_id}"]
-                );
-                if (typeof TemplateComponent{index} !== 'function') {{
-                    const ssrModules{index} = globalThis['~rari']?.ssrModules;
-                    TemplateComponent{index} = resolveTemplateExport{index}(
-                        ssrModules{index}?.["{template_component_id}"]
-                    ) ?? resolveTemplateExport{index}(
-                        ssrModules{index}?.[{ssr_module_key_json}]
-                    ) ?? resolveTemplateExport{index}(
-                        ssrModules{index}?.[{ssr_module_key_json} + '#default']
-                    );
-                }}
-            }}
-            if (!TemplateComponent{index} || typeof TemplateComponent{index} !== 'function') {{
-                throw new Error('Template component {template_component_id} not found');
-            }}
-
-            const templateKey{index} = {template_key_json};
-            const templateResult{index} = React.createElement(
-                TemplateComponent{index},
-                {{ key: templateKey{index}, children: {current_element} }},
-            );
-            const {template_var} = templateResult{index};
-            timings.template{index} = performance.now() - startTemplate{index};
-            "#
-        )
-    }
-
-    fn generate_error_boundary_wrap(
-        current_element: &str,
-        error_boundary: Option<&ErrorBoundaryInfo>,
-    ) -> String {
-        let error_component_id = error_boundary.map(|b| b.component_id.as_str()).unwrap_or("");
-        let error_component_id_json =
-            serde_json::to_string(error_component_id).unwrap_or_else(|_| "\"\"".to_string());
-        format!(
-            r"
-                const errorComponentId = {error_component_id_json};
-                const wrapperComponentId = 'virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper';
-
-                const ErrorWrapper = {{
-                    $$typeof: Symbol.for('react.client.reference'),
-                    $$id: wrapperComponentId,
-                    $$async: false,
-                }};
-                const errorBoundedElement = globalThis.React.createElement(
-                    ErrorWrapper,
-                    {{ errorComponentId: errorComponentId }},
-                    {current_element}
-                );
-                "
-        )
-    }
-
-    fn generate_rsc_conversion(
-        final_element: &str,
-        metadata_json: &str,
-        defer_rsc: bool,
-        capture_stream_id: Option<&str>,
-    ) -> String {
-        let rsc_render = if defer_rsc {
-            if let Some(stream_id) = capture_stream_id {
-                let stream_id_json =
-                    serde_json::to_string(stream_id).unwrap_or_else(|_| "\"\"".to_string());
-                format!(
-                    r"
-                if (!globalThis['~rari']) globalThis['~rari'] = {{}};
-                if (!globalThis['~rari'].capturedByStream) globalThis['~rari'].capturedByStream = Object.create(null);
-                if (!globalThis['~rari'].blockingHeadByStream) globalThis['~rari'].blockingHeadByStream = Object.create(null);
-                globalThis['~rari'].capturedByStream[{stream_id_json}] = elementToRender;
-                globalThis['~rari'].blockingHeadByStream[{stream_id_json}] = __blockingHeadHtml;
-                return;
-            "
-                )
-            } else {
-                r"
-                if (!globalThis['~rari']) globalThis['~rari'] = {};
-                if (globalThis['~rari'].isActionRefreshCompose) {
-                    globalThis['~rari'].actionRefreshElement = elementToRender;
-                } else {
-                    globalThis['~rari'].capturedElement = elementToRender;
-                }
-                globalThis['~rari'].blockingHeadScriptsHtml = __blockingHeadHtml;
-                return;
-            "
-                .to_string()
-            }
-        } else {
-            r"
-                let rscData = await globalThis.renderToRsc(elementToRender);
-            "
-            .to_string()
-        };
-
-        format!(
-            r"
-
-                const startRSC = performance.now();
-
-                let elementToRender = {final_element};
-                const __rariMetadata = {metadata_json};
-                if (
-                    __rariMetadata &&
-                    typeof __rariMetadata === 'object' &&
-                    Object.keys(__rariMetadata).length > 0 &&
-                    typeof globalThis['~rari']?.injectMetadataIntoDocument === 'function'
-                ) {{
-                    elementToRender = await globalThis['~rari'].injectMetadataIntoDocument(
-                        elementToRender,
-                        __rariMetadata,
-                    );
-                }}
-                let __blockingHeadHtml = '';
-                if (typeof globalThis['~rari']?.hoistBlockingHeadScripts === 'function') {{
-                    const __hoisted = globalThis['~rari'].hoistBlockingHeadScripts(elementToRender);
-                    elementToRender = __hoisted.element;
-                    __blockingHeadHtml =
-                        typeof __hoisted.html === 'string' ? __hoisted.html : '';
-                }}
-                {rsc_render}
-
-                timings.rscConversion = performance.now() - startRSC;
-
-                timings.total = performance.now() - startTotal;
-
-                const result = {{
-                    rsc_data: rscData,
-                    boundaries: globalThis['~suspense']?.discoveredBoundaries || [],
-                    pending_promises: globalThis['~suspense']?.pendingPromises || [],
-                    has_suspense: (globalThis['~suspense']?.discoveredBoundaries && globalThis['~suspense'].discoveredBoundaries.length > 0) ||
-                                 (globalThis['~suspense']?.pendingPromises && globalThis['~suspense'].pendingPromises.length > 0),
-                    timings: timings,
+                return await globalThis['~rari'].composeRoute({{
+                    pageElement,
+                    layouts: {layouts_json},
+                    templates: {templates_json},
+                    pathname: {pathname_json},
+                    templateKey: {template_key_json},
+                    errorComponentId: {error_component_id_json},
                     metadata: {metadata_json},
-                    success: true
-                }};
-
-                try {{
-                    const jsonString = JSON.stringify(result);
-                    const cleanResult = JSON.parse(jsonString);
-                    globalThis['~rsc'].renderResult = cleanResult;
-                    return cleanResult;
-                }} catch (jsonError) {{
-                    globalThis['~rsc'].renderResult = result;
-                    return result;
-                }}
+                    deferRsc: {defer_rsc_js},
+                    captureStreamId: {capture_stream_id_json},
+                    expandRootLayout: {expand_root_js},
+                    reuseLayoutPaths: {reuse_paths_json},
+                    actionPostUrl: {action_post_url_json},
+                    timings,
+                    startTotal,
+                }});
             }})()
             "
         )
+    }
+
+    fn layouts_json(layouts: &[LayoutInfo]) -> String {
+        let value: Vec<Value> = layouts
+            .iter()
+            .map(|layout| {
+                json!({
+                    "componentId": layout.component_id,
+                    "isRoot": layout.is_root,
+                    "filePath": layout.file_path,
+                    "path": layout.path,
+                })
+            })
+            .collect();
+        serde_json::to_string(&value).unwrap_or_else(|_| "[]".to_string())
+    }
+
+    fn templates_json(templates: &[TemplateInfo]) -> String {
+        let value: Vec<Value> = templates
+            .iter()
+            .map(|template| {
+                json!({
+                    "componentId": template.component_id,
+                    "filePath": template.file_path,
+                    "ssrModuleKey": super::utils::normalize_route_component_path(&template.file_path),
+                })
+            })
+            .collect();
+        serde_json::to_string(&value).unwrap_or_else(|_| "[]".to_string())
     }
 }
 
@@ -384,6 +166,7 @@ impl RouteComposer {
 #[expect(clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::rendering::base::constants::ROUTE_COMPOSER_SCRIPT;
 
     #[test]
     fn test_layout_info_creation() {
@@ -391,6 +174,7 @@ mod tests {
             component_id: "Layout".to_string(),
             is_root: true,
             file_path: "app/layout.tsx".to_string(),
+            path: "/".to_string(),
         };
         assert_eq!(layout.component_id, "Layout");
         assert!(layout.is_root);
@@ -403,6 +187,7 @@ mod tests {
             component_id: "Layout".to_string(),
             is_root: false,
             file_path: "app/layout.tsx".to_string(),
+            path: "/".to_string(),
         };
         let cloned = layout.clone();
         assert_eq!(layout.component_id, cloned.component_id);
@@ -416,9 +201,13 @@ mod tests {
             RouteComposer::build_composition_script("const pageElement = Page();", &[], "\"/\"");
 
         assert!(script.contains("const pageElement = Page();"));
-        assert!(script.contains("errorBoundedElement"));
-        assert!(script.contains("elementToRender = errorBoundedElement"));
-        assert!(!script.contains("LayoutComponent"));
+        assert!(script.contains("composeRoute"));
+        assert!(script.contains("layouts: []"));
+        assert!(script.contains("createPageElement"));
+        assert!(
+            !script.contains("\"componentId\":\"RootLayout\""),
+            "empty layouts must not serialize a RootLayout entry"
+        );
     }
 
     #[test]
@@ -427,6 +216,7 @@ mod tests {
             component_id: "RootLayout".to_string(),
             is_root: true,
             file_path: "app/layout.tsx".to_string(),
+            path: "/".to_string(),
         }];
 
         let script = RouteComposer::build_composition_script(
@@ -436,14 +226,10 @@ mod tests {
         );
 
         assert!(script.contains("const pageElement = Page();"));
-        assert!(script.contains("errorBoundedElement"));
-        assert!(script.contains("LayoutComponent0"));
+        assert!(script.contains("composeRoute"));
         assert!(script.contains("RootLayout"));
-        assert!(script.contains("children: errorBoundedElement"));
-        assert!(script.contains("elementToRender = layout0"));
-        assert!(script.contains("LayoutComponent0(__layoutProps0)"));
-        assert!(script.contains("catch (__layoutExpandError0)"));
-        assert!(script.contains("React.createElement(LayoutComponent0, __layoutProps0)"));
+        assert!(script.contains("\"isRoot\":true"));
+        assert!(script.contains("expandRootLayout: true"));
     }
 
     #[test]
@@ -452,6 +238,7 @@ mod tests {
             component_id: "RootLayout".to_string(),
             is_root: true,
             file_path: "app/layout.tsx".to_string(),
+            path: "/".to_string(),
         }];
 
         let script = RouteComposer::build_composition_script_with_templates(
@@ -466,10 +253,13 @@ mod tests {
             "\"/\"",
             Some("stream-1"),
             true,
+            &[],
         );
 
-        assert!(script.contains("LayoutComponent0(__layoutProps0)"));
-        assert!(script.contains("catch (__layoutExpandError0)"));
+        assert!(script.contains("expandRootLayout: true"));
+        assert!(script.contains("deferRsc: true"));
+        assert!(script.contains("\"stream-1\""));
+        assert!(script.contains("RootLayout"));
     }
 
     #[test]
@@ -479,11 +269,13 @@ mod tests {
                 component_id: "RootLayout".to_string(),
                 is_root: true,
                 file_path: "app/layout.tsx".to_string(),
+                path: "/".to_string(),
             },
             LayoutInfo {
                 component_id: "DashboardLayout".to_string(),
                 is_root: false,
                 file_path: "app/dashboard/layout.tsx".to_string(),
+                path: "/".to_string(),
             },
         ];
 
@@ -493,126 +285,13 @@ mod tests {
             "\"/dashboard\"",
         );
 
-        assert!(script.contains("LayoutComponent0"));
-        assert!(script.contains("LayoutComponent1"));
         assert!(script.contains("DashboardLayout"));
         assert!(script.contains("RootLayout"));
-        assert!(script.contains("children: pageElement"));
-        assert!(script.contains("children: errorBoundedElement"));
-        assert!(script.contains("elementToRender = layout1"));
-        assert!(script.contains("React.createElement(LayoutComponent0"));
-        assert!(script.contains("LayoutComponent1(__layoutProps1)"));
-        assert!(script.contains("catch (__layoutExpandError1)"));
-        assert!(script.contains("React.createElement(LayoutComponent1, __layoutProps1)"));
         let dashboard_pos = script.find("DashboardLayout").expect("dashboard");
-        let error_pos = script.find("errorBoundedElement =").expect("error wrap");
         let root_pos = script.find("RootLayout").expect("root");
-        assert!(dashboard_pos < error_pos && error_pos < root_pos);
-    }
-
-    #[test]
-    fn test_generate_layout_wrapper() {
-        let wrapper = RouteComposer::generate_layout_wrapper(
-            0,
-            "TestLayout",
-            "pageElement",
-            "layout0",
-            "\"/test\"",
-            false,
-        );
-
-        assert!(wrapper.contains("LayoutComponent0"));
-        assert!(wrapper.contains("TestLayout"));
-        assert!(wrapper.contains("pageElement"));
-        assert!(wrapper.contains("layout0"));
-        assert!(wrapper.contains("\"/test\""));
-        assert!(wrapper.contains("timings.layout0"));
-        assert!(wrapper.contains("React.createElement(LayoutComponent0"));
-    }
-
-    #[test]
-    fn test_generate_root_layout_wrapper_expands_document() {
-        let wrapper = RouteComposer::generate_layout_wrapper(
-            0,
-            "RootLayout",
-            "errorBoundedElement",
-            "layout0",
-            "\"/\"",
-            true,
-        );
-
-        assert!(wrapper.contains("LayoutComponent0(__layoutProps0)"));
-        assert!(wrapper.contains("catch (__layoutExpandError0)"));
-        assert!(wrapper.contains("React.createElement(LayoutComponent0, __layoutProps0)"));
-        assert!(wrapper.contains("await layout0"));
-    }
-
-    #[test]
-    fn test_generate_rsc_conversion() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement", "{}", false, None);
-
-        assert!(conversion.contains("elementToRender = finalElement"));
-        assert!(conversion.contains("renderToRsc(elementToRender"));
-        assert!(conversion.contains("rsc_data: rscData"));
-        assert!(conversion.contains("timings: timings"));
-        assert!(conversion.contains("success: true"));
-    }
-
-    #[test]
-    fn test_generate_error_boundary_wrap_default() {
-        let wrap = RouteComposer::generate_error_boundary_wrap("pageElement", None);
-
-        assert!(wrap.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
-        assert!(wrap.contains(r#"const errorComponentId = """#));
-        assert!(wrap.contains("errorBoundedElement"));
-        assert!(wrap.contains("pageElement"));
-    }
-
-    #[test]
-    fn test_generate_error_boundary_wrap_with_custom_component() {
-        let error_boundary = ErrorBoundaryInfo {
-            component_id: "src/app/test/error.tsx".to_string(),
-            file_path: "test/error.tsx".to_string(),
-        };
-
-        let wrap =
-            RouteComposer::generate_error_boundary_wrap("pageElement", Some(&error_boundary));
-
-        assert!(wrap.contains("virtual:error-boundary-wrapper.tsx#ErrorBoundaryWrapper"));
-        assert!(wrap.contains("src/app/test/error.tsx"));
-        assert!(wrap.contains("errorComponentId"));
-        assert!(wrap.contains("ErrorWrapper"));
-        assert!(wrap.contains("errorBoundedElement"));
-    }
-
-    #[test]
-    fn test_generate_rsc_conversion_with_metadata() {
-        let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
-        let conversion =
-            RouteComposer::generate_rsc_conversion("finalElement", metadata_json, false, None);
-
-        assert!(conversion.contains(r#"metadata: {"title":"Test Page","description":"A test"}"#));
-        assert!(conversion.contains("injectMetadataIntoDocument"));
-        assert!(conversion.contains("await globalThis['~rari'].injectMetadataIntoDocument"));
-        assert!(conversion.contains("hoistBlockingHeadScripts"));
-        assert!(conversion.contains("__rariMetadata"));
-        assert!(conversion.contains("__blockingHeadHtml"));
-    }
-
-    #[test]
-    fn test_generate_rsc_conversion_deferred() {
-        let conversion = RouteComposer::generate_rsc_conversion("finalElement", "{}", true, None);
-
-        assert!(conversion.contains("capturedElement = elementToRender"));
-        assert!(conversion.contains("blockingHeadScriptsHtml = __blockingHeadHtml"));
-        assert!(!conversion.contains("renderToRsc(elementToRender"));
-    }
-
-    fn template_info(file_path: &str) -> TemplateInfo {
-        TemplateInfo {
-            component_id: format!("template:{file_path}"),
-            file_path: file_path.to_string(),
-        }
+        assert_ne!(dashboard_pos, root_pos);
+        assert!(script.contains("\"isRoot\":false"));
+        assert!(script.contains("\"isRoot\":true"));
     }
 
     #[test]
@@ -637,8 +316,16 @@ mod tests {
             "\"/\"",
             None,
             true,
+            &[],
         );
         assert_eq!(empty_tpl, no_tpl);
+    }
+
+    fn template_info(file_path: &str) -> TemplateInfo {
+        TemplateInfo {
+            component_id: format!("template:{file_path}"),
+            file_path: file_path.to_string(),
+        }
     }
 
     #[test]
@@ -655,69 +342,36 @@ mod tests {
             "\"/about\"",
             None,
             true,
+            &[],
         );
 
-        assert!(script.contains("TemplateComponent0"));
-        assert!(script.contains(r#"globalThis["template:template.tsx"]"#));
+        assert!(script.contains("template:template.tsx"));
         assert!(
-            script.contains(r#"globalThis['~rsc']?.modules?.["template:template.tsx"]"#),
-            "templates must fall back to the SSR module registry used by RscModuleManager.register"
-        );
-        assert!(
-            script.contains(r"globalThis['~rari']?.ssrModules"),
-            "client templates must fall back to production SSR client modules"
-        );
-        assert!(
-            script.contains(r#""src/app/template.tsx""#),
+            script.contains(r#""ssrModuleKey":"src/app/template.tsx""#),
             "client templates resolve via project-relative SSR module keys"
         );
         assert!(
-            !script.contains(r#""src/app/src/app/template.tsx""#),
+            !script.contains(r#""ssrModuleKey":"src/app/src/app/template.tsx""#),
             "template SSR keys must not double-prefix the app directory"
         );
-        assert!(script.contains("templateKey0 = \"/about\""));
-        assert!(script.contains("key: templateKey0"));
-        let template_wrapper = RouteComposer::generate_template_wrapper(
-            0,
-            "template:template.tsx",
-            "template.tsx",
-            "pageElement",
-            "template0",
-            "\"/about\"",
-        );
-        assert!(
-            !template_wrapper.contains("react.client.reference"),
-            "server templates must resolve from the SSR module registry, not forced client refs"
-        );
-        assert!(
-            !script.contains("pathname: \"/about\", children: pageElement"),
-            "template wrapper must not include pathname as a prop, only key and children"
-        );
+        assert!(script.contains("templateKey: \"/about\""));
     }
 
     #[test]
     fn test_template_ssr_module_key_normalizes_app_relative_paths() {
-        let already_prefixed = RouteComposer::generate_template_wrapper(
-            0,
-            "template:src/app/template.tsx",
-            "src/app/template.tsx",
-            "pageElement",
-            "template0",
-            "\"/\"",
-        );
-        assert!(already_prefixed.contains(r#""src/app/template.tsx""#));
-        assert!(!already_prefixed.contains(r#""src/app/src/app/template.tsx""#));
+        let already_prefixed = RouteComposer::templates_json(&[TemplateInfo {
+            component_id: "template:src/app/template.tsx".to_string(),
+            file_path: "src/app/template.tsx".to_string(),
+        }]);
+        assert!(already_prefixed.contains(r#""ssrModuleKey":"src/app/template.tsx""#));
+        assert!(!already_prefixed.contains(r#""ssrModuleKey":"src/app/src/app/template.tsx""#));
 
-        let app_prefixed = RouteComposer::generate_template_wrapper(
-            0,
-            "template:app/template.tsx",
-            "app/template.tsx",
-            "pageElement",
-            "template0",
-            "\"/\"",
-        );
-        assert!(app_prefixed.contains(r#""src/app/template.tsx""#));
-        assert!(!app_prefixed.contains(r#""src/app/app/template.tsx""#));
+        let app_prefixed = RouteComposer::templates_json(&[TemplateInfo {
+            component_id: "template:app/template.tsx".to_string(),
+            file_path: "app/template.tsx".to_string(),
+        }]);
+        assert!(app_prefixed.contains(r#""ssrModuleKey":"src/app/template.tsx""#));
+        assert!(!app_prefixed.contains(r#""ssrModuleKey":"src/app/app/template.tsx""#));
     }
 
     #[tokio::test]
@@ -727,38 +381,54 @@ mod tests {
         use crate::runtime::JsExecutionRuntime;
 
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let wrapper = RouteComposer::generate_template_wrapper(
-            0,
-            "template:template.tsx",
-            "template.tsx",
-            "pageElement",
-            "template0",
-            "\"/\"",
-        );
+        runtime
+            .execute_script("route_composer.ts".to_string(), ROUTE_COMPOSER_SCRIPT.to_string())
+            .await
+            .expect("route composer should load");
 
-        let script = format!(
-            r"
-            globalThis.React = {{
-              createElement(type, props) {{
-                return {{ type, props }};
-              }},
-            }};
-            const pageElement = {{ kind: 'page' }};
-            const timings = {{}};
-            globalThis['~rsc'] = {{ modules: {{}} }};
-            function RegisteredTemplate() {{ return null; }}
-            globalThis['~rsc'].modules['template:template.tsx'] = {{ default: RegisteredTemplate }};
+        let script = r"
+            (async () => {
+            globalThis.React = {
+              createElement(type, props, ...children) {
+                return { type, props, children };
+              },
+            };
+            globalThis['~rsc'] = { modules: {} };
+            function RegisteredTemplate() { return null; }
+            globalThis['~rsc'].modules['template:template.tsx'] = { default: RegisteredTemplate };
             delete globalThis['template:template.tsx'];
-            {wrapper}
-            if (template0.type !== RegisteredTemplate) {{
+
+            const timings = {};
+            await globalThis['~rari'].composeRoute({
+              pageElement: { kind: 'page' },
+              layouts: [],
+              templates: [{
+                componentId: 'template:template.tsx',
+                filePath: 'template.tsx',
+                ssrModuleKey: 'src/app/template.tsx',
+              }],
+              pathname: '/',
+              templateKey: '/',
+              errorComponentId: '',
+              metadata: {},
+              deferRsc: true,
+              captureStreamId: null,
+              expandRootLayout: true,
+              reuseLayoutPaths: [],
+              timings,
+              startTotal: performance.now(),
+            });
+            const captured = globalThis['~rari'].capturedElement;
+            const templateEl = captured.children?.[0] ?? captured;
+            if (templateEl.type !== RegisteredTemplate) {
               throw new Error('template did not resolve from ~rsc.modules');
-            }}
-            true
-            "
-        );
+            }
+            return true;
+            })()
+            ";
 
         let result = runtime
-            .execute_script("template_rsc_modules_fallback".to_string(), script)
+            .execute_script("template_rsc_modules_fallback".to_string(), script.to_string())
             .await
             .expect("template registry fallback script should execute");
         assert_eq!(result, serde_json::Value::Bool(true));
@@ -771,38 +441,54 @@ mod tests {
         use crate::runtime::JsExecutionRuntime;
 
         let runtime = Arc::new(JsExecutionRuntime::new(None));
-        let wrapper = RouteComposer::generate_template_wrapper(
-            0,
-            "app/template_6ef52460",
-            "template.tsx",
-            "pageElement",
-            "template0",
-            "\"/\"",
-        );
+        runtime
+            .execute_script("route_composer.ts".to_string(), ROUTE_COMPOSER_SCRIPT.to_string())
+            .await
+            .expect("route composer should load");
 
-        let script = format!(
-            r"
-            globalThis.React = {{
-              createElement(type, props) {{
-                return {{ type, props }};
-              }},
-            }};
-            const pageElement = {{ kind: 'page' }};
-            const timings = {{}};
-            globalThis['~rari'] = {{ ssrModules: {{}} }};
-            function ClientTemplate() {{ return null; }}
-            globalThis['~rari'].ssrModules['src/app/template.tsx'] = {{ default: ClientTemplate }};
+        let script = r"
+            (async () => {
+            globalThis.React = {
+              createElement(type, props, ...children) {
+                return { type, props, children };
+              },
+            };
+            globalThis['~rari'] = { ...(globalThis['~rari'] || {}), ssrModules: {} };
+            function ClientTemplate() { return null; }
+            globalThis['~rari'].ssrModules['src/app/template.tsx'] = { default: ClientTemplate };
             delete globalThis['app/template_6ef52460'];
-            {wrapper}
-            if (template0.type !== ClientTemplate) {{
+
+            const timings = {};
+            await globalThis['~rari'].composeRoute({
+              pageElement: { kind: 'page' },
+              layouts: [],
+              templates: [{
+                componentId: 'app/template_6ef52460',
+                filePath: 'template.tsx',
+                ssrModuleKey: 'src/app/template.tsx',
+              }],
+              pathname: '/',
+              templateKey: '/',
+              errorComponentId: '',
+              metadata: {},
+              deferRsc: true,
+              captureStreamId: null,
+              expandRootLayout: true,
+              reuseLayoutPaths: [],
+              timings,
+              startTotal: performance.now(),
+            });
+            const captured = globalThis['~rari'].capturedElement;
+            const templateEl = captured.children?.[0] ?? captured;
+            if (templateEl.type !== ClientTemplate) {
               throw new Error('template did not resolve from ~rari.ssrModules');
-            }}
-            true
-            "
-        );
+            }
+            return true;
+            })()
+            ";
 
         let result = runtime
-            .execute_script("template_ssr_modules_fallback".to_string(), script)
+            .execute_script("template_ssr_modules_fallback".to_string(), script.to_string())
             .await
             .expect("client template SSR module fallback should execute");
         assert_eq!(result, serde_json::Value::Bool(true));
@@ -816,6 +502,7 @@ mod tests {
                 component_id: "layout:blog".to_string(),
                 is_root: false,
                 file_path: "blog/layout.tsx".to_string(),
+                path: "/".to_string(),
             }],
             &[template_info("blog/template.tsx")],
             "\"/blog/hello\"",
@@ -826,14 +513,13 @@ mod tests {
             "\"/blog/hello\"",
             None,
             true,
+            &[],
         );
 
-        let page_idx = script.find("pageElement").expect("pageElement present");
-        let template_idx = script.find("template0").expect("template0 present");
-        let layout_idx = script.find("layout0").expect("layout0 present");
-        assert!(page_idx < template_idx);
-        assert!(template_idx < layout_idx);
-        assert!(script.contains("templateKey0 = \"/blog/hello\""));
+        assert!(script.contains("pageElement"));
+        assert!(script.contains("blog/template.tsx"));
+        assert!(script.contains("layout:blog"));
+        assert!(script.contains("templateKey: \"/blog/hello\""));
     }
 
     #[test]
@@ -850,11 +536,137 @@ mod tests {
             "\"/about\"",
             None,
             true,
+            &[],
         );
 
-        assert!(script.contains("TemplateComponent0"));
-        assert!(script.contains("TemplateComponent1"));
-        assert!(script.contains("templateKey0 = \"/about\""));
-        assert!(script.contains("templateKey1 = \"/about\""));
+        assert!(script.contains("template:template.tsx"));
+        assert!(script.contains("template:about/template.tsx"));
+        assert!(script.contains(r#""ssrModuleKey":"src/app/about/template.tsx""#));
+    }
+
+    #[test]
+    fn test_layout_reuse_emits_marker_without_layout_component() {
+        let layouts = vec![LayoutInfo {
+            component_id: "RootLayout".to_string(),
+            is_root: true,
+            file_path: "app/layout.tsx".to_string(),
+            path: "/".to_string(),
+        }];
+
+        let script = RouteComposer::build_composition_script_with_templates(
+            "const pageElement = Page();",
+            &layouts,
+            &[],
+            "\"/about\"",
+            "\"/about\"",
+            None,
+            "{}",
+            true,
+            "\"/about\"",
+            Some("stream-1"),
+            true,
+            &["/".to_string()],
+        );
+
+        assert!(script.contains("reuseLayoutPaths"));
+        assert!(script.contains(r#""/""#));
+        assert!(script.contains("RootLayout"));
+        assert!(script.contains("deferRsc: true"));
+        assert!(
+            ROUTE_COMPOSER_SCRIPT.contains("wrapLayoutReuse"),
+            "layout reuse tree must live in TS helper, not Rust format!"
+        );
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("rari-layout-reuse"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("data-rari-layout-path"));
+    }
+
+    #[test]
+    fn test_error_boundary_id_serialized() {
+        let error_boundary = ErrorBoundaryInfo {
+            component_id: "src/app/test/error.tsx".to_string(),
+            file_path: "test/error.tsx".to_string(),
+        };
+        let script = RouteComposer::build_composition_script_with_error(
+            "const pageElement = Page();",
+            &[],
+            "\"/\"",
+            Some(&error_boundary),
+            "{}",
+        );
+        assert!(script.contains("src/app/test/error.tsx"));
+        assert!(script.contains("errorComponentId"));
+    }
+
+    #[test]
+    fn test_metadata_passed_through() {
+        let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
+        let script = RouteComposer::build_composition_script_with_error(
+            "const pageElement = Page();",
+            &[],
+            "\"/\"",
+            None,
+            metadata_json,
+        );
+        assert!(script.contains(r#"{"title":"Test Page","description":"A test"}"#));
+        assert!(script.contains("metadata:"));
+    }
+
+    #[tokio::test]
+    async fn test_layout_reuse_compose_emits_marker() {
+        use std::sync::Arc;
+
+        use crate::runtime::JsExecutionRuntime;
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        runtime
+            .execute_script("route_composer.ts".to_string(), ROUTE_COMPOSER_SCRIPT.to_string())
+            .await
+            .expect("route composer should load");
+
+        let script = r"
+            (async () => {
+            globalThis.React = {
+              createElement(type, props, ...children) {
+                return { type, props: props || null, children };
+              },
+            };
+            const timings = {};
+            await globalThis['~rari'].composeRoute({
+              pageElement: { kind: 'page' },
+              layouts: [{
+                componentId: 'RootLayout',
+                isRoot: true,
+                filePath: 'app/layout.tsx',
+                path: '/',
+              }],
+              templates: [],
+              pathname: '/about',
+              templateKey: '/about',
+              errorComponentId: '',
+              metadata: {},
+              deferRsc: true,
+              captureStreamId: null,
+              expandRootLayout: true,
+              reuseLayoutPaths: ['/'],
+              timings,
+              startTotal: performance.now(),
+            });
+            const marker = globalThis['~rari'].capturedElement;
+            if (marker.type !== 'rari-layout-reuse') throw new Error('expected reuse marker');
+            if (marker.props['data-rari-layout-path'] !== '/') {
+              throw new Error('expected reuse path');
+            }
+            if (marker.props['data-rari-document-reuse'] !== true) {
+              throw new Error('expected document reuse marker');
+            }
+            return true;
+            })()
+            ";
+
+        let result = runtime
+            .execute_script("layout_reuse_compose".to_string(), script.to_string())
+            .await
+            .expect("layout reuse compose should execute");
+        assert_eq!(result, serde_json::Value::Bool(true));
     }
 }

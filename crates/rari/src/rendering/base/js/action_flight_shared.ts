@@ -19,8 +19,8 @@ async function readStreamToLastRscBinary(stream: ReadableStream<Uint8Array>): Pr
     offset += chunk.byteLength
   }
 
-  g['~rari'] ??= {}
-  g['~rari'].lastRscBinary = fullBuffer
+  const rari = (g['~rari'] ??= {})
+  rari.lastRscBinary = fullBuffer
 }
 
 async function encodeActionFlightResponse(
@@ -74,9 +74,9 @@ function withSkipRefreshMarker(result: unknown): unknown {
 }
 
 function stashRpcActionResult(result: unknown): Record<string, unknown> {
-  g['~rari'] ??= {}
+  const rari = (g['~rari'] ??= {})
 
-  g['~rari'].pendingActionResult = withSkipRefreshMarker(result)
+  rari.pendingActionResult = withSkipRefreshMarker(result)
 
   const metadata: Record<string, unknown> = { '~actionFlightPending': true }
   if (result != null && typeof result === 'object') {

@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/prefer-readonly-parameter-types font option bags and transform params mutate during parse */
+// oxlint-disable typescript/prefer-readonly-parameter-types
 import type { Plugin } from 'vite-plus'
 import type { FallbackFontName } from './metrics'
 import type { JsonValue } from './parse-options'

@@ -1,9 +1,9 @@
 'use client'
 
-import { useTheme } from '@/providers/ThemeProvider'
-import Moon from './icons/Moon'
-import Sun from './icons/Sun'
-import System from './icons/System'
+import { useTheme } from '@/providers/useTheme'
+import Moon from '../icons/Moon'
+import Sun from '../icons/Sun'
+import System from '../icons/System'
 
 const OPTIONS = [
   { value: 'light' as const, label: 'Light', Icon: Sun },

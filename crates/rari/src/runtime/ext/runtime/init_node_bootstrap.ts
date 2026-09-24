@@ -21,15 +21,14 @@ internals.__nodeBootstrapArgs = {
   denoVersion: Deno.version,
 }
 
-// Per-request async context for concurrent streams on one isolate.
-g['~rari'] ??= {}
-g['~rari'].requestStorage ??= new AsyncLocalStorage<{
+const rari = (g['~rari'] ??= {})
+const requestStorage = (rari.requestStorage ??= new AsyncLocalStorage<{
   requestId: string
   streamId?: string
   capturedElement?: unknown
-}>()
-g['~rari'].currentRequestId = () => {
-  const store = g['~rari']?.requestStorage?.getStore?.()
+}>())
+rari.currentRequestId = () => {
+  const store = requestStorage.getStore()
   if (store && typeof store === 'object' && store.requestId != null) return store.requestId
 
   return ''

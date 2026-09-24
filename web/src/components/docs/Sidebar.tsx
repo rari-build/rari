@@ -14,7 +14,7 @@ import Heart from '../icons/Heart'
 import Menu from '../icons/Menu'
 import Rari from '../icons/Rari'
 import SearchBar from '../search/SearchBar'
-import ThemeSwitcher from '../ThemeSwitcher'
+import ThemeSwitcher from '../ui/ThemeSwitcher'
 
 interface TopNavItem {
   readonly href: string

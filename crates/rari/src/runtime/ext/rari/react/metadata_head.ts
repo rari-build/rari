@@ -38,6 +38,11 @@ function elementChildren(props: Readonly<Record<string, unknown>> | undefined): 
   return Array.isArray(children) ? children : [children]
 }
 
+function propsWithoutChildren(props: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const { children: _children, ...rest } = props
+  return rest
+}
+
 function createMeta(react: ReactApi, attrs: Readonly<Record<string, string>>): unknown {
   return react.createElement('meta', { ...attrs, 'data-rari-meta': '1' })
 }
@@ -362,13 +367,18 @@ export function hoistBlockingHeadScripts(element: unknown): {
 
   if (scripts.length === 0) return { element, html: '' }
 
-  const updatedHead = react.cloneElement(head, { ...headProps, children: kept })
+  const updatedHead = react.cloneElement(
+    head,
+    propsWithoutChildren(headProps),
+    ...(kept.length > 0 ? kept : [null]),
+  )
   const updatedChildren = [...children]
   updatedChildren[headIndex] = updatedHead
-  const updatedDocument = react.cloneElement(documentElement, {
-    ...props,
-    children: updatedChildren,
-  })
+  const updatedDocument = react.cloneElement(
+    documentElement,
+    propsWithoutChildren(props),
+    ...updatedChildren,
+  )
 
   return { element: updatedDocument, html: `${scripts.join('\n')}\n` }
 }
@@ -396,19 +406,23 @@ export function injectMetadataIntoDocument(element: unknown, metadata: unknown):
     if (!isRecord(head)) return element
     const headProps = isRecord(head.props) ? head.props : {}
     const updatedHeadChildren = [...elementChildren(headProps), ...metaElements]
-    const updatedHead = react.cloneElement(head, { ...headProps, children: updatedHeadChildren })
+    const updatedHead = react.cloneElement(
+      head,
+      propsWithoutChildren(headProps),
+      ...updatedHeadChildren,
+    )
     const updatedChildren = [...children]
     updatedChildren[headIndex] = updatedHead
-    return react.cloneElement(documentElement, { ...props, children: updatedChildren })
+    return react.cloneElement(documentElement, propsWithoutChildren(props), ...updatedChildren)
   }
 
   const head = react.createElement('head', null, ...metaElements)
-  return react.cloneElement(documentElement, { ...props, children: [head, ...children] })
+  return react.cloneElement(documentElement, propsWithoutChildren(props), head, ...children)
 }
 
-g['~rari'] ??= {}
-g['~rari'].injectMetadataIntoDocument = injectMetadataIntoDocument
-g['~rari'].buildMetadataHeadElements = buildMetadataHeadElements
-g['~rari'].hoistBlockingHeadScripts = hoistBlockingHeadScripts
+const rari = (g['~rari'] ??= {})
+rari.injectMetadataIntoDocument = injectMetadataIntoDocument
+rari.buildMetadataHeadElements = buildMetadataHeadElements
+rari.hoistBlockingHeadScripts = hoistBlockingHeadScripts
 
 export type { MetadataParams }
