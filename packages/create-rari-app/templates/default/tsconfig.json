@@ -20,5 +20,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["node_modules/.rari/types/**/*.d.ts", "src"]
+  "include": ["src"]
 }

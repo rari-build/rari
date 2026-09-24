@@ -4,7 +4,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["node", "vite-plus/client"]
+    "types": ["node"]
   },
-  "include": ["node_modules/.rari/types/**/*.d.ts", "src"]
+  "include": ["src"]
 }
