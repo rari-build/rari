@@ -386,4 +386,20 @@ export /* keep /* nested marker */ async function save(formData) {
     )
     expect(result!.code).not.toMatch(/^export \/\*/m)
   })
+
+  it('preserves named exports when a block comment opener overlaps */ as /*/', () => {
+    const input = `import { db } from './db'
+export /*/ note */ async function save(formData) {
+  'use server'
+  await db.write(formData)
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result).not.toBeNull()
+    expect(result!.rewrittenExportNames).toEqual(['save'])
+    expect(result!.code).toContain(
+      'export const save = registerServerReference($$ACTION_0_save, "page", "save")',
+    )
+  })
 })
