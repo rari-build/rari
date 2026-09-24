@@ -7,10 +7,6 @@ function installRedbOpsMock(backend: MockBackend) {
   patchDenoBackend({ get: 'op_redb_cache_get', set: 'op_redb_cache_set' }, backend)
 }
 
-function uninstallRedbOpsMock(): void {
-  restoreDeno()
-}
-
 function makeBackend(): MockBackend {
   const store = new Map<string, string>()
   return {
@@ -23,7 +19,7 @@ function makeBackend(): MockBackend {
 
 describe('redbCacheStorage', () => {
   afterEach(() => {
-    uninstallRedbOpsMock()
+    restoreDeno()
   })
 
   it('hasRedbOps returns true when both ops are present', () => {
@@ -32,7 +28,7 @@ describe('redbCacheStorage', () => {
   })
 
   it('hasRedbOps returns false when ops missing', () => {
-    uninstallRedbOpsMock()
+    restoreDeno()
     expect(hasRedbOps()).toBe(false)
   })
 

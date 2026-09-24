@@ -542,7 +542,7 @@ export function AppRouterProvider({
       }
 
       if (parsedPayload && currentNavigationIdRef.current === detail.navigationId) {
-        let resolvedPayload = parsedPayload
+        let resolvedPayload: typeof parsedPayload
         try {
           const resolvedElement = await unwrapFlightContent(parsedPayload.element)
           if (currentNavigationIdRef.current !== detail.navigationId) return

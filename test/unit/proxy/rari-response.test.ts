@@ -102,6 +102,7 @@ describe('rari response', () => {
       const res = new RariResponse()
 
       res.cookies.set('key', 'old')
+      // oxlint-disable-next-line sonarjs/no-element-overwrite
       res.cookies.set('key', 'new')
 
       expect(res.cookies.get('key')?.value).toBe('new')

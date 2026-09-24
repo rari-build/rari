@@ -10,10 +10,6 @@ function installOpsMock(backend: MockBackend, remoteHandler: 'redis' | 'redb' | 
   patchDenoBackend(REDIS_CACHE_OPS, backend, { remoteHandler })
 }
 
-function uninstallOpsMock(): void {
-  restoreDeno()
-}
-
 const CACHE_LIMIT = 1000
 const FILL_COUNT = CACHE_LIMIT + 1
 
@@ -48,7 +44,7 @@ describe('$$cache__', () => {
   })
 
   afterEach(() => {
-    uninstallOpsMock()
+    restoreDeno()
     setUseCacheBuildId('development')
   })
 
@@ -170,7 +166,7 @@ describe('$$cache__', () => {
   })
 
   it('falls back to memory storage when Deno.core.ops is missing for kind=remote', async () => {
-    uninstallOpsMock()
+    restoreDeno()
 
     let calls = 0
     const fn = (a: number) => {

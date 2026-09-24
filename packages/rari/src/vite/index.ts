@@ -1358,11 +1358,9 @@ ${clientTransformedCode}`
           modifiedCode.includes('/>') ||
           JSX_TEST_REGEX.test(modifiedCode)
 
-        if (hasJsx) {
-          if (isDevMode) {
-            modifiedCode = `'use client';\n\n${modifiedCode}`
-            setComponentType(id, 'client')
-          }
+        if (hasJsx && isDevMode) {
+          modifiedCode = `'use client';\n\n${modifiedCode}`
+          setComponentType(id, 'client')
         }
 
         return finish(modifiedCode)

@@ -1,4 +1,6 @@
 catalogMode: prefer
+
+minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
   - '@rari/use-cache-darwin-arm64@0.16.0'
   - '@rari/use-cache-darwin-x64@0.16.0'
@@ -6,7 +8,6 @@ minimumReleaseAgeExclude:
   - '@rari/use-cache-linux-x64@0.16.0'
   - '@rari/use-cache-win32-arm64@0.16.0'
   - '@rari/use-cache-win32-x64@0.16.0'
-  - '@rari/use-cache@0.16.0'
   - rari-darwin-arm64@0.16.0
   - rari-darwin-x64@0.16.0
   - rari-linux-arm64@0.16.0
@@ -14,10 +15,13 @@ minimumReleaseAgeExclude:
   - rari-win32-arm64@0.16.0
   - rari-win32-x64@0.16.0
   - rari@0.16.0
+
 shellEmulator: true
+
 trustPolicy: no-downgrade
 trustPolicyExclude:
   - semver@6.3.1
+
 packages:
   - examples/*
   - packages/*
@@ -28,6 +32,7 @@ packages:
   - test/fixtures/*
   - tools/bundle-react-esm
   - web
+
 catalogs:
   analytics:
     posthog-js: ^1.434.6
@@ -58,6 +63,8 @@ catalogs:
     eslint-plugin-pnpm: ^1.9.1
     eslint-plugin-react-refresh: ^0.5.7
     eslint-plugin-regexp: ^3.3.1
+    eslint-plugin-slop: ^0.1.3
+    eslint-plugin-sonarjs: ^4.2.1
     eslint-plugin-unused-imports: ^4.4.1
     eslint-plugin-yml: ^3.8.1
     jsonc-eslint-parser: ^3.3.0
@@ -97,5 +104,6 @@ catalogs:
     # https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0
     typescript: npm:@typescript/typescript6@^6.0.2
     typescript-7: npm:typescript@^7.0.2
+
 allowBuilds:
   core-js: true

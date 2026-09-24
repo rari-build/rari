@@ -148,17 +148,11 @@ interface ComponentModule {
   readonly generateStaticParams?: () => unknown
 }
 
-function isComponentModule(value: unknown): value is ComponentModule {
-  return isRecord(value)
-}
-
-function isMetadataResult(value: unknown): value is MetadataResult {
-  return isRecord(value)
-}
-
 async function loadComponentModule(componentPath: string): Promise<ComponentModule> {
   const module: unknown = await import(/* @vite-ignore */ componentPath)
-  return isComponentModule(module) ? module : {}
+  if (!isRecord(module)) return {}
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return module
 }
 
 // oxlint-disable typescript/prefer-readonly-parameter-types
@@ -250,10 +244,16 @@ export async function extractMetadata(
 
     if (typeof module.generateMetadata === 'function') {
       const metadata = await module.generateMetadata({ params, searchParams })
-      if (isMetadataResult(metadata)) return metadata
+      if (isRecord(metadata)) {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return metadata
+      }
     }
 
-    if (isMetadataResult(module.metadata)) return module.metadata
+    if (isRecord(module.metadata)) {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return module.metadata
+    }
 
     return {}
   } catch (error) {

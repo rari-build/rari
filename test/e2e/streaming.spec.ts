@@ -362,6 +362,7 @@ test.describe('Client-Side Navigation Tests', () => {
 
     await expect(page).toHaveURL(URL_PATTERNS.ABOUT)
     await expect(page.locator('h1')).toBeVisible()
+    expect(requests.length).toBeGreaterThan(0)
   })
 
   test('should receive RSC Flight protocol on navigation', async ({ page }) => {
@@ -388,6 +389,7 @@ test.describe('Client-Side Navigation Tests', () => {
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('h1')).toBeVisible()
+    expect(rscResponses.length).toBeGreaterThan(0)
   })
 
   test('should dispatch rari:navigate events', async ({ page }) => {

@@ -79,8 +79,8 @@ function stashRpcActionResult(result: unknown): Record<string, unknown> {
   rari.pendingActionResult = withSkipRefreshMarker(result)
 
   const metadata: Record<string, unknown> = { '~actionFlightPending': true }
-  if (result != null && typeof result === 'object') {
-    if ('redirect' in result) metadata.redirect = (result as { redirect?: unknown }).redirect
+  if (result != null && typeof result === 'object' && 'redirect' in result) {
+    metadata.redirect = (result as { redirect?: unknown }).redirect
   }
 
   return metadata

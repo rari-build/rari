@@ -11,10 +11,6 @@ export const FIND_SOURCE_MAP_URL_PATH = '/__rari_findSourceMapURL'
 const SOURCE_FILE_EXT_RE = /\.(?:[cm]?[jt]sx?|vue|svelte|mdx?)$/i
 const MAX_IDENTITY_SOURCE_BYTES = 1_048_576
 
-function slash(value: string): string {
-  return toPosixPath(value)
-}
-
 function rewriteModuleSourceUrl(source: string, moduleUrl: string, base: string): string {
   if (source.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(source)) {
     return source
@@ -40,7 +36,7 @@ function findSourceMapURL(
   if (filename.startsWith('file://')) {
     let filePath: string
     try {
-      filePath = slash(fileURLToPath(filename))
+      filePath = toPosixPath(fileURLToPath(filename))
     } catch {
       return undefined
     }

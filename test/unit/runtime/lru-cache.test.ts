@@ -33,6 +33,7 @@ describe('lru cache', () => {
   it('replaces the value when setting an existing key', () => {
     const cache = new LruCache<string, number>(10)
     cache.set('a', 1)
+    // oxlint-disable-next-line sonarjs/no-element-overwrite
     cache.set('a', 2)
     expect(cache.get('a')).toBe(2)
   })
@@ -41,6 +42,7 @@ describe('lru cache', () => {
     const cache = new LruCache<string, number>(2)
     cache.set('a', 1)
     cache.set('b', 2)
+    // oxlint-disable-next-line sonarjs/no-element-overwrite
     cache.set('a', 10)
     cache.set('c', 3)
 

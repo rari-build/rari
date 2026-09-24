@@ -3,8 +3,9 @@ import type { ComponentInfo, GlobalWithRari, RariGlobalBag, WindowWithRari } fro
 export type { RariGlobalBag }
 
 export function getRariGlobalRoot(): GlobalWithRari {
+  const root: unknown = globalThis
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion runtime global bag lives on globalThis
-  return globalThis as unknown as GlobalWithRari
+  return root as GlobalWithRari
 }
 
 export function getRariGlobal(): RariGlobalBag {

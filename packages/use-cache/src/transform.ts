@@ -4,10 +4,6 @@ import nativeAddon, { transformUseCache } from './native'
 const USE_CACHE_FUNCTION_REGEX = /['"]use\s+cache(?::\s*[\w-]+)?['"]/
 const DIRECTIVE_PROLOGUE_REGEX = /^['"][^'"]+['"];?\s*$/
 
-function hasUseCacheFunction(code: string): boolean {
-  return USE_CACHE_FUNCTION_REGEX.test(code)
-}
-
 let addon: NativeAddon | null = null
 let addonLoadAttempted = false
 
@@ -48,7 +44,7 @@ export function transformUseCacheModule(
   id: string,
   options: UseCacheTransformOptions = {},
 ): string | null {
-  if (!hasUseCacheFunction(code)) return null
+  if (!USE_CACHE_FUNCTION_REGEX.test(code)) return null
 
   const native = getAddon()
   if (!native) return null

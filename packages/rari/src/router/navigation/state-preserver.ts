@@ -105,10 +105,11 @@ export class StatePreserver {
         if (activeElement.id) return `#${activeElement.id}`
 
         if (
-          activeElement instanceof HTMLInputElement ||
-          activeElement instanceof HTMLTextAreaElement
+          (activeElement instanceof HTMLInputElement ||
+            activeElement instanceof HTMLTextAreaElement) &&
+          activeElement.name
         ) {
-          if (activeElement.name) return `[name="${activeElement.name}"]`
+          return `[name="${activeElement.name}"]`
         }
       }
     } catch {}
