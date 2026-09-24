@@ -246,6 +246,23 @@ export default async function Page({ id }) {
     expect(result!.code).toContain('async function $$ACTION_0_like(id, { id: ignored })')
   })
 
+  it('captures enclosing vars used only via object spread', () => {
+    const input = `import { db } from './db'
+export default async function Page({ defaults }) {
+  async function save(formData) {
+    'use server'
+    await db.write({ ...defaults })
+  }
+  return save
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.code).toContain('$$ACTION_0_save.bind(null, defaults)')
+    expect(result!.code).toContain('async function $$ACTION_0_save(defaults, formData)')
+    expect(result!.code).toContain('...defaults')
+  })
+
   it('does not treat default-value identifiers as destructured bindings', () => {
     const input = `import { db } from './db'
 export default async function Page({ fallback }) {
