@@ -18,9 +18,26 @@ export interface ASTNode {
   data?: unknown
 }
 
+interface Highlighter {
+  readonly codeToHtml: (
+    code: string,
+    options: Readonly<{
+      readonly lang: string
+      readonly themes: { readonly light: string; readonly dark: string }
+      readonly defaultColor: false
+    }>,
+  ) => string
+}
+
+export interface RemarkFencesOptions {
+  readonly highlighter?: Highlighter
+  readonly themes?: { readonly light: string; readonly dark: string }
+}
+
 const TITLE_META_REGEX = /title=["']([^"']+)["']/
 const PACKAGE_MANAGER_LINE_REGEX = /^(pnpm|npm|yarn|bun):\s*(.*)/
 const PACKAGE_MANAGERS = ['pnpm', 'npm', 'yarn', 'bun'] as const
+const PRE_STYLE_REGEX = /<pre([^>]*) style="[^"]*"/g
 
 type PackageManager = (typeof PACKAGE_MANAGERS)[number]
 
@@ -70,17 +87,49 @@ function packageManagersWidget(value: string): ASTNode | null {
   return jsxElement('PackageManagerTabs', attributes)
 }
 
-function codeBlockWidget(lang: string, meta: string, value: string): ASTNode | null {
+function highlightCode(
+  code: string,
+  lang: string,
+  highlighter: Highlighter,
+  themes: { readonly light: string; readonly dark: string },
+): string | undefined {
+  try {
+    const html = highlighter.codeToHtml(code.trim(), {
+      lang,
+      themes,
+      defaultColor: false,
+    })
+    return html.replace(PRE_STYLE_REGEX, '<pre$1')
+  } catch (err) {
+    console.error('Failed to highlight code fence:', err)
+    return undefined
+  }
+}
+
+function codeBlockWidget(
+  lang: string,
+  meta: string,
+  value: string,
+  options: RemarkFencesOptions,
+): ASTNode | null {
   if (lang === '' && meta === '' && value === '') return null
 
-  const attributes: ASTAttribute[] = [attr('language', lang !== '' ? lang : 'typescript')]
+  const language = lang !== '' ? lang : 'typescript'
+  const attributes: ASTAttribute[] = [attr('language', language)]
   const title = parseTitle(meta)
   if (title != null && title !== '') attributes.push(attr('filename', title))
+
+  if (options.highlighter != null && options.themes != null) {
+    const highlightedHtml = highlightCode(value, language, options.highlighter, options.themes)
+    if (highlightedHtml != null && highlightedHtml !== '') {
+      attributes.push(attr('highlightedHtml', highlightedHtml))
+    }
+  }
 
   return jsxElement('CodeBlock', attributes, [{ type: 'text', value }])
 }
 
-function codeToWidget(node: ASTNode): ASTNode | null {
+function codeToWidget(node: ASTNode, options: RemarkFencesOptions): ASTNode | null {
   const lang = node.lang ?? ''
   const value = node.value ?? ''
   const meta = node.meta ?? ''
@@ -91,15 +140,15 @@ function codeToWidget(node: ASTNode): ASTNode | null {
 
   if (lang === 'package-managers') return packageManagersWidget(value)
   if (lang === 'mermaid') return jsxElement('MermaidChart', [], [{ type: 'text', value }])
-  return codeBlockWidget(lang, meta, value)
+  return codeBlockWidget(lang, meta, value, options)
 }
 
-export function remarkFences() {
+export function remarkFences(options: RemarkFencesOptions = {}) {
   return (tree: ASTNode) => {
     visit(tree, (node: ASTNode, index?: number, parent?: ASTNode) => {
       if (node.type !== 'code' || parent?.children == null || index == null) return
 
-      const replacement = codeToWidget(node)
+      const replacement = codeToWidget(node, options)
       if (replacement != null) parent.children[index] = replacement
     })
   }

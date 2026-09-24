@@ -44,6 +44,8 @@
         "eslint-plugin-de-morgan",
         "eslint-plugin-perfectionist",
         "eslint-plugin-regexp",
+        "eslint-plugin-slop",
+        "eslint-plugin-sonarjs",
         "eslint-plugin-unused-imports"
       ]
     },
@@ -59,15 +61,7 @@
       "project": ["src/**/*.{ts,tsx,css,mdx}"],
       "ignore": [
         "src/proxy.ts", // Proxy configuration file is used via Vite plugin
-        "src/content/**/*.mdx", // Blog/docs MDX loaded via filesystem
-        "src/components/docs/CodeBlock.tsx", // MDX client component
-        "src/components/docs/MermaidChart.tsx", // MDX client component
-        "src/components/ui/TerminalBlock.tsx", // MDX client component
-        "src/components/icons/File.tsx", // MDX client component
-        "src/components/icons/Terminal2.tsx" // MDX client component
-      ],
-      "ignoreDependencies": [
-        "mermaid" // Used by MermaidChart MDX client component
+        "src/content/**/*.mdx" // Blog/docs MDX loaded via filesystem
       ]
     },
     "tools/bundle-react-esm": {
