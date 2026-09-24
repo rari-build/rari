@@ -5,7 +5,7 @@ import ReactIcon from '@/components/icons/React'
 import Rust from '@/components/icons/Rust'
 import TypeScript from '@/components/icons/TypeScript'
 import Vite from '@/components/icons/Vite'
-import TrailCard from '@/components/ui/TrailCard'
+import TrailCard from './TrailCard'
 
 const iconMap: Record<string, ReactNode> = {
   code: (

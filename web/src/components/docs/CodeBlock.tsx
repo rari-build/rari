@@ -3,7 +3,7 @@ import File from '../icons/File'
 import React from '../icons/React'
 import TypeScript from '../icons/TypeScript'
 import Vite from '../icons/Vite'
-import CopyButton from '../ui/CopyButton'
+import CopyButton from './CopyButton'
 
 interface CodeBlockProps {
   readonly children: string

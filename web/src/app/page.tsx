@@ -1,9 +1,9 @@
 import type { Metadata } from 'rari'
+import PackageManagerTabs from '@/components/docs/PackageManagerTabs'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import FeatureCard from '@/components/marketing/FeatureCard'
-import HeroSection from '@/components/marketing/HeroSection'
-import PackageManagerTabs from '@/components/ui/PackageManagerTabs'
 import { container, text } from '@/lib/site/styles'
+import HeroSection from './_components/HeroSection'
 
 export default function HomePage() {
   return (
