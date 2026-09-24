@@ -245,4 +245,55 @@ export default async function Page({ id }) {
     expect(result!.code).toContain('$$ACTION_0_like.bind(null, id)')
     expect(result!.code).toContain('async function $$ACTION_0_like(id, { id: ignored })')
   })
+
+  it('does not treat default-value identifiers as destructured bindings', () => {
+    const input = `import { db } from './db'
+export default async function Page({ fallback }) {
+  async function save({ count = fallback }) {
+    'use server'
+    await db.write(count, fallback)
+  }
+  return save
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.code).toContain('$$ACTION_0_save.bind(null, fallback)')
+    expect(result!.code).toContain('async function $$ACTION_0_save(fallback, { count = fallback })')
+  })
+
+  it('keeps named functions in return position as expressions', () => {
+    const input = `import { db } from './db'
+export default function Page() {
+  return async function save(formData) {
+    'use server'
+    await db.write(formData)
+  }
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.code).toContain('return $$ACTION_0_save')
+    expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
+    expect(result!.code).not.toContain('const save =')
+    expect(result!.code).not.toContain('return const ')
+  })
+
+  it('keeps named functions in call-argument position as expressions', () => {
+    const input = `import { db } from './db'
+import { register } from './register'
+export default function Page() {
+  register(async function save(formData) {
+    'use server'
+    await db.write(formData)
+  })
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.code).toContain('register($$ACTION_0_save)')
+    expect(result!.code).toContain('async function $$ACTION_0_save(formData)')
+    expect(result!.code).not.toContain('const save =')
+    expect(result!.code).not.toContain('register(const ')
+  })
 })

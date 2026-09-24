@@ -357,6 +357,45 @@ describe('mergeFlightRefresh', () => {
     expect(blog.props.children).toBe('post-b')
   })
 
+  it('consumes nested reuse markers separated by a matching client wrapper', () => {
+    const shell = clientRef('src/app/blog/layout.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        'div',
+        { 'data-rari-layout-path': '/', 'className': 'root' },
+        React.createElement(
+          shell,
+          { key: '/blog' },
+          React.createElement(
+            'div',
+            { 'data-rari-layout-path': '/blog', 'className': 'blog' },
+            React.createElement('main', null, 'post-a'),
+          ),
+        ),
+      ),
+    )
+    const refresh = React.createElement(
+      'rari-layout-reuse',
+      { 'data-rari-layout-path': '/' },
+      React.createElement(
+        clientRef('src/app/blog/layout.tsx'),
+        { key: '/blog' },
+        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/blog' }, 'post-b'),
+      ),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const root = expectElement(childList(mergedBody)[0])
+    expect(root.props.className).toBe('root')
+    const client = expectElement(childList(root)[0])
+    expect(client.type).toBe(shell)
+    const blog = expectElement(childList(client)[0])
+    expect(blog.props.className).toBe('blog')
+    expect(blog.props.children).toBe('post-b')
+  })
+
   it('retains previous document attributes and head when merging reuse payloads', () => {
     const current = React.createElement(
       'html',

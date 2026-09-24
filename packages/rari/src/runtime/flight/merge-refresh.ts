@@ -436,6 +436,14 @@ function isEmptyContentSlot(element: React.ReactElement): boolean {
   return elementChildren(element).length === 0
 }
 
+function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
+  const kids = elementChildren(host)
+  if (kids.length === 1 && isReactElement(kids[0])) {
+    return mergeFlightRefresh(kids[0], nextPage)
+  }
+  return nextPage
+}
+
 function spliceAtLayoutPath(
   current: React.ReactElement,
   nextPage: React.ReactNode,
@@ -449,7 +457,11 @@ function spliceAtLayoutPath(
   const nextKids = [...kids]
   const existing = kids[slot.slotIndex]
   nextKids[slot.slotIndex] = isReactElement(existing)
-    ? cloneWithMergedChildren(existing, elementPropsRecord(existing), nextPage)
+    ? cloneWithMergedChildren(
+        existing,
+        elementPropsRecord(existing),
+        mergeIntoHostChild(existing, nextPage),
+      )
     : nextPage
   return replaceElementInTree(
     current,
@@ -482,7 +494,7 @@ function spliceIntoContentHost(
   const kids = elementChildren(current)
 
   if (current.type === 'main' || current.type === 'MAIN') {
-    return cloneWithMergedChildren(current, props, nextPage)
+    return cloneWithMergedChildren(current, props, mergeIntoHostChild(current, nextPage))
   }
 
   if (kids.length === 1 && isReactElement(kids[0])) {
@@ -526,11 +538,15 @@ function spliceIntoContentHost(
       props,
       kids,
       index,
-      cloneWithMergedChildren(child, elementPropsRecord(child), nextPage),
+      cloneWithMergedChildren(
+        child,
+        elementPropsRecord(child),
+        mergeIntoHostChild(child, nextPage),
+      ),
     )
   }
 
-  return cloneWithMergedChildren(current, props, nextPage)
+  return cloneWithMergedChildren(current, props, mergeIntoHostChild(current, nextPage))
 }
 
 export function spliceLayoutReuseChildren(
