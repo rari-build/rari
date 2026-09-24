@@ -712,6 +712,27 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(kids[2]).type).toBe('footer')
   })
 
+  it('keeps nested-array key scopes distinct through merge flatten', () => {
+    const nestedChildren: React.ReactNode = [
+      [React.createElement('span', { key: 'dup' }, 'a')],
+      [React.createElement('span', { key: 'dup' }, 'b')],
+    ]
+    const base = React.createElement('div', null)
+    const refresh = {
+      ...base,
+      props: { ...base.props, children: nestedChildren },
+    }
+
+    const merged = expectElement(mergeFlightRefresh(null, refresh))
+    const kids = childList(merged).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(kids[0].props.children).toBe('a')
+    expect(kids[1].props.children).toBe('b')
+    expect(kids[0].key).not.toBe(kids[1].key)
+    expect(kids[0].key).toBeTruthy()
+    expect(kids[1].key).toBeTruthy()
+  })
+
   it('unwraps reuse markers when remaining siblings are only non-element nodes', () => {
     const current = React.createElement('div', null, 'a', 'b', 'c')
     const refresh = React.createElement(
