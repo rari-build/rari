@@ -702,7 +702,10 @@ export function mergeFlightRefresh(
 
   if (isHeadElement(current) || isHeadElement(refresh)) return refresh
 
-  if (matchingClientShell(current, refresh)) return refresh
+  if (matchingClientShell(current, refresh)) {
+    if (treeContainsReuseMarker(refresh)) return mergeSameTypeElements(current, refresh)
+    return refresh
+  }
 
   if (current.type !== refresh.type) return refresh
 

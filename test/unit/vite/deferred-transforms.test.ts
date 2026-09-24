@@ -194,4 +194,55 @@ export const save = async (formData) => {
       'registerServerReference($$ACTION_0_anonymous_server_function, "page", "$$ACTION_0_anonymous_server_function")',
     )
   })
+
+  it('treats named function expressions as expressions under assignment', () => {
+    const input = `import { db } from './db'
+export const save = async function named(formData) {
+  'use server'
+  await db.write(formData)
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.rewrittenExportNames).toEqual(['save'])
+    expect(result!.code).toContain(
+      'export const save = registerServerReference($$ACTION_0_named, "page", "save")',
+    )
+    expect(result!.code).toContain('async function $$ACTION_0_named(formData)')
+    expect(result!.code).not.toContain('export const named =')
+    expect(result!.code).not.toContain('const save = const named')
+  })
+
+  it('locates single-parameter async arrow actions', () => {
+    const input = `import { save } from './db'
+export default function Page() {
+  const action = async formData => {
+    'use server'
+    await save(formData)
+  }
+  return action
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result).not.toBeNull()
+    expect(result!.code).toContain('const action = $$ACTION_0_anonymous_server_function')
+    expect(result!.code).toContain('async function $$ACTION_0_anonymous_server_function(formData)')
+  })
+
+  it('captures enclosing vars that collide with destructured property keys', () => {
+    const input = `import { db } from './db'
+export default async function Page({ id }) {
+  async function like({ id: ignored }) {
+    'use server'
+    await db.like(id)
+  }
+  return like
+}
+`
+
+    const result = transformInlineServerActions(input, 'page')
+    expect(result!.code).toContain('$$ACTION_0_like.bind(null, id)')
+    expect(result!.code).toContain('async function $$ACTION_0_like(id, { id: ignored })')
+  })
 })

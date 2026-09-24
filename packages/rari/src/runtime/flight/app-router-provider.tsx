@@ -471,13 +471,11 @@ export function AppRouterProvider({
       }
     } catch (parseError) {
       const error = toError(parseError)
-      trackHMRFailure(
-        error,
-        'parse',
-        `Failed to parse RSC Flight protocol: ${error.message}`,
-        window.location.pathname,
-      )
-      return error
+      const wrapped = new Error(`Failed to parse RSC Flight protocol: ${error.message}`, {
+        cause: error,
+      })
+      trackHMRFailure(wrapped, 'parse', wrapped.message, window.location.pathname)
+      return wrapped
     }
   }
 
