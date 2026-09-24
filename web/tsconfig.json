@@ -1,10 +1,10 @@
 {
   "extends": "../.config/typescript/app.json",
   "compilerOptions": {
-    "types": ["node", "vite-plus/client"],
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["node", "vite-plus/client"]
   },
-  "include": ["src", "node_modules/.rari/types/**/*.d.ts"]
+  "include": ["node_modules/.rari/types/**/*.d.ts", "src"]
 }

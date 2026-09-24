@@ -15,14 +15,14 @@
     "url": "https://github.com/rari-build/rari/issues"
   },
   "keywords": [
-    "react",
-    "server-components",
-    "rsc",
-    "ssr",
-    "vite",
-    "rust",
     "deno",
-    "framework"
+    "framework",
+    "react",
+    "rsc",
+    "rust",
+    "server-components",
+    "ssr",
+    "vite"
   ],
   "sideEffects": [
     "./dist/runtime/entry-client.mjs",

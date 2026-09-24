@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2023",
     "jsx": "react-jsx",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
     "useDefineForClassFields": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -20,5 +20,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src", "node_modules/.rari/types/**/*.d.ts"]
+  "include": ["node_modules/.rari/types/**/*.d.ts", "src"]
 }

@@ -15,20 +15,20 @@
     "url": "https://github.com/rari-build/rari/issues"
   },
   "keywords": [
-    "rari",
-    "react",
-    "scaffolding",
+    "boilerplate",
     "cli",
     "create-app",
-    "generator",
-    "boilerplate",
-    "template",
-    "server-components",
-    "rust",
     "framework",
-    "zero-config",
+    "generator",
+    "project-template",
+    "rari",
+    "react",
+    "rust",
+    "scaffolding",
+    "server-components",
     "starter",
-    "project-template"
+    "template",
+    "zero-config"
   ],
   "bin": {
     "create-rari-app": "dist/index.mjs"
