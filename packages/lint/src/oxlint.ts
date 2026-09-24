@@ -234,6 +234,9 @@ export const lint: OxlintConfig = {
       {
         ignoreInferredTypes: true,
         treatMethodsAsReadonly: true,
+        allow: [
+          { from: 'package', name: ['PageProps', 'LayoutProps', 'ErrorProps'], package: 'rari' },
+        ],
       },
     ],
     'typescript/prefer-readonly': 'error',
