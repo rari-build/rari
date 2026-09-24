@@ -105,17 +105,13 @@ function readOpenGraphImages(value: unknown): OpenGraphImage[] {
   return images
 }
 
-export function buildMetadataHeadElements(metadata: unknown): unknown[] {
-  if (!isRecord(metadata)) return []
+type MetaPush = (node: unknown) => void
 
-  const react = g.React
-  if (react == null || typeof react.createElement !== 'function') return []
-
-  const elements: unknown[] = []
-  const push = (node: unknown) => {
-    if (node != null) elements.push(node)
-  }
-
+function pushBasicMetadata(
+  react: ReactApi,
+  metadata: Readonly<Record<string, unknown>>,
+  push: MetaPush,
+): void {
   push(createMeta(react, { charSet: 'UTF-8' }))
 
   const viewport =
@@ -140,17 +136,24 @@ export function buildMetadataHeadElements(metadata: unknown): unknown[] {
       push(createMeta(react, { name: 'keywords', content: keywords.join(', ') }))
     }
   }
+}
 
-  if (isRecord(metadata.robots)) {
-    const parts: string[] = []
-    if (metadata.robots.index === false) parts.push('noindex')
-    else if (metadata.robots.index === true) parts.push('index')
-    if (metadata.robots.follow === false) parts.push('nofollow')
-    else if (metadata.robots.follow === true) parts.push('follow')
-    if (metadata.robots.nocache === true) parts.push('nocache')
-    if (parts.length > 0) push(createMeta(react, { name: 'robots', content: parts.join(', ') }))
-  }
+function pushRobotsMeta(react: ReactApi, robots: unknown, push: MetaPush): void {
+  if (!isRecord(robots)) return
+  const parts: string[] = []
+  if (robots.index === false) parts.push('noindex')
+  else if (robots.index === true) parts.push('index')
+  if (robots.follow === false) parts.push('nofollow')
+  else if (robots.follow === true) parts.push('follow')
+  if (robots.nocache === true) parts.push('nocache')
+  if (parts.length > 0) push(createMeta(react, { name: 'robots', content: parts.join(', ') }))
+}
 
+function pushAlternateLinks(
+  react: ReactApi,
+  metadata: Readonly<Record<string, unknown>>,
+  push: MetaPush,
+): void {
   const alternates = isRecord(metadata.alternates) ? metadata.alternates : undefined
   const canonical =
     (typeof metadata.canonical === 'string' ? metadata.canonical : undefined) ??
@@ -159,120 +162,138 @@ export function buildMetadataHeadElements(metadata: unknown): unknown[] {
     push(createLink(react, { rel: 'canonical', href: canonical }))
   }
 
-  if (isRecord(alternates?.types)) {
-    for (const [type, href] of Object.entries(alternates.types)) {
-      if (hasNonEmptyString(href)) push(createLink(react, { rel: 'alternate', type, href }))
-    }
+  if (!isRecord(alternates?.types)) return
+  for (const [type, href] of Object.entries(alternates.types)) {
+    if (hasNonEmptyString(href)) push(createLink(react, { rel: 'alternate', type, href }))
   }
+}
 
-  const icons = isRecord(metadata.icons) ? metadata.icons : undefined
-
-  for (const icon of iconDescriptors(icons?.icon, 'icon')) {
+function pushIconDescriptorLinks(
+  react: ReactApi,
+  value: unknown,
+  defaultRel: string,
+  push: MetaPush,
+  includeColor = false,
+): void {
+  for (const icon of iconDescriptors(value, defaultRel)) {
     if (!hasNonEmptyString(icon.url)) continue
-    const attrs: Record<string, string> = { rel: icon.rel ?? 'icon', href: icon.url }
+    const attrs: Record<string, string> = { rel: icon.rel ?? defaultRel, href: icon.url }
     if (hasNonEmptyString(icon.type)) attrs.type = icon.type
     if (hasNonEmptyString(icon.sizes)) attrs.sizes = icon.sizes
+    if (includeColor && hasNonEmptyString(icon.color)) attrs.color = icon.color
     push(createLink(react, attrs))
   }
+}
 
-  for (const icon of iconDescriptors(icons?.apple, 'apple-touch-icon')) {
-    if (!hasNonEmptyString(icon.url)) continue
-    const attrs: Record<string, string> = {
-      rel: icon.rel ?? 'apple-touch-icon',
-      href: icon.url,
-    }
-    if (hasNonEmptyString(icon.type)) attrs.type = icon.type
-    if (hasNonEmptyString(icon.sizes)) attrs.sizes = icon.sizes
-    push(createLink(react, attrs))
+function pushIconLinks(
+  react: ReactApi,
+  icons: Readonly<Record<string, unknown>> | undefined,
+  push: MetaPush,
+): void {
+  pushIconDescriptorLinks(react, icons?.icon, 'icon', push)
+  pushIconDescriptorLinks(react, icons?.apple, 'apple-touch-icon', push)
+  pushIconDescriptorLinks(react, icons?.other, 'icon', push, true)
+}
+
+function pushOgImageMeta(react: ReactApi, image: OpenGraphImage, push: MetaPush): void {
+  const url = ogImageUrl(image)
+  if (hasNonEmptyString(url)) push(createMeta(react, { property: 'og:image', content: url }))
+  if (typeof image === 'string') return
+  if (image.width != null)
+    push(createMeta(react, { property: 'og:image:width', content: String(image.width) }))
+  if (image.height != null)
+    push(createMeta(react, { property: 'og:image:height', content: String(image.height) }))
+  if (hasNonEmptyString(image.alt))
+    push(createMeta(react, { property: 'og:image:alt', content: image.alt }))
+}
+
+function pushOpenGraphMeta(react: ReactApi, og: unknown, push: MetaPush): void {
+  if (!isRecord(og)) return
+  if (hasNonEmptyString(og.title))
+    push(createMeta(react, { property: 'og:title', content: og.title }))
+  if (hasNonEmptyString(og.description))
+    push(createMeta(react, { property: 'og:description', content: og.description }))
+  if (hasNonEmptyString(og.url)) push(createMeta(react, { property: 'og:url', content: og.url }))
+  if (hasNonEmptyString(og.siteName))
+    push(createMeta(react, { property: 'og:site_name', content: og.siteName }))
+  if (hasNonEmptyString(og.type)) push(createMeta(react, { property: 'og:type', content: og.type }))
+  for (const image of readOpenGraphImages(og.images)) pushOgImageMeta(react, image, push)
+}
+
+function pushTwitterMeta(react: ReactApi, twitter: unknown, push: MetaPush): void {
+  if (!isRecord(twitter)) return
+  if (hasNonEmptyString(twitter.card))
+    push(createMeta(react, { name: 'twitter:card', content: twitter.card }))
+  if (hasNonEmptyString(twitter.site))
+    push(createMeta(react, { name: 'twitter:site', content: twitter.site }))
+  if (hasNonEmptyString(twitter.creator))
+    push(createMeta(react, { name: 'twitter:creator', content: twitter.creator }))
+  if (hasNonEmptyString(twitter.title))
+    push(createMeta(react, { name: 'twitter:title', content: twitter.title }))
+  if (hasNonEmptyString(twitter.description))
+    push(createMeta(react, { name: 'twitter:description', content: twitter.description }))
+  if (!Array.isArray(twitter.images)) return
+  for (const image of twitter.images) {
+    if (hasNonEmptyString(image)) push(createMeta(react, { name: 'twitter:image', content: image }))
+  }
+}
+
+function pushThemeColorMeta(react: ReactApi, themeColor: unknown, push: MetaPush): void {
+  if (typeof themeColor === 'string') {
+    push(createMeta(react, { name: 'theme-color', content: themeColor }))
+    return
+  }
+  if (!Array.isArray(themeColor)) return
+  for (const entry of themeColor) {
+    if (!isRecord(entry) || typeof entry.color !== 'string') continue
+    const attrs: Record<string, string> = { name: 'theme-color', content: entry.color }
+    if (hasNonEmptyString(entry.media)) attrs.media = entry.media
+    push(createMeta(react, attrs))
+  }
+}
+
+function pushAppleWebAppMeta(react: ReactApi, appleWebApp: unknown, push: MetaPush): void {
+  if (!isRecord(appleWebApp)) return
+  if (appleWebApp.capable === true) {
+    push(createMeta(react, { name: 'apple-mobile-web-app-capable', content: 'yes' }))
+  }
+  if (hasNonEmptyString(appleWebApp.title)) {
+    push(
+      createMeta(react, {
+        name: 'apple-mobile-web-app-title',
+        content: appleWebApp.title,
+      }),
+    )
+  }
+  if (hasNonEmptyString(appleWebApp.statusBarStyle)) {
+    push(
+      createMeta(react, {
+        name: 'apple-mobile-web-app-status-bar-style',
+        content: appleWebApp.statusBarStyle,
+      }),
+    )
+  }
+}
+
+export function buildMetadataHeadElements(metadata: unknown): unknown[] {
+  if (!isRecord(metadata)) return []
+
+  const react = g.React
+  if (react == null || typeof react.createElement !== 'function') return []
+
+  const elements: unknown[] = []
+  const push: MetaPush = node => {
+    if (node != null) elements.push(node)
   }
 
-  for (const icon of iconDescriptors(icons?.other, 'icon')) {
-    if (!hasNonEmptyString(icon.url)) continue
-    const attrs: Record<string, string> = { rel: icon.rel ?? 'icon', href: icon.url }
-    if (hasNonEmptyString(icon.type)) attrs.type = icon.type
-    if (hasNonEmptyString(icon.sizes)) attrs.sizes = icon.sizes
-    if (hasNonEmptyString(icon.color)) attrs.color = icon.color
-    push(createLink(react, attrs))
-  }
-
-  const og = isRecord(metadata.openGraph) ? metadata.openGraph : undefined
-  if (og != null) {
-    if (hasNonEmptyString(og.title))
-      push(createMeta(react, { property: 'og:title', content: og.title }))
-    if (hasNonEmptyString(og.description))
-      push(createMeta(react, { property: 'og:description', content: og.description }))
-    if (hasNonEmptyString(og.url)) push(createMeta(react, { property: 'og:url', content: og.url }))
-    if (hasNonEmptyString(og.siteName))
-      push(createMeta(react, { property: 'og:site_name', content: og.siteName }))
-    if (hasNonEmptyString(og.type))
-      push(createMeta(react, { property: 'og:type', content: og.type }))
-    for (const image of readOpenGraphImages(og.images)) {
-      const url = ogImageUrl(image)
-      if (hasNonEmptyString(url)) push(createMeta(react, { property: 'og:image', content: url }))
-      if (typeof image !== 'string') {
-        if (image.width != null)
-          push(createMeta(react, { property: 'og:image:width', content: String(image.width) }))
-        if (image.height != null)
-          push(createMeta(react, { property: 'og:image:height', content: String(image.height) }))
-        if (hasNonEmptyString(image.alt))
-          push(createMeta(react, { property: 'og:image:alt', content: image.alt }))
-      }
-    }
-  }
-
-  const twitter = isRecord(metadata.twitter) ? metadata.twitter : undefined
-  if (twitter != null) {
-    if (hasNonEmptyString(twitter.card))
-      push(createMeta(react, { name: 'twitter:card', content: twitter.card }))
-    if (hasNonEmptyString(twitter.site))
-      push(createMeta(react, { name: 'twitter:site', content: twitter.site }))
-    if (hasNonEmptyString(twitter.creator))
-      push(createMeta(react, { name: 'twitter:creator', content: twitter.creator }))
-    if (hasNonEmptyString(twitter.title))
-      push(createMeta(react, { name: 'twitter:title', content: twitter.title }))
-    if (hasNonEmptyString(twitter.description))
-      push(createMeta(react, { name: 'twitter:description', content: twitter.description }))
-    if (Array.isArray(twitter.images)) {
-      for (const image of twitter.images) {
-        if (hasNonEmptyString(image))
-          push(createMeta(react, { name: 'twitter:image', content: image }))
-      }
-    }
-  }
-
-  if (typeof metadata.themeColor === 'string') {
-    push(createMeta(react, { name: 'theme-color', content: metadata.themeColor }))
-  } else if (Array.isArray(metadata.themeColor)) {
-    for (const entry of metadata.themeColor) {
-      if (!isRecord(entry) || typeof entry.color !== 'string') continue
-      const attrs: Record<string, string> = { name: 'theme-color', content: entry.color }
-      if (hasNonEmptyString(entry.media)) attrs.media = entry.media
-      push(createMeta(react, attrs))
-    }
-  }
-
-  const appleWebApp = isRecord(metadata.appleWebApp) ? metadata.appleWebApp : undefined
-  if (appleWebApp != null) {
-    if (appleWebApp.capable === true) {
-      push(createMeta(react, { name: 'apple-mobile-web-app-capable', content: 'yes' }))
-    }
-    if (hasNonEmptyString(appleWebApp.title)) {
-      push(
-        createMeta(react, {
-          name: 'apple-mobile-web-app-title',
-          content: appleWebApp.title,
-        }),
-      )
-    }
-    if (hasNonEmptyString(appleWebApp.statusBarStyle)) {
-      push(
-        createMeta(react, {
-          name: 'apple-mobile-web-app-status-bar-style',
-          content: appleWebApp.statusBarStyle,
-        }),
-      )
-    }
-  }
+  pushBasicMetadata(react, metadata, push)
+  pushRobotsMeta(react, metadata.robots, push)
+  pushAlternateLinks(react, metadata, push)
+  pushIconLinks(react, isRecord(metadata.icons) ? metadata.icons : undefined, push)
+  pushOpenGraphMeta(react, metadata.openGraph, push)
+  pushTwitterMeta(react, metadata.twitter, push)
+  pushThemeColorMeta(react, metadata.themeColor, push)
+  pushAppleWebAppMeta(react, metadata.appleWebApp, push)
 
   return elements
 }

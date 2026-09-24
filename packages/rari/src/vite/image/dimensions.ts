@@ -36,6 +36,35 @@ function dimensionsFromGif(buffer: Buffer): ImageDimensions | null {
   }
 }
 
+function isJpegSofMarker(marker: number): boolean {
+  return (
+    (marker >= 0xc0 && marker <= 0xc3) ||
+    (marker >= 0xc5 && marker <= 0xc7) ||
+    (marker >= 0xc9 && marker <= 0xcb) ||
+    (marker >= 0xcd && marker <= 0xcf)
+  )
+}
+
+function dimensionsFromJpegSof(buffer: Buffer, offset: number): ImageDimensions | null {
+  if (offset + 7 >= buffer.length) return null
+  const size = readUInt16BE(buffer, offset)
+  const components = buffer[offset + 7] ?? 0
+  const required = 8 + 3 * components
+  if (components < 1 || size < required) return null
+  if (offset + size > buffer.length) return null
+  const height = readUInt16BE(buffer, offset + 3)
+  const width = readUInt16BE(buffer, offset + 5)
+  if (width === 0 || height === 0) return null
+  return { height, width }
+}
+
+function skipJpegMarkerSegment(buffer: Buffer, offset: number): number | null {
+  if (offset + 1 >= buffer.length) return null
+  const size = readUInt16BE(buffer, offset)
+  if (size < 2) return null
+  return offset + size
+}
+
 function dimensionsFromJpeg(buffer: Buffer): ImageDimensions | null {
   if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
 
@@ -50,31 +79,12 @@ function dimensionsFromJpeg(buffer: Buffer): ImageDimensions | null {
     const marker = buffer[offset + 1]
     offset += 2
 
-    const isSof =
-      (marker >= 0xc0 && marker <= 0xc3) ||
-      (marker >= 0xc5 && marker <= 0xc7) ||
-      (marker >= 0xc9 && marker <= 0xcb) ||
-      (marker >= 0xcd && marker <= 0xcf)
-
-    if (isSof) {
-      if (offset + 7 >= buffer.length) return null
-      const size = readUInt16BE(buffer, offset)
-      const components = buffer[offset + 7] ?? 0
-      const required = 8 + 3 * components
-      if (components < 1 || size < required) return null
-      if (offset + size > buffer.length) return null
-      const height = readUInt16BE(buffer, offset + 3)
-      const width = readUInt16BE(buffer, offset + 5)
-      if (width === 0 || height === 0) return null
-      return { height, width }
-    }
-
+    if (isJpegSofMarker(marker)) return dimensionsFromJpegSof(buffer, offset)
     if (marker === 0xd9 || marker === 0xda) return null
 
-    if (offset + 1 >= buffer.length) return null
-    const size = readUInt16BE(buffer, offset)
-    if (size < 2) return null
-    offset += size
+    const next = skipJpegMarkerSegment(buffer, offset)
+    if (next == null) return null
+    offset = next
   }
 
   return null
@@ -199,6 +209,45 @@ function readPitmItemId(buffer: Buffer, box: IsoBox): number | null {
   return readUInt32BE(buffer, full.dataOffset)
 }
 
+function readIpmaItemId(
+  buffer: Buffer,
+  offset: number,
+  boxEnd: number,
+  version: number,
+): { readonly itemId: number; readonly nextOffset: number } | null {
+  if (version < 1) {
+    if (offset + 2 > boxEnd) return null
+    return { itemId: readUInt16BE(buffer, offset), nextOffset: offset + 2 }
+  }
+  if (offset + 4 > boxEnd) return null
+  return { itemId: readUInt32BE(buffer, offset), nextOffset: offset + 4 }
+}
+
+function readIpmaPropertyIndexes(
+  buffer: Buffer,
+  startOffset: number,
+  boxEnd: number,
+  associationCount: number,
+  largePropertyIndex: boolean,
+): { readonly propertyIndexes: number[]; readonly nextOffset: number } | null {
+  let offset = startOffset
+  const propertyIndexes: number[] = []
+  for (let j = 0; j < associationCount; j += 1) {
+    if (largePropertyIndex) {
+      if (offset + 2 > boxEnd) return null
+      const value = readUInt16BE(buffer, offset)
+      offset += 2
+      propertyIndexes.push(value & 0x7fff)
+    } else {
+      if (offset + 1 > boxEnd) return null
+      const value = buffer[offset] ?? 0
+      offset += 1
+      propertyIndexes.push(value & 0x7f)
+    }
+  }
+  return { propertyIndexes, nextOffset: offset }
+}
+
 function readIpmaAssociations(buffer: Buffer, box: IsoBox): Map<number, number[]> | null {
   const full = readFullBoxVersionFlags(buffer, box)
   if (full == null) return null
@@ -210,37 +259,24 @@ function readIpmaAssociations(buffer: Buffer, box: IsoBox): Map<number, number[]
   const largePropertyIndex = (full.flags & 1) !== 0
 
   for (let i = 0; i < entryCount; i += 1) {
-    let itemId: number
-    if (full.version < 1) {
-      if (offset + 2 > box.end) return null
-      itemId = readUInt16BE(buffer, offset)
-      offset += 2
-    } else {
-      if (offset + 4 > box.end) return null
-      itemId = readUInt32BE(buffer, offset)
-      offset += 4
-    }
+    const item = readIpmaItemId(buffer, offset, box.end, full.version)
+    if (item == null) return null
+    offset = item.nextOffset
 
     if (offset + 1 > box.end) return null
     const associationCount = buffer[offset] ?? 0
     offset += 1
 
-    const propertyIndexes: number[] = []
-    for (let j = 0; j < associationCount; j += 1) {
-      if (largePropertyIndex) {
-        if (offset + 2 > box.end) return null
-        const value = readUInt16BE(buffer, offset)
-        offset += 2
-        propertyIndexes.push(value & 0x7fff)
-      } else {
-        if (offset + 1 > box.end) return null
-        const value = buffer[offset] ?? 0
-        offset += 1
-        propertyIndexes.push(value & 0x7f)
-      }
-    }
-
-    associations.set(itemId, propertyIndexes)
+    const props = readIpmaPropertyIndexes(
+      buffer,
+      offset,
+      box.end,
+      associationCount,
+      largePropertyIndex,
+    )
+    if (props == null) return null
+    offset = props.nextOffset
+    associations.set(item.itemId, props.propertyIndexes)
   }
 
   return associations
@@ -249,6 +285,65 @@ function readIpmaAssociations(buffer: Buffer, box: IsoBox): Map<number, number[]
 function findMetaBox(buffer: Buffer): IsoBox | null {
   for (const box of iterateIsoBoxes(buffer, 0, buffer.length)) {
     if (box.type === 'meta') return box
+  }
+  return null
+}
+
+function collectIpcoIspe(
+  buffer: Buffer,
+  ipco: IsoBox,
+  ispeByIndex: Map<number, ImageDimensions>,
+): ImageDimensions | null {
+  let propertyIndex = 1
+  let firstIspe: ImageDimensions | null = null
+  for (const property of iterateIsoBoxes(buffer, ipco.start + ipco.headerSize, ipco.end)) {
+    if (property.type === 'ispe') {
+      const dims = readIspeDimensions(buffer, property)
+      if (dims != null) {
+        ispeByIndex.set(propertyIndex, dims)
+        firstIspe ??= dims
+      }
+    }
+    propertyIndex += 1
+  }
+  return firstIspe
+}
+
+function collectIprpData(
+  buffer: Buffer,
+  iprp: IsoBox,
+): {
+  readonly ispeByIndex: Map<number, ImageDimensions>
+  readonly associations: Map<number, number[]> | null
+  readonly firstIspe: ImageDimensions | null
+} {
+  const ispeByIndex = new Map<number, ImageDimensions>()
+  let associations: Map<number, number[]> | null = null
+  let firstIspe: ImageDimensions | null = null
+
+  for (const child of iterateIsoBoxes(buffer, iprp.start + iprp.headerSize, iprp.end)) {
+    if (child.type === 'ipco') {
+      const found = collectIpcoIspe(buffer, child, ispeByIndex)
+      firstIspe ??= found
+    } else if (child.type === 'ipma') {
+      associations = readIpmaAssociations(buffer, child)
+    }
+  }
+
+  return { ispeByIndex, associations, firstIspe }
+}
+
+function resolvePrimaryItemDimensions(
+  primaryItemId: number | null,
+  associations: Map<number, number[]> | null,
+  ispeByIndex: Map<number, ImageDimensions>,
+): ImageDimensions | null {
+  if (primaryItemId == null || associations == null) return null
+  const propertyIndexes = associations.get(primaryItemId)
+  if (propertyIndexes == null) return null
+  for (const index of propertyIndexes) {
+    const dims = ispeByIndex.get(index)
+    if (dims != null) return dims
   }
   return null
 }
@@ -263,7 +358,7 @@ function dimensionsFromAvif(buffer: Buffer): ImageDimensions | null {
   if (metaBody > meta.end) return null
 
   let primaryItemId: number | null = null
-  const ispeByIndex = new Map<number, ImageDimensions>()
+  let ispeByIndex = new Map<number, ImageDimensions>()
   let associations: Map<number, number[]> | null = null
   let firstIspe: ImageDimensions | null = null
 
@@ -272,39 +367,15 @@ function dimensionsFromAvif(buffer: Buffer): ImageDimensions | null {
       primaryItemId = readPitmItemId(buffer, box)
       continue
     }
-
     if (box.type !== 'iprp') continue
 
-    for (const child of iterateIsoBoxes(buffer, box.start + box.headerSize, box.end)) {
-      if (child.type === 'ipco') {
-        let propertyIndex = 1
-        for (const property of iterateIsoBoxes(buffer, child.start + child.headerSize, child.end)) {
-          if (property.type === 'ispe') {
-            const dims = readIspeDimensions(buffer, property)
-            if (dims != null) {
-              ispeByIndex.set(propertyIndex, dims)
-              firstIspe ??= dims
-            }
-          }
-          propertyIndex += 1
-        }
-      } else if (child.type === 'ipma') {
-        associations = readIpmaAssociations(buffer, child)
-      }
-    }
+    const collected = collectIprpData(buffer, box)
+    ispeByIndex = collected.ispeByIndex
+    associations = collected.associations
+    firstIspe ??= collected.firstIspe
   }
 
-  if (primaryItemId != null && associations != null) {
-    const propertyIndexes = associations.get(primaryItemId)
-    if (propertyIndexes != null) {
-      for (const index of propertyIndexes) {
-        const dims = ispeByIndex.get(index)
-        if (dims != null) return dims
-      }
-    }
-  }
-
-  return firstIspe
+  return resolvePrimaryItemDimensions(primaryItemId, associations, ispeByIndex) ?? firstIspe
 }
 
 export function readImageDimensions(buffer: Buffer): ImageDimensions | null {

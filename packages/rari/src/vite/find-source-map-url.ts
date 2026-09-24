@@ -34,20 +34,7 @@ function findSourceMapURL(
   projectRoot: string,
 ): object | undefined {
   if (filename.startsWith('file://')) {
-    let filePath: string
-    try {
-      filePath = toPosixPath(fileURLToPath(filename))
-    } catch {
-      return undefined
-    }
-    if (!isPathInside(filePath, projectRoot)) return undefined
-    if (!isFileLoadingAllowed(server.config, filePath)) return undefined
-    if (!SOURCE_FILE_EXT_RE.test(filePath)) return undefined
-    if (!fs.existsSync(filePath)) return undefined
-    const stat = fs.statSync(filePath)
-    if (!stat.isFile() || stat.size > MAX_IDENTITY_SOURCE_BYTES) return undefined
-    const content = fs.readFileSync(filePath, 'utf-8')
-    return lineIdentitySourceMap(filePath, content)
+    return identitySourceMapForFile(server, filename, projectRoot)
   }
 
   const base = server.config.base.endsWith('/')
@@ -57,51 +44,80 @@ function findSourceMapURL(
   const isServer = environmentName === 'Server' || environmentName === 'rsc'
   const isClient = environmentName === 'Client' || environmentName === 'client'
 
-  if (isServer) {
-    const rscGraph = server.environments.rsc.moduleGraph
-    const mod =
-      rscGraph.getModuleById(filename) ??
-      (filename.startsWith('/') ? rscGraph.urlToModuleMap.get(filename) : undefined)
-    const map = mod?.transformResult?.map
-    if (mod != null && map != null) {
-      const mappings =
-        typeof map.mappings === 'string' && map.mappings !== '' ? `;;${map.mappings}` : map.mappings
-      const sources = readSources(map)
-      return {
-        ...map,
-        mappings,
-        ...(sources != null
-          ? {
-              sources: sources.map(source => rewriteModuleSourceUrl(source, mod.url, base)),
-            }
-          : {}),
-      }
-    }
-  }
-
-  if (isClient) {
-    try {
-      const pathname = new URL(filename, 'http://localhost').pathname
-      const url = base !== '' && pathname.startsWith(base) ? pathname.slice(base.length) : pathname
-      const mod = server.environments.client.moduleGraph.urlToModuleMap.get(url)
-      const map = mod?.transformResult?.map
-      if (mod != null && map != null) {
-        const sources = readSources(map)
-        return {
-          ...map,
-          ...(sources != null
-            ? {
-                sources: sources.map(source => rewriteModuleSourceUrl(source, mod.url, base)),
-              }
-            : {}),
-        }
-      }
-    } catch {
-      // ignore invalid URL filenames
-    }
-  }
-
+  if (isServer) return serverEnvironmentSourceMap(server, filename, base)
+  if (isClient) return clientEnvironmentSourceMap(server, filename, base)
   return undefined
+}
+
+function identitySourceMapForFile(
+  server: ViteDevServer,
+  filename: string,
+  projectRoot: string,
+): object | undefined {
+  let filePath: string
+  try {
+    filePath = toPosixPath(fileURLToPath(filename))
+  } catch {
+    return undefined
+  }
+  if (!isPathInside(filePath, projectRoot)) return undefined
+  if (!isFileLoadingAllowed(server.config, filePath)) return undefined
+  if (!SOURCE_FILE_EXT_RE.test(filePath)) return undefined
+  if (!fs.existsSync(filePath)) return undefined
+  const stat = fs.statSync(filePath)
+  if (!stat.isFile() || stat.size > MAX_IDENTITY_SOURCE_BYTES) return undefined
+  const content = fs.readFileSync(filePath, 'utf-8')
+  return lineIdentitySourceMap(filePath, content)
+}
+
+function serverEnvironmentSourceMap(
+  server: ViteDevServer,
+  filename: string,
+  base: string,
+): object | undefined {
+  const rscGraph = server.environments.rsc.moduleGraph
+  const mod =
+    rscGraph.getModuleById(filename) ??
+    (filename.startsWith('/') ? rscGraph.urlToModuleMap.get(filename) : undefined)
+  const map = mod?.transformResult?.map
+  if (mod == null || map == null) return undefined
+  const mappings =
+    typeof map.mappings === 'string' && map.mappings !== '' ? `;;${map.mappings}` : map.mappings
+  const sources = readSources(map)
+  return {
+    ...map,
+    mappings,
+    ...(sources != null
+      ? {
+          sources: sources.map(source => rewriteModuleSourceUrl(source, mod.url, base)),
+        }
+      : {}),
+  }
+}
+
+function clientEnvironmentSourceMap(
+  server: ViteDevServer,
+  filename: string,
+  base: string,
+): object | undefined {
+  try {
+    const pathname = new URL(filename, 'http://localhost').pathname
+    const url = base !== '' && pathname.startsWith(base) ? pathname.slice(base.length) : pathname
+    const mod = server.environments.client.moduleGraph.urlToModuleMap.get(url)
+    const map = mod?.transformResult?.map
+    if (mod == null || map == null) return undefined
+    const sources = readSources(map)
+    return {
+      ...map,
+      ...(sources != null
+        ? {
+            sources: sources.map(source => rewriteModuleSourceUrl(source, mod.url, base)),
+          }
+        : {}),
+    }
+  } catch {
+    return undefined
+  }
 }
 
 export function createFindSourceMapURLPlugin(projectRoot: string): Plugin {

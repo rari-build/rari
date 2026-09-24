@@ -6,61 +6,65 @@ export async function preloadModulesFromFlightProtocol(
   flightProtocol: string,
   preloadedModuleIds?: Set<string>,
 ): Promise<void> {
-  const lines = flightProtocol.split('\n')
-  const moduleIds = new Set<string>()
+  const moduleIds = collectFlightModuleIds(flightProtocol, preloadedModuleIds)
+  if (moduleIds.size === 0) return
 
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-
-    const colonIndex = trimmed.indexOf(':')
-    if (colonIndex === -1) continue
-
-    const content = trimmed.substring(colonIndex + 1)
-
-    if (content.startsWith('I')) {
+  await Promise.all(
+    Array.from(moduleIds, async id => {
       try {
-        const jsonContent = content.substring(1)
-        const importData: unknown = JSON.parse(jsonContent)
+        const component: unknown = await getClientComponent(id)
 
-        if (isFlightImportTuple(importData)) {
-          const id = importData[0]
-          if (!id.includes('/') && id.startsWith('$')) continue
-          const exportName = typeof importData[2] === 'string' ? importData[2] : undefined
-          const normalizedImportId = toPosixPath(id)
-
-          let moduleId: string
-          if (normalizedImportId.includes('#')) {
-            moduleId = normalizedImportId
-          } else {
-            moduleId =
-              exportName != null && exportName !== '' && exportName !== 'default'
-                ? `${normalizedImportId}#${exportName}`
-                : normalizedImportId
-          }
-
-          if (!preloadedModuleIds || !preloadedModuleIds.has(moduleId)) moduleIds.add(moduleId)
+        if (component == null) {
+          console.warn(`[rari] Failed to preload component: ${id}`)
+          return
         }
-      } catch {}
-    }
+
+        preloadedModuleIds?.add(id)
+      } catch (error) {
+        console.error(`[rari] Error preloading component ${id}:`, error)
+      }
+    }),
+  )
+}
+
+function collectFlightModuleIds(
+  flightProtocol: string,
+  preloadedModuleIds?: ReadonlySet<string>,
+): Set<string> {
+  const moduleIds = new Set<string>()
+  for (const line of flightProtocol.split('\n')) {
+    const moduleId = parseFlightImportModuleId(line)
+    if (moduleId == null) continue
+    if (!preloadedModuleIds || !preloadedModuleIds.has(moduleId)) moduleIds.add(moduleId)
   }
+  return moduleIds
+}
 
-  if (moduleIds.size > 0) {
-    await Promise.all(
-      Array.from(moduleIds, async id => {
-        try {
-          const component: unknown = await getClientComponent(id)
+function parseFlightImportModuleId(line: string): string | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
 
-          if (component == null) {
-            console.warn(`[rari] Failed to preload component: ${id}`)
-            return
-          }
+  const colonIndex = trimmed.indexOf(':')
+  if (colonIndex === -1) return null
 
-          preloadedModuleIds?.add(id)
-        } catch (error) {
-          console.error(`[rari] Error preloading component ${id}:`, error)
-        }
-      }),
-    )
+  const content = trimmed.substring(colonIndex + 1)
+  if (!content.startsWith('I')) return null
+
+  try {
+    const importData: unknown = JSON.parse(content.substring(1))
+    if (!isFlightImportTuple(importData)) return null
+
+    const id = importData[0]
+    if (!id.includes('/') && id.startsWith('$')) return null
+    const exportName = typeof importData[2] === 'string' ? importData[2] : undefined
+    const normalizedImportId = toPosixPath(id)
+
+    if (normalizedImportId.includes('#')) return normalizedImportId
+    if (exportName != null && exportName !== '' && exportName !== 'default') {
+      return `${normalizedImportId}#${exportName}`
+    }
+    return normalizedImportId
+  } catch {
+    return null
   }
 }

@@ -69,82 +69,94 @@ async function callHandler(
   methodName: string,
 ): Promise<ApiResponse> {
   try {
-    const url = new URL(requestData.url, 'http://localhost')
-    const headers = new Headers(requestData.headers ?? {})
-    const method = requestData.method.toUpperCase()
-    const body = method === 'GET' || method === 'HEAD' ? undefined : (requestData.body ?? undefined)
-
-    const request = new Request(url.toString(), {
-      method: requestData.method,
-      headers,
-      body,
-    })
-
-    const context: ApiContext = {
-      params: requestData.params ?? {},
-    }
-
-    const moduleNamespace = (await import(moduleSpecifier)) as Record<string, unknown> // oxlint-disable-line typescript/no-unsafe-type-assertion
-    const handler = moduleNamespace[methodName] as ApiHandler // oxlint-disable-line typescript/no-unsafe-type-assertion
-
-    if (typeof handler !== 'function') {
-      const available = Object.keys(moduleNamespace).join(', ')
-      throw new Error(`Handler '${methodName}' is not a function. Available exports: ${available}`)
-    }
-
-    const result = await handler(request, context)
-
-    if (result instanceof Response) {
-      const body = await result.text()
-      return {
-        status: result.status,
-        statusText: result.statusText,
-        headers: serializeResponseHeaders(result.headers, cookiesFromResponse(result)),
-        body,
-      }
-    } else {
-      try {
-        return {
-          status: 200,
-          statusText: 'OK',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(result),
-        }
-      } catch (serializationError) {
-        console.error('Failed to serialize API response:', serializationError)
-
-        const isDevelopment = g['~rari']?.isDevelopment === true
-        const serializationMessage =
-          serializationError instanceof Error
-            ? serializationError.message
-            : 'Response contains circular references or non-serializable values'
-        return {
-          status: 500,
-          statusText: 'Internal Server Error',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            error: 'Failed to serialize response',
-            message: serializationMessage,
-            stack:
-              isDevelopment && serializationError instanceof Error
-                ? serializationError.stack
-                : undefined,
-          }),
-        }
-      }
-    }
+    const result = await invokeApiHandler(requestData, moduleSpecifier, methodName)
+    if (result instanceof Response) return await responseToApiResponse(result)
+    return serializeJsonApiResult(result)
   } catch (error) {
-    console.error('API route handler error:', error)
+    console.error(`API handler error (${methodName}):`, error)
     const isDevelopment = g['~rari']?.isDevelopment === true
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error)
     return {
       status: 500,
       statusText: 'Internal Server Error',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         error: 'Internal Server Error',
-        message: errorMessage,
+        message,
         stack: isDevelopment && error instanceof Error ? error.stack : undefined,
+      }),
+    }
+  }
+}
+
+async function invokeApiHandler(
+  requestData: RequestData,
+  moduleSpecifier: string,
+  methodName: string,
+): Promise<unknown> {
+  const url = new URL(requestData.url, 'http://localhost')
+  const headers = new Headers(requestData.headers ?? {})
+  const method = requestData.method.toUpperCase()
+  const body = method === 'GET' || method === 'HEAD' ? undefined : (requestData.body ?? undefined)
+
+  const request = new Request(url.toString(), {
+    method: requestData.method,
+    headers,
+    body,
+  })
+
+  const context: ApiContext = {
+    params: requestData.params ?? {},
+  }
+
+  const moduleNamespace = (await import(moduleSpecifier)) as Record<string, unknown> // oxlint-disable-line typescript/no-unsafe-type-assertion
+  const handler = moduleNamespace[methodName] as ApiHandler // oxlint-disable-line typescript/no-unsafe-type-assertion
+
+  if (typeof handler !== 'function') {
+    const available = Object.keys(moduleNamespace).join(', ')
+    throw new Error(`Handler '${methodName}' is not a function. Available exports: ${available}`)
+  }
+
+  return handler(request, context)
+}
+
+async function responseToApiResponse(result: Response): Promise<ApiResponse> {
+  const body = await result.text()
+  return {
+    status: result.status,
+    statusText: result.statusText,
+    headers: serializeResponseHeaders(result.headers, cookiesFromResponse(result)),
+    body,
+  }
+}
+
+function serializeJsonApiResult(result: unknown): ApiResponse {
+  try {
+    return {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(result),
+    }
+  } catch (serializationError) {
+    console.error('Failed to serialize API response:', serializationError)
+
+    const isDevelopment = g['~rari']?.isDevelopment === true
+    const serializationMessage =
+      serializationError instanceof Error
+        ? serializationError.message
+        : 'Response contains circular references or non-serializable values'
+    return {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        error: 'Failed to serialize response',
+        message: serializationMessage,
+        stack:
+          isDevelopment && serializationError instanceof Error
+            ? serializationError.stack
+            : undefined,
       }),
     }
   }

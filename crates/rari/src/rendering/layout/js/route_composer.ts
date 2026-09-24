@@ -164,6 +164,25 @@
     startTotal: number,
   ): Promise<unknown> {
     const startRsc = performance.now()
+    const prepared = await prepareElementForRsc(element, options)
+    if (prepared.deferred) return undefined
+
+    const renderToRsc = g.renderToRsc
+    if (typeof renderToRsc !== 'function') {
+      throw new TypeError('[rari] renderToRsc is not available')
+    }
+    const rscData = await renderToRsc(prepared.element)
+
+    timings.rscConversion = performance.now() - startRsc
+    timings.total = performance.now() - startTotal
+
+    return storeRenderResult(rscData, options, timings)
+  }
+
+  async function prepareElementForRsc(
+    element: unknown,
+    options: ComposeRouteOptions,
+  ): Promise<{ element: unknown; deferred: boolean }> {
     let elementToRender = element
     const metadata = options.metadata
     const rari = (g['~rari'] ??= {})
@@ -193,32 +212,46 @@
     }
 
     if (options.deferRsc === true) {
-      const streamId = options.captureStreamId
-      if (streamId != null && streamId !== '') {
-        rari.capturedByStream ??= {}
-        rari.blockingHeadByStream ??= {}
-        rari.capturedByStream[streamId] = elementToRender
-        rari.blockingHeadByStream[streamId] = blockingHeadHtml
-        return undefined
-      }
-      if (rari.isActionRefreshCompose === true) {
-        rari.actionRefreshElement = elementToRender
-      } else {
-        rari.capturedElement = elementToRender
-      }
-      rari.blockingHeadScriptsHtml = blockingHeadHtml
-      return undefined
+      captureDeferredElement(rari, options, elementToRender, blockingHeadHtml)
+      return { element: elementToRender, deferred: true }
     }
 
-    const renderToRsc = g.renderToRsc
-    if (typeof renderToRsc !== 'function') {
-      throw new TypeError('[rari] renderToRsc is not available')
+    return { element: elementToRender, deferred: false }
+  }
+
+  function captureDeferredElement(
+    rari: Record<string, unknown>,
+    options: ComposeRouteOptions,
+    elementToRender: unknown,
+    blockingHeadHtml: string,
+  ): void {
+    const streamId = options.captureStreamId
+    if (streamId != null && streamId !== '') {
+      if (rari.capturedByStream == null || typeof rari.capturedByStream !== 'object') {
+        rari.capturedByStream = Object.create(null)
+      }
+      if (rari.blockingHeadByStream == null || typeof rari.blockingHeadByStream !== 'object') {
+        rari.blockingHeadByStream = Object.create(null)
+      }
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      ;(rari.capturedByStream as Record<string, unknown>)[streamId] = elementToRender
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      ;(rari.blockingHeadByStream as Record<string, unknown>)[streamId] = blockingHeadHtml
+      return
     }
-    const rscData = await renderToRsc(elementToRender)
+    if (rari.isActionRefreshCompose === true) {
+      rari.actionRefreshElement = elementToRender
+    } else {
+      rari.capturedElement = elementToRender
+    }
+    rari.blockingHeadScriptsHtml = blockingHeadHtml
+  }
 
-    timings.rscConversion = performance.now() - startRsc
-    timings.total = performance.now() - startTotal
-
+  function storeRenderResult(
+    rscData: unknown,
+    options: ComposeRouteOptions,
+    timings: Record<string, number>,
+  ): unknown {
     const suspense = g['~suspense']
     const boundaries = suspense?.discoveredBoundaries ?? []
     const pendingPromises = suspense?.pendingPromises ?? []
@@ -251,11 +284,7 @@
         typeof options.actionPostUrl === 'string' ? options.actionPostUrl : undefined
     }
 
-    const suspense = (g['~suspense'] ??= {})
-    suspense.discoveredBoundaries = []
-    suspense.pendingPromises = []
-    suspense.promises = {}
-    suspense.currentBoundaryId = null
+    resetSuspenseState()
 
     const timings = options.timings
     const startTotal = options.startTotal
@@ -267,13 +296,52 @@
     const expandRootLayout = options.expandRootLayout !== false
 
     let current: unknown = options.pageElement
+    current = wrapAllTemplates(templates, current, templateKey, timings)
+    current = await wrapNestedAndRootLayouts(
+      layouts,
+      current,
+      pathname,
+      expandRootLayout,
+      reusePaths,
+      timings,
+      options.errorComponentId ?? '',
+    )
 
+    return finalizeComposition(current, options, timings, startTotal)
+  }
+
+  function resetSuspenseState(): void {
+    const suspense = (g['~suspense'] ??= {})
+    suspense.discoveredBoundaries = []
+    suspense.pendingPromises = []
+    suspense.promises = {}
+    suspense.currentBoundaryId = null
+  }
+
+  function wrapAllTemplates(
+    templates: readonly TemplateSpec[],
+    pageElement: unknown,
+    templateKey: string,
+    timings: Record<string, number>,
+  ): unknown {
+    let current = pageElement
     for (let i = templates.length - 1, wrapIndex = 0; i >= 0; i -= 1, wrapIndex += 1) {
       const template = templates[i] as TemplateSpec | undefined
       if (template == null) continue
       current = wrapTemplate(template, current, templateKey, timings, wrapIndex)
     }
+    return current
+  }
 
+  async function wrapNestedAndRootLayouts(
+    layouts: readonly LayoutSpec[],
+    pageElement: unknown,
+    pathname: string,
+    expandRootLayout: boolean,
+    reusePaths: ReadonlySet<string>,
+    timings: Record<string, number>,
+    errorComponentId: string,
+  ): Promise<unknown> {
     const nestedLayouts: LayoutSpec[] = []
     const rootLayouts: LayoutSpec[] = []
     for (const layout of layouts) {
@@ -281,6 +349,7 @@
       else nestedLayouts.push(layout)
     }
 
+    let current = pageElement
     let layoutIndex = 0
     for (let i = nestedLayouts.length - 1; i >= 0; i -= 1) {
       const layout = nestedLayouts[i] as LayoutSpec | undefined
@@ -297,7 +366,7 @@
       layoutIndex += 1
     }
 
-    current = wrapErrorBoundary(current, options.errorComponentId ?? '')
+    current = wrapErrorBoundary(current, errorComponentId)
 
     for (let i = rootLayouts.length - 1; i >= 0; i -= 1) {
       const layout = rootLayouts[i] as LayoutSpec | undefined
@@ -314,7 +383,7 @@
       layoutIndex += 1
     }
 
-    return finalizeComposition(current, options, timings, startTotal)
+    return current
   }
 
   const rari = (g['~rari'] ??= {})

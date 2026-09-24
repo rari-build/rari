@@ -74,6 +74,16 @@ export function alignGeneratedLinesToOriginal(
 
   if (n * m > MAX_LCS_CELLS) return heuristicAlign(originalLines, generatedLines)
 
+  return alignWithLcs(originalLines, generatedLines)
+}
+
+function alignWithLcs(
+  originalLines: readonly string[],
+  generatedLines: readonly string[],
+): Array<number | null> {
+  const n = originalLines.length
+  const m = generatedLines.length
+  const result = Array.from<number | null>({ length: m }).fill(null)
   const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1))
   for (let i = 1; i <= n; i += 1) {
     const oi = originalLines[i - 1]

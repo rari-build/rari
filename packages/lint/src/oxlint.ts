@@ -160,7 +160,7 @@ export const lint: OxlintConfig = {
     'slop/no-trivial-functions': 'error',
     'slop/no-trivial-type-aliases': 'error',
     'slop/prefer-jsdoc': 'error',
-    // 'sonarjs/cognitive-complexity': ['error', 15],
+    'sonarjs/cognitive-complexity': ['error', 15],
     'sonarjs/no-all-duplicated-branches': 'error',
     'sonarjs/no-collapsible-if': 'error',
     'sonarjs/no-commented-code': 'error',

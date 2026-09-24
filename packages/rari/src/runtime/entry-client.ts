@@ -240,6 +240,133 @@ async function createElementFromFlightBytes(
   return createFromReadableStream(stream)
 }
 
+function resolveRscServerUrl(): string {
+  if (!import.meta.env.DEV) return window.location.origin
+  if (import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== '')
+    return import.meta.env.RARI_SERVER_URL
+  const port =
+    import.meta.env.VITE_RSC_PORT != null && import.meta.env.VITE_RSC_PORT !== ''
+      ? import.meta.env.VITE_RSC_PORT
+      : '3000'
+  return `http://localhost:${port}`
+}
+
+async function hydrateFromEmbeddedPayload(
+  embeddedPayloadBytes: Uint8Array,
+): Promise<{ readonly ok: boolean; readonly errorMessage: string }> {
+  let hydrationErrorMessage = 'Could not load interactive page data.'
+  let element: React.ReactNode | PromiseLike<React.ReactNode> | null | undefined
+
+  try {
+    element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: false })
+  } catch (parseErr) {
+    hydrationErrorMessage = errorMessage(parseErr, 'Failed to parse embedded RSC payload.')
+
+    try {
+      const currentPath = window.location.pathname + window.location.search
+      const response = await fetch(resolveRscServerUrl() + currentPath, {
+        headers: { Accept: 'text/x-component' },
+        cache: 'no-store',
+      })
+
+      if (response.ok) {
+        element = await createFromFetch(Promise.resolve(response))
+      } else {
+        hydrationErrorMessage = `Failed to fetch RSC payload fallback: HTTP ${response.status}.`
+      }
+    } catch (fetchErr) {
+      hydrationErrorMessage = errorMessage(fetchErr, 'Failed to fetch RSC payload fallback.')
+      console.error('[rari] Failed to fetch RSC payload fallback:', fetchErr)
+    }
+  }
+
+  if (element != null) {
+    const resolvedElement = await resolveFlightElement(element)
+    mountAppRouterTree(resolvedElement)
+    return { ok: true, errorMessage: hydrationErrorMessage }
+  }
+
+  showHydrationFailureBanner(document.body, `${hydrationErrorMessage} Try refreshing the page.`)
+  console.error('[rari] Hydration skipped: failed to load RSC payload')
+  return { ok: false, errorMessage: hydrationErrorMessage }
+}
+
+async function fetchInitialRscElement(): Promise<
+  React.ReactNode | PromiseLike<React.ReactNode> | null
+> {
+  try {
+    const currentPath = window.location.pathname + window.location.search
+    const response = await fetch(resolveRscServerUrl() + currentPath, {
+      headers: { Accept: 'text/x-component' },
+      cache: 'no-store',
+    })
+
+    if (!response.ok && response.status !== 404)
+      throw new Error(`Failed to fetch RSC data: ${response.status}`)
+
+    if (!response.body) throw new Error('RSC response has no body')
+
+    return await createFromFetch(Promise.resolve(response))
+  } catch (e) {
+    if (e instanceof Promise) throw e
+    console.error('[rari] Failed to fetch initial RSC data:', e)
+    return null
+  }
+}
+
+function createBufferedRscStream(): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const handleStreamUpdate = (event: Event) => {
+        const detail = getCustomEventDetail(event, isRscRowDetail)
+        if (detail) controller.enqueue(new TextEncoder().encode(`${detail.rscRow}\n`))
+      }
+
+      const handleStreamComplete = () => {
+        controller.close()
+        window.removeEventListener('rari:html-stream-row', handleStreamUpdate)
+        window.removeEventListener('rari:stream-complete', handleStreamComplete)
+      }
+
+      window.addEventListener('rari:html-stream-row', handleStreamUpdate)
+      window.addEventListener('rari:stream-complete', handleStreamComplete)
+
+      const windowRari = getRariWindowBag()!
+      if (windowRari.streaming?.bufferedRows) {
+        const snapshot = [...windowRari.streaming.bufferedRows]
+        windowRari.streaming.bufferedRows = []
+
+        for (const row of snapshot) controller.enqueue(new TextEncoder().encode(`${row}\n`))
+      }
+
+      if (windowRari.streaming?.complete) handleStreamComplete()
+    },
+  })
+}
+
+async function loadElementFromBufferedRows(): Promise<
+  React.ReactNode | PromiseLike<React.ReactNode> | null
+> {
+  try {
+    return await createFromReadableStream(createBufferedRscStream())
+  } catch (e) {
+    console.error('[rari] Failed to process streaming RSC payload:', e)
+    return null
+  }
+}
+
+async function loadElementFromEmbeddedStreaming(
+  embeddedPayloadBytes: Uint8Array,
+): Promise<React.ReactNode | PromiseLike<React.ReactNode> | null> {
+  try {
+    return await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: true })
+  } catch (e) {
+    console.error('[rari] Failed to parse embedded RSC payload:', e)
+    console.error('[rari] Error stack:', asError(e)?.stack ?? 'no stack')
+    return null
+  }
+}
+
 export async function renderApp(): Promise<void> {
   const hasEmbeddedPayload = hasEmbeddedFlightPayload()
   const embeddedPayloadBytes = decodeEmbeddedFlightPayload()
@@ -249,128 +376,20 @@ export async function renderApp(): Promise<void> {
   const hasBufferedRows = !!(streaming?.bufferedRows && streaming.bufferedRows.length > 0)
 
   try {
-    let element: React.ReactNode | PromiseLike<React.ReactNode> | null | undefined
-
-    const needsInitialFetch = !hasEmbeddedPayload && !hasBufferedRows && !hasServerRenderedContent
-
     if (hasServerRenderedContent && hasEmbeddedPayload && embeddedPayloadBytes) {
-      let hydrationErrorMessage = 'Could not load interactive page data.'
-
-      try {
-        element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: false })
-      } catch (parseErr) {
-        hydrationErrorMessage = errorMessage(parseErr, 'Failed to parse embedded RSC payload.')
-
-        try {
-          const currentPath = window.location.pathname + window.location.search
-          const rscServerUrl = import.meta.env.DEV
-            ? import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== ''
-              ? import.meta.env.RARI_SERVER_URL
-              : `http://localhost:${import.meta.env.VITE_RSC_PORT != null && import.meta.env.VITE_RSC_PORT !== '' ? import.meta.env.VITE_RSC_PORT : '3000'}`
-            : window.location.origin
-
-          const response = await fetch(rscServerUrl + currentPath, {
-            headers: { Accept: 'text/x-component' },
-            cache: 'no-store',
-          })
-
-          if (response.ok) {
-            element = await createFromFetch(Promise.resolve(response))
-          } else {
-            hydrationErrorMessage = `Failed to fetch RSC payload fallback: HTTP ${response.status}.`
-          }
-        } catch (fetchErr) {
-          hydrationErrorMessage = errorMessage(fetchErr, 'Failed to fetch RSC payload fallback.')
-          console.error('[rari] Failed to fetch RSC payload fallback:', fetchErr)
-        }
-      }
-
-      if (element != null) {
-        const resolvedElement = await resolveFlightElement(element)
-        mountAppRouterTree(resolvedElement)
-      } else {
-        showHydrationFailureBanner(
-          document.body,
-          `${hydrationErrorMessage} Try refreshing the page.`,
-        )
-        console.error('[rari] Hydration skipped: failed to load RSC payload')
-      }
-
+      await hydrateFromEmbeddedPayload(embeddedPayloadBytes)
       return
     }
 
+    const needsInitialFetch = !hasEmbeddedPayload && !hasBufferedRows && !hasServerRenderedContent
+    let element: React.ReactNode | PromiseLike<React.ReactNode> | null | undefined
+
     if (needsInitialFetch) {
-      try {
-        const currentPath = window.location.pathname + window.location.search
-
-        const rscServerUrl = import.meta.env.DEV
-          ? import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== ''
-            ? import.meta.env.RARI_SERVER_URL
-            : `http://localhost:${import.meta.env.VITE_RSC_PORT != null && import.meta.env.VITE_RSC_PORT !== '' ? import.meta.env.VITE_RSC_PORT : '3000'}`
-          : window.location.origin
-        const fetchUrl = rscServerUrl + currentPath
-
-        const response = await fetch(fetchUrl, {
-          headers: {
-            Accept: 'text/x-component',
-          },
-          cache: 'no-store',
-        })
-
-        if (!response.ok && response.status !== 404)
-          throw new Error(`Failed to fetch RSC data: ${response.status}`)
-
-        if (!response.body) throw new Error('RSC response has no body')
-
-        element = await createFromFetch(Promise.resolve(response))
-      } catch (e) {
-        if (e instanceof Promise) throw e
-        console.error('[rari] Failed to fetch initial RSC data:', e)
-        element = null
-      }
+      element = await fetchInitialRscElement()
     } else if (hasEmbeddedPayload && embeddedPayloadBytes) {
-      try {
-        element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: true })
-      } catch (e) {
-        console.error('[rari] Failed to parse embedded RSC payload:', e)
-        console.error('[rari] Error stack:', asError(e)?.stack ?? 'no stack')
-        element = null
-      }
+      element = await loadElementFromEmbeddedStreaming(embeddedPayloadBytes)
     } else if (hasBufferedRows) {
-      try {
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            const handleStreamUpdate = (event: Event) => {
-              const detail = getCustomEventDetail(event, isRscRowDetail)
-              if (detail) controller.enqueue(new TextEncoder().encode(`${detail.rscRow}\n`))
-            }
-
-            const handleStreamComplete = () => {
-              controller.close()
-              window.removeEventListener('rari:html-stream-row', handleStreamUpdate)
-              window.removeEventListener('rari:stream-complete', handleStreamComplete)
-            }
-
-            window.addEventListener('rari:html-stream-row', handleStreamUpdate)
-            window.addEventListener('rari:stream-complete', handleStreamComplete)
-
-            const windowRari = getRariWindowBag()!
-            if (windowRari.streaming?.bufferedRows) {
-              const snapshot = [...windowRari.streaming.bufferedRows]
-              windowRari.streaming.bufferedRows = []
-
-              for (const row of snapshot) controller.enqueue(new TextEncoder().encode(`${row}\n`))
-            }
-
-            if (windowRari.streaming?.complete) handleStreamComplete()
-          },
-        })
-
-        element = await createFromReadableStream(stream)
-      } catch (e) {
-        console.error('[rari] Failed to process streaming RSC payload:', e)
-        element = null
-      }
+      element = await loadElementFromBufferedRows()
     }
 
     if (element == null) throw new Error('No RSC data available for hydration')

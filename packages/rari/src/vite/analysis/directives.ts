@@ -158,14 +158,7 @@ function skipString(source: string, i: number, len: number, quoteCode: number): 
   return i
 }
 
-function skipJSX(source: string, i: number, len: number): number {
-  i++
-
-  const isClosingTag = source.charCodeAt(i) === CH_SLASH
-  if (isClosingTag) {
-    i++
-  }
-
+function skipJsxTagName(source: string, i: number, len: number): number {
   while (i < len) {
     const ch = source.charCodeAt(i)
     if (isIdentifierPartCode(ch) || ch === CH_DOT || ch === CH_MINUS) {
@@ -174,76 +167,92 @@ function skipJSX(source: string, i: number, len: number): number {
       break
     }
   }
+  return i
+}
+
+function skipJsxBraceExpression(source: string, i: number, len: number): number {
+  i++
+  let braceDepth = 1
+  while (i < len && braceDepth > 0) {
+    const bch = source.charCodeAt(i)
+    if (bch === CH_SINGLE_QUOTE || bch === CH_DOUBLE_QUOTE || bch === CH_BACKTICK) {
+      i = skipString(source, i, len, bch)
+      continue
+    }
+    if (bch === CH_OPEN_BRACE) braceDepth++
+    if (bch === CH_CLOSE_BRACE) braceDepth--
+    i++
+  }
+  return i
+}
+
+function applyJsxOpenOrCloseAtLt(
+  source: string,
+  i: number,
+  len: number,
+  depth: number,
+): { i: number; depth: number } {
+  const nextCh = source.charCodeAt(i + 1)
+  if (
+    nextCh !== CH_SLASH &&
+    nextCh !== CH_DOT &&
+    nextCh !== CH_GT &&
+    !isIdentifierStartCode(nextCh)
+  ) {
+    return { i: i + 1, depth }
+  }
+
+  let nextDepth = depth
+  if (nextCh === CH_SLASH) {
+    nextDepth--
+    i++
+  } else if (nextCh !== CH_EXCL) {
+    nextDepth++
+  }
+  i++
+  return { i: skipJsxTagName(source, i, len), depth: nextDepth }
+}
+
+function advanceJsxInsideTag(
+  source: string,
+  i: number,
+  len: number,
+  depth: number,
+  isClosingTag: boolean,
+): { i: number; depth: number } {
+  const ch = source.charCodeAt(i)
+  if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+    return { i: skipString(source, i, len, ch), depth }
+  }
+  if (ch === CH_OPEN_BRACE) {
+    return { i: skipJsxBraceExpression(source, i, len), depth }
+  }
+  if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_GT) {
+    return { i: i + 2, depth: depth - 1 }
+  }
+  if (ch === CH_GT) {
+    return { i: i + 1, depth: isClosingTag ? depth - 1 : depth }
+  }
+  if (ch === CH_LT) {
+    return applyJsxOpenOrCloseAtLt(source, i, len, depth)
+  }
+  return { i: i + 1, depth }
+}
+
+function skipJSX(source: string, i: number, len: number): number {
+  i++
+
+  const isClosingTag = source.charCodeAt(i) === CH_SLASH
+  if (isClosingTag) {
+    i++
+  }
+
+  i = skipJsxTagName(source, i, len)
 
   let depth = isClosingTag ? 0 : 1
 
   while (i < len && depth > 0) {
-    const ch = source.charCodeAt(i)
-    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
-      i = skipString(source, i, len, ch)
-      continue
-    }
-
-    if (ch === CH_OPEN_BRACE) {
-      i++
-      let braceDepth = 1
-      while (i < len && braceDepth > 0) {
-        const bch = source.charCodeAt(i)
-        if (bch === CH_SINGLE_QUOTE || bch === CH_DOUBLE_QUOTE || bch === CH_BACKTICK) {
-          i = skipString(source, i, len, bch)
-          continue
-        }
-        if (bch === CH_OPEN_BRACE) braceDepth++
-        if (bch === CH_CLOSE_BRACE) braceDepth--
-        i++
-      }
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_GT) {
-      depth--
-      i += 2
-      continue
-    }
-
-    if (ch === CH_GT) {
-      i++
-      if (isClosingTag) {
-        depth--
-      }
-      continue
-    }
-
-    if (ch === CH_LT) {
-      const nextCh = source.charCodeAt(i + 1)
-      if (
-        nextCh === CH_SLASH ||
-        nextCh === CH_DOT ||
-        nextCh === CH_GT ||
-        isIdentifierStartCode(nextCh)
-      ) {
-        if (nextCh === CH_SLASH) {
-          depth--
-          i++
-        } else if (nextCh !== CH_EXCL) {
-          depth++
-        }
-        i++
-        while (i < len) {
-          const tch = source.charCodeAt(i)
-          if (isIdentifierPartCode(tch) || tch === CH_DOT || tch === CH_MINUS) {
-            i++
-          } else {
-            break
-          }
-        }
-        continue
-      }
-      i++
-      continue
-    }
-
-    i++
+    ;({ i, depth } = advanceJsxInsideTag(source, i, len, depth, isClosingTag))
   }
 
   return i
@@ -299,41 +308,30 @@ function readImportModuleSpecifier(
   }
 }
 
-function collectImportSourcesAt(
-  source: string,
-  i: number,
-  len: number,
-): { sources: string[]; end: number } {
-  if (!isKeywordAt(source, i, 'import')) return { sources: [], end: i + 6 }
+function skipImportMetaChain(source: string, pos: number, len: number): number {
+  pos++
+  while (pos < len && isIdentifierPartCode(source.charCodeAt(pos))) pos++
 
-  let pos = i + 6
-  pos = skipTrivia(source, pos, len)
-
-  if (isKeywordAt(source, pos, 'type')) pos = skipTrivia(source, pos + 4, len)
-
-  if (source.charCodeAt(pos) === CH_DOT) {
+  while (pos < len && source.charCodeAt(pos) === CH_DOT) {
     pos++
     while (pos < len && isIdentifierPartCode(source.charCodeAt(pos))) pos++
-
-    while (pos < len && source.charCodeAt(pos) === CH_DOT) {
-      pos++
-      while (pos < len && isIdentifierPartCode(source.charCodeAt(pos))) pos++
-    }
-
-    return { sources: [], end: pos }
   }
 
-  if (source.charCodeAt(pos) === CH_OPEN_PAREN) {
-    pos++
-    const specifier = readImportModuleSpecifier(source, pos, len)
-    if (specifier) return { sources: [specifier.source], end: specifier.end }
+  return pos
+}
 
-    return { sources: [], end: pos }
-  }
+function adjustImportClauseDepth(ch: number, depth: number): number {
+  if (ch === CH_OPEN_BRACE || ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET) return depth + 1
+  if (ch === CH_CLOSE_BRACE || ch === CH_CLOSE_PAREN || ch === CH_CLOSE_BRACKET)
+    return Math.max(0, depth - 1)
+  return depth
+}
 
-  const sideEffect = readImportModuleSpecifier(source, pos, len)
-  if (sideEffect) return { sources: [sideEffect.source], end: sideEffect.end }
-
+function scanImportFromClause(
+  source: string,
+  pos: number,
+  len: number,
+): { sources: string[]; end: number } {
   let depth = 0
   while (pos < len) {
     pos = skipTrivia(source, pos, len)
@@ -344,7 +342,6 @@ function collectImportSourcesAt(
     if (depth === 0 && isKeywordAt(source, pos, 'from')) {
       const specifier = readImportModuleSpecifier(source, pos + 4, len)
       if (specifier) return { sources: [specifier.source], end: specifier.end }
-
       break
     }
 
@@ -353,14 +350,39 @@ function collectImportSourcesAt(
       continue
     }
 
-    if (ch === CH_OPEN_BRACE || ch === CH_OPEN_PAREN || ch === CH_OPEN_BRACKET) depth++
-    else if (ch === CH_CLOSE_BRACE || ch === CH_CLOSE_PAREN || ch === CH_CLOSE_BRACKET)
-      depth = Math.max(0, depth - 1)
-
+    depth = adjustImportClauseDepth(ch, depth)
     pos++
   }
 
   return { sources: [], end: pos }
+}
+
+function collectImportSourcesAt(
+  source: string,
+  i: number,
+  len: number,
+): { sources: string[]; end: number } {
+  if (!isKeywordAt(source, i, 'import')) return { sources: [], end: i + 6 }
+
+  let pos = skipTrivia(source, i + 6, len)
+
+  if (isKeywordAt(source, pos, 'type')) pos = skipTrivia(source, pos + 4, len)
+
+  if (source.charCodeAt(pos) === CH_DOT) {
+    return { sources: [], end: skipImportMetaChain(source, pos, len) }
+  }
+
+  if (source.charCodeAt(pos) === CH_OPEN_PAREN) {
+    pos++
+    const specifier = readImportModuleSpecifier(source, pos, len)
+    if (specifier) return { sources: [specifier.source], end: specifier.end }
+    return { sources: [], end: pos }
+  }
+
+  const sideEffect = readImportModuleSpecifier(source, pos, len)
+  if (sideEffect) return { sources: [sideEffect.source], end: sideEffect.end }
+
+  return scanImportFromClause(source, pos, len)
 }
 
 const EXPORT_E = 101
@@ -413,184 +435,261 @@ export interface ModuleAnalysis {
   readonly importSources: readonly string[]
 }
 
+interface ModuleScanState {
+  directives: { hasUseClient: boolean; hasUseServer: boolean }
+  topLevelUseClient: boolean
+  topLevelUseServer: boolean
+  hasDefaultExportResult: boolean
+  hasComponentExportResult: boolean
+  importSources: string[]
+  directivesPhase: boolean
+  sawFirstDirective: boolean
+}
+
+// oxlint-disable typescript/prefer-readonly-parameter-types
+function markDirectiveFlags(
+  state: ModuleScanState,
+  isUseClient: boolean,
+  isUseServer: boolean,
+): void {
+  if (!state.sawFirstDirective) {
+    state.sawFirstDirective = true
+    state.topLevelUseClient = isUseClient
+    state.topLevelUseServer = isUseServer
+  }
+  if (isUseClient) state.directives.hasUseClient = true
+  if (isUseServer) state.directives.hasUseServer = true
+}
+
+function advancePastDirectiveTerminator(
+  source: string,
+  stringEnd: number,
+  len: number,
+): { stillDirective: boolean; nextI: number; endDirectivesPhase: boolean } {
+  let j = stringEnd
+  while (j < len) {
+    const jch = source.charCodeAt(j)
+    if (isWhitespaceCode(jch) && !isLineTerminatorCode(jch)) {
+      j++
+      continue
+    }
+    if (isLineTerminatorCode(jch) || jch === CH_SEMICOLON) {
+      return { stillDirective: true, nextI: j + 1, endDirectivesPhase: false }
+    }
+    if (jch === CH_SLASH && source.charCodeAt(j + 1) === CH_SLASH) {
+      j = skipSingleLineComment(source, j, len)
+      continue
+    }
+    if (jch === CH_SLASH && source.charCodeAt(j + 1) === CH_STAR) {
+      j = skipMultiLineComment(source, j, len)
+      continue
+    }
+    return { stillDirective: false, nextI: j, endDirectivesPhase: true }
+  }
+  return { stillDirective: false, nextI: j, endDirectivesPhase: j >= len }
+}
+
+function tryConsumeDirectiveString(
+  source: string,
+  i: number,
+  len: number,
+  state: ModuleScanState,
+): number | null {
+  if (!state.directivesPhase) return null
+  const ch = source.charCodeAt(i)
+  if (ch !== CH_SINGLE_QUOTE && ch !== CH_DOUBLE_QUOTE) return null
+
+  const stringStart = i + 1
+  const stringEnd = skipString(source, i, len, ch)
+  if (stringEnd <= stringStart) {
+    state.directivesPhase = false
+    return i + 1
+  }
+
+  const contentLen = stringEnd - 1 - stringStart
+  const isUseClient = contentLen === 10 && regionEquals(source, stringStart, 'use client')
+  const isUseServer = contentLen === 10 && regionEquals(source, stringStart, 'use server')
+  markDirectiveFlags(state, isUseClient, isUseServer)
+
+  const term = advancePastDirectiveTerminator(source, stringEnd, len)
+  if (term.stillDirective) return term.nextI
+
+  if (term.endDirectivesPhase) state.directivesPhase = false
+  return state.directivesPhase ? stringEnd : term.nextI
+}
+
+function isExportKeywordBoundary(source: string, afterExport: number, len: number): boolean {
+  if (afterExport >= len) return false
+  const afterCh = source.charCodeAt(afterExport)
+  if (isWhitespaceCode(afterCh) || afterCh === CH_OPEN_BRACE) return true
+  return (
+    afterCh === CH_SLASH &&
+    (source.charCodeAt(afterExport + 1) === CH_SLASH ||
+      source.charCodeAt(afterExport + 1) === CH_STAR)
+  )
+}
+
+function markDefaultExportFlags(state: ModuleScanState): void {
+  state.hasDefaultExportResult = true
+  state.hasComponentExportResult = true
+}
+
+function consumeExportAsAlias(
+  source: string,
+  k: number,
+  len: number,
+  state: ModuleScanState,
+): { k: number; hasAlias: boolean } {
+  if (source.charCodeAt(k) !== AS_A || source.charCodeAt(k + 1) !== AS_S) {
+    return { k, hasAlias: false }
+  }
+
+  const afterAs = k + 2
+  if (afterAs >= len || isIdentifierPartCode(source.charCodeAt(afterAs))) {
+    return { k, hasAlias: true }
+  }
+
+  k = skipTrivia(source, afterAs, len)
+  const aliasStart = k
+  while (k < len && isIdentifierPartCode(source.charCodeAt(k))) k++
+  if (k - aliasStart === 7 && isDefaultAt(source, aliasStart)) {
+    markDefaultExportFlags(state)
+  }
+  return { k, hasAlias: true }
+}
+
+function advanceExportBraceSpecifier(
+  source: string,
+  k: number,
+  len: number,
+  state: ModuleScanState,
+): number | null {
+  const identStart = k
+  while (k < len && isIdentifierPartCode(source.charCodeAt(k))) k++
+  const identLen = k - identStart
+  if (identLen === 0) return null
+
+  k = skipTrivia(source, k, len)
+  const alias = consumeExportAsAlias(source, k, len, state)
+  k = alias.k
+
+  if (!alias.hasAlias && identLen === 7 && isDefaultAt(source, identStart)) {
+    markDefaultExportFlags(state)
+  }
+
+  if (source.charCodeAt(k) === CH_COMMA) return k + 1
+  if (source.charCodeAt(k) === CH_CLOSE_BRACE) return k
+  return k + 1
+}
+
+function scanExportBraceListForDefault(
+  source: string,
+  openBrace: number,
+  len: number,
+  state: ModuleScanState,
+): void {
+  let k = openBrace + 1
+  while (k < len) {
+    k = skipTrivia(source, k, len)
+    if (source.charCodeAt(k) === CH_CLOSE_BRACE) break
+
+    const next = advanceExportBraceSpecifier(source, k, len, state)
+    if (next === null) break
+    k = next
+  }
+}
+
+function noteExportAt(
+  source: string,
+  i: number,
+  len: number,
+  state: ModuleScanState,
+): number | null {
+  if (!isExportAt(source, i)) return null
+  const afterExport = i + 6
+  if (!isExportKeywordBoundary(source, afterExport, len)) return null
+
+  const j = skipTrivia(source, afterExport, len)
+
+  if (isDefaultAt(source, j)) {
+    markDefaultExportFlags(state)
+    const afterDefault = j + 7
+    if (afterDefault >= len || !isIdentifierPartCode(source.charCodeAt(afterDefault))) {
+      return afterExport
+    }
+  }
+
+  if (source.charCodeAt(j) === CH_OPEN_BRACE) {
+    scanExportBraceListForDefault(source, j, len, state)
+    return null
+  }
+
+  if (
+    isKeywordAt(source, j, 'async') ||
+    isKeywordAt(source, j, 'function') ||
+    isKeywordAt(source, j, 'class')
+  ) {
+    state.hasComponentExportResult = true
+  }
+
+  return null
+}
+
+function advanceModuleScanAt(
+  source: string,
+  i: number,
+  len: number,
+  state: ModuleScanState,
+): number {
+  const directiveNext = tryConsumeDirectiveString(source, i, len, state)
+  if (directiveNext !== null) return directiveNext
+
+  const skipped = skipNonCodeToken(source, i, len)
+  if (skipped !== -1) {
+    if (state.directivesPhase && !isTriviaOrCommentStart(source, i)) state.directivesPhase = false
+    return skipped
+  }
+
+  state.directivesPhase = false
+
+  if (isKeywordAt(source, i, 'import')) {
+    const collected = collectImportSourcesAt(source, i, len)
+    for (const importSource of collected.sources) state.importSources.push(importSource)
+    return collected.end
+  }
+
+  const exportAdvance = noteExportAt(source, i, len, state)
+  if (exportAdvance !== null) return exportAdvance
+
+  return i + 1
+}
+
 export function analyzeModuleSource(source: string): ModuleAnalysis {
-  const directives = { hasUseClient: false, hasUseServer: false }
-  let topLevelUseClient = false
-  let topLevelUseServer = false
-  let hasDefaultExportResult = false
-  let hasComponentExportResult = false
-  const importSources: string[] = []
-  let directivesPhase = true
-  let sawFirstDirective = false
+  const state: ModuleScanState = {
+    directives: { hasUseClient: false, hasUseServer: false },
+    topLevelUseClient: false,
+    topLevelUseServer: false,
+    hasDefaultExportResult: false,
+    hasComponentExportResult: false,
+    importSources: [],
+    directivesPhase: true,
+    sawFirstDirective: false,
+  }
 
   let i = 0
   const len = source.length
 
   while (i < len) {
-    const ch = source.charCodeAt(i)
-
-    if (directivesPhase && (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE)) {
-      const stringStart = i + 1
-      const stringEnd = skipString(source, i, len, ch)
-      if (stringEnd <= stringStart) {
-        directivesPhase = false
-        i++
-        continue
-      }
-
-      const contentLen = stringEnd - 1 - stringStart
-      const isUseClient = contentLen === 10 && regionEquals(source, stringStart, 'use client')
-      const isUseServer = contentLen === 10 && regionEquals(source, stringStart, 'use server')
-
-      if (!sawFirstDirective) {
-        sawFirstDirective = true
-        topLevelUseClient = isUseClient
-        topLevelUseServer = isUseServer
-      }
-
-      if (isUseClient) directives.hasUseClient = true
-      if (isUseServer) directives.hasUseServer = true
-
-      let j = stringEnd
-      let stillDirective = false
-      while (j < len) {
-        const jch = source.charCodeAt(j)
-        if (isWhitespaceCode(jch) && !isLineTerminatorCode(jch)) {
-          j++
-          continue
-        }
-        if (isLineTerminatorCode(jch) || jch === CH_SEMICOLON) {
-          stillDirective = true
-          i = j + 1
-          break
-        }
-        if (jch === CH_SLASH && source.charCodeAt(j + 1) === CH_SLASH) {
-          j = skipSingleLineComment(source, j, len)
-          continue
-        }
-        if (jch === CH_SLASH && source.charCodeAt(j + 1) === CH_STAR) {
-          j = skipMultiLineComment(source, j, len)
-          continue
-        }
-
-        directivesPhase = false
-        stillDirective = false
-        break
-      }
-
-      if (!stillDirective) {
-        if (j >= len) directivesPhase = false
-        i = directivesPhase ? stringEnd : j
-        continue
-      }
-
-      continue
-    }
-
-    const skipped = skipNonCodeToken(source, i, len)
-    if (skipped !== -1) {
-      if (directivesPhase && !isTriviaOrCommentStart(source, i)) directivesPhase = false
-      i = skipped
-      continue
-    }
-
-    directivesPhase = false
-
-    if (isKeywordAt(source, i, 'import')) {
-      const collected = collectImportSourcesAt(source, i, len)
-      for (const importSource of collected.sources) importSources.push(importSource)
-      i = collected.end
-      continue
-    }
-
-    if (isExportAt(source, i)) {
-      const afterExport = i + 6
-      if (afterExport < len) {
-        const afterCh = source.charCodeAt(afterExport)
-        if (
-          isWhitespaceCode(afterCh) ||
-          afterCh === CH_OPEN_BRACE ||
-          (afterCh === CH_SLASH &&
-            (source.charCodeAt(afterExport + 1) === CH_SLASH ||
-              source.charCodeAt(afterExport + 1) === CH_STAR))
-        ) {
-          const j = skipTrivia(source, afterExport, len)
-
-          if (isDefaultAt(source, j)) {
-            hasDefaultExportResult = true
-            hasComponentExportResult = true
-            const afterDefault = j + 7
-            if (afterDefault >= len || !isIdentifierPartCode(source.charCodeAt(afterDefault))) {
-              i = afterExport
-              continue
-            }
-          }
-
-          if (source.charCodeAt(j) === CH_OPEN_BRACE) {
-            let k = j + 1
-            while (k < len) {
-              k = skipTrivia(source, k, len)
-
-              if (source.charCodeAt(k) === CH_CLOSE_BRACE) break
-
-              const identStart = k
-              while (k < len && isIdentifierPartCode(source.charCodeAt(k))) k++
-              const identLen = k - identStart
-
-              if (identLen === 0) break
-
-              k = skipTrivia(source, k, len)
-
-              let hasAlias = false
-              if (source.charCodeAt(k) === AS_A && source.charCodeAt(k + 1) === AS_S) {
-                hasAlias = true
-                const afterAs = k + 2
-                if (afterAs < len && !isIdentifierPartCode(source.charCodeAt(afterAs))) {
-                  k = skipTrivia(source, afterAs, len)
-                  const aliasStart = k
-                  while (k < len && isIdentifierPartCode(source.charCodeAt(k))) k++
-                  if (k - aliasStart === 7 && isDefaultAt(source, aliasStart)) {
-                    hasDefaultExportResult = true
-                    hasComponentExportResult = true
-                  }
-                }
-              }
-
-              if (!hasAlias && identLen === 7 && isDefaultAt(source, identStart)) {
-                hasDefaultExportResult = true
-                hasComponentExportResult = true
-              }
-
-              if (source.charCodeAt(k) === CH_COMMA) {
-                k++
-                continue
-              }
-
-              if (source.charCodeAt(k) === CH_CLOSE_BRACE) break
-
-              k++
-            }
-          } else if (
-            isKeywordAt(source, j, 'async') ||
-            isKeywordAt(source, j, 'function') ||
-            isKeywordAt(source, j, 'class')
-          ) {
-            hasComponentExportResult = true
-          }
-        }
-      }
-    }
-
-    i++
+    i = advanceModuleScanAt(source, i, len, state)
   }
 
   return {
-    directives,
-    topLevelUseClient,
-    topLevelUseServer,
-    hasDefaultExport: hasDefaultExportResult,
-    hasComponentExport: hasComponentExportResult,
-    importSources: [...new Set(importSources)],
+    directives: state.directives,
+    topLevelUseClient: state.topLevelUseClient,
+    topLevelUseServer: state.topLevelUseServer,
+    hasDefaultExport: state.hasDefaultExportResult,
+    hasComponentExport: state.hasComponentExportResult,
+    importSources: [...new Set(state.importSources)],
   }
 }
 
@@ -646,6 +745,63 @@ interface NamedSpecifierParse {
   readonly end: number
 }
 
+function tryParseTypeOnlySpecifierModifier(
+  source: string,
+  pos: number,
+  len: number,
+): number | null {
+  if (!isKeywordAt(source, pos, 'type')) return null
+  const after = skipTrivia(source, pos + 4, len)
+  const afterCh = source.charCodeAt(after)
+  const startsSpecifier =
+    afterCh === CH_SINGLE_QUOTE ||
+    afterCh === CH_DOUBLE_QUOTE ||
+    readIdentifier(source, after, len) !== null
+  if (startsSpecifier && !isKeywordAt(source, after, 'as')) return after
+  return null
+}
+
+function readImportedName(
+  source: string,
+  pos: number,
+  len: number,
+): { imported: string; end: number } | null {
+  const importedCh = source.charCodeAt(pos)
+  if (importedCh === CH_SINGLE_QUOTE || importedCh === CH_DOUBLE_QUOTE) {
+    const strEnd = skipString(source, pos, len, importedCh)
+    return { imported: source.slice(pos + 1, strEnd - 1), end: strEnd }
+  }
+  const ident = readIdentifier(source, pos, len)
+  if (!ident) return null
+  return { imported: ident.name, end: ident.end }
+}
+
+function parseOneNamedImportSpecifier(
+  source: string,
+  pos: number,
+  len: number,
+): { specifier: ScannedImportSpecifier; end: number } | null {
+  const typeOnlyPos = tryParseTypeOnlySpecifierModifier(source, pos, len)
+  const specTypeOnly = typeOnlyPos !== null
+  if (typeOnlyPos !== null) pos = typeOnlyPos
+
+  const importedName = readImportedName(source, pos, len)
+  if (!importedName) return null
+  const imported = importedName.imported
+  pos = skipTrivia(source, importedName.end, len)
+
+  let local = imported
+  if (isKeywordAt(source, pos, 'as')) {
+    pos = skipTrivia(source, pos + 2, len)
+    const alias = readIdentifier(source, pos, len)
+    if (!alias) return null
+    local = alias.name
+    pos = skipTrivia(source, alias.end, len)
+  }
+
+  return { specifier: { imported, local, typeOnly: specTypeOnly }, end: pos }
+}
+
 function parseNamedImportSpecifiers(
   source: string,
   openBrace: number,
@@ -660,47 +816,10 @@ function parseNamedImportSpecifiers(
 
     if (source.charCodeAt(pos) === CH_CLOSE_BRACE) return { named, end: pos + 1 }
 
-    // Inline type specifier: `type` followed by another specifier name is a
-    // modifier. A binding literally named `type` still parses as a name below.
-    let specTypeOnly = false
-    if (isKeywordAt(source, pos, 'type')) {
-      const after = skipTrivia(source, pos + 4, len)
-      const afterCh = source.charCodeAt(after)
-      const startsSpecifier =
-        afterCh === CH_SINGLE_QUOTE ||
-        afterCh === CH_DOUBLE_QUOTE ||
-        readIdentifier(source, after, len) !== null
-      if (startsSpecifier && !isKeywordAt(source, after, 'as')) {
-        specTypeOnly = true
-        pos = after
-      }
-    }
-
-    let imported: string
-    const importedCh = source.charCodeAt(pos)
-    if (importedCh === CH_SINGLE_QUOTE || importedCh === CH_DOUBLE_QUOTE) {
-      const strEnd = skipString(source, pos, len, importedCh)
-      imported = source.slice(pos + 1, strEnd - 1)
-      pos = strEnd
-    } else {
-      const ident = readIdentifier(source, pos, len)
-      if (!ident) return null
-      imported = ident.name
-      pos = ident.end
-    }
-
-    pos = skipTrivia(source, pos, len)
-
-    let local = imported
-    if (isKeywordAt(source, pos, 'as')) {
-      pos = skipTrivia(source, pos + 2, len)
-      const alias = readIdentifier(source, pos, len)
-      if (!alias) return null
-      local = alias.name
-      pos = skipTrivia(source, alias.end, len)
-    }
-
-    named.push({ imported, local, typeOnly: specTypeOnly })
+    const parsed = parseOneNamedImportSpecifier(source, pos, len)
+    if (!parsed) return null
+    named.push(parsed.specifier)
+    pos = parsed.end
 
     const ch = source.charCodeAt(pos)
     if (ch === CH_COMMA) {
@@ -713,54 +832,64 @@ function parseNamedImportSpecifiers(
   }
 }
 
-function parseImportStatementAt(source: string, start: number, len: number): ScannedImport | null {
-  let pos = skipTrivia(source, start + 6, len)
-  if (pos >= len) return null
-
+function parseSideEffectImport(
+  source: string,
+  start: number,
+  pos: number,
+  len: number,
+): ScannedImport | null {
   const ch = source.charCodeAt(pos)
-  // Dynamic import or import.meta not a static statement.
-  if (ch === CH_OPEN_PAREN || ch === CH_DOT) return null
-
-  if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE) {
-    const spec = readImportModuleSpecifier(source, pos, len)
-    if (!spec) return null
-
-    return {
-      start,
-      end: consumeTrailingSemicolon(source, spec.end, len),
-      source: spec.source,
-      typeOnly: false,
-      sideEffectOnly: true,
-      defaultBinding: null,
-      namespaceBinding: null,
-      named: [],
-    }
+  if (ch !== CH_SINGLE_QUOTE && ch !== CH_DOUBLE_QUOTE) return null
+  const spec = readImportModuleSpecifier(source, pos, len)
+  if (!spec) return null
+  return {
+    start,
+    end: consumeTrailingSemicolon(source, spec.end, len),
+    source: spec.source,
+    typeOnly: false,
+    sideEffectOnly: true,
+    defaultBinding: null,
+    namespaceBinding: null,
+    named: [],
   }
+}
 
-  let typeOnly = false
-  // `import type ...` is type-only unless `type` is itself the default
-  // binding (`import type from './x'` or `import type, { x } from './x'`).
-  if (isKeywordAt(source, pos, 'type')) {
-    const after = skipTrivia(source, pos + 4, len)
-    if (!isKeywordAt(source, after, 'from') && source.charCodeAt(after) !== CH_COMMA) {
-      typeOnly = true
-      pos = after
-    }
+function maybeAdvancePastImportTypeKeyword(
+  source: string,
+  pos: number,
+  len: number,
+): {
+  typeOnly: boolean
+  pos: number
+} {
+  if (!isKeywordAt(source, pos, 'type')) return { typeOnly: false, pos }
+  const after = skipTrivia(source, pos + 4, len)
+  if (!isKeywordAt(source, after, 'from') && source.charCodeAt(after) !== CH_COMMA) {
+    return { typeOnly: true, pos: after }
   }
+  return { typeOnly: false, pos }
+}
 
+function parseImportDefaultAndRestClause(
+  source: string,
+  pos: number,
+  len: number,
+): {
+  defaultBinding: string | null
+  namespaceBinding: string | null
+  named: ScannedImportSpecifier[]
+  pos: number
+} | null {
   let defaultBinding: string | null = null
   let namespaceBinding: string | null = null
   let named: ScannedImportSpecifier[] = []
-
   let clauseCh = source.charCodeAt(pos)
 
   if (clauseCh !== CH_OPEN_BRACE && clauseCh !== CH_STAR) {
     const ident = readIdentifier(source, pos, len)
     if (!ident) return null
-
     defaultBinding = ident.name
     pos = skipTrivia(source, ident.end, len)
-
     if (source.charCodeAt(pos) === CH_COMMA) {
       pos = skipTrivia(source, pos + 1, len)
       clauseCh = source.charCodeAt(pos)
@@ -772,22 +901,37 @@ function parseImportStatementAt(source: string, start: number, len: number): Sca
   if (clauseCh === CH_STAR) {
     pos = skipTrivia(source, pos + 1, len)
     if (!isKeywordAt(source, pos, 'as')) return null
-
     pos = skipTrivia(source, pos + 2, len)
     const ns = readIdentifier(source, pos, len)
     if (!ns) return null
-
     namespaceBinding = ns.name
     pos = ns.end
   } else if (clauseCh === CH_OPEN_BRACE) {
     const parsed = parseNamedImportSpecifiers(source, pos, len)
     if (!parsed) return null
-
     named = parsed.named
     pos = parsed.end
   }
 
-  pos = skipTrivia(source, pos, len)
+  return { defaultBinding, namespaceBinding, named, pos }
+}
+
+function parseImportStatementAt(source: string, start: number, len: number): ScannedImport | null {
+  let pos = skipTrivia(source, start + 6, len)
+  if (pos >= len) return null
+
+  const ch = source.charCodeAt(pos)
+  if (ch === CH_OPEN_PAREN || ch === CH_DOT) return null
+
+  const sideEffect = parseSideEffectImport(source, start, pos, len)
+  if (sideEffect) return sideEffect
+
+  const typeKw = maybeAdvancePastImportTypeKeyword(source, pos, len)
+  pos = typeKw.pos
+
+  const clause = parseImportDefaultAndRestClause(source, pos, len)
+  if (!clause) return null
+  pos = skipTrivia(source, clause.pos, len)
   if (!isKeywordAt(source, pos, 'from')) return null
 
   const spec = readImportModuleSpecifier(source, pos + 4, len)
@@ -797,11 +941,11 @@ function parseImportStatementAt(source: string, start: number, len: number): Sca
     start,
     end: consumeTrailingSemicolon(source, spec.end, len),
     source: spec.source,
-    typeOnly,
+    typeOnly: typeKw.typeOnly,
     sideEffectOnly: false,
-    defaultBinding,
-    namespaceBinding,
-    named,
+    defaultBinding: clause.defaultBinding,
+    namespaceBinding: clause.namespaceBinding,
+    named: clause.named,
   }
 }
 
@@ -840,6 +984,101 @@ export function scanImportStatements(source: string): ScannedImport[] {
   return imports
 }
 
+function addExportStarAsName(
+  source: string,
+  pos: number,
+  len: number,
+  exports: Set<string>,
+): number {
+  let afterStar = skipTrivia(source, pos + 1, len)
+  if (isKeywordAt(source, afterStar, 'as')) {
+    afterStar = skipTrivia(source, afterStar + 2, len)
+    const ns = readIdentifier(source, afterStar, len)
+    if (ns) exports.add(ns.name)
+    return ns?.end ?? afterStar + 1
+  }
+  return pos + 1
+}
+
+function addExportBraceListNames(
+  source: string,
+  pos: number,
+  len: number,
+  exports: Set<string>,
+): number {
+  const close = skipBalancedBraceList(source, pos, len)
+  const list = source.slice(pos + 1, close - 1)
+  for (const part of list.split(',')) {
+    const trimmed = part.trim()
+    if (!trimmed || trimmed.startsWith('type ') || trimmed.startsWith('typeof ')) continue
+    const asParts = trimmed.split(/\s+as\s+/)
+    const exportedName = (asParts.at(-1) ?? '').trim()
+    if (exportedName !== '' && exportedName !== 'type') exports.add(exportedName)
+  }
+  return close
+}
+
+function declarationKeywordLen(source: string, pos: number): number {
+  if (isKeywordAt(source, pos, 'function')) return 8
+  if (isKeywordAt(source, pos, 'class')) return 5
+  if (isKeywordAt(source, pos, 'const')) return 5
+  return 3
+}
+
+function addExportDeclarationName(
+  source: string,
+  pos: number,
+  len: number,
+  exports: Set<string>,
+): number | null {
+  if (isKeywordAt(source, pos, 'async')) {
+    pos = skipTrivia(source, pos + 5, len)
+  }
+
+  if (
+    !isKeywordAt(source, pos, 'function') &&
+    !isKeywordAt(source, pos, 'class') &&
+    !isKeywordAt(source, pos, 'const') &&
+    !isKeywordAt(source, pos, 'let') &&
+    !isKeywordAt(source, pos, 'var')
+  ) {
+    return null
+  }
+
+  const keywordLen = declarationKeywordLen(source, pos)
+  let after = skipTrivia(source, pos + keywordLen, len)
+  if (source.charCodeAt(after) === CH_STAR) after = skipTrivia(source, after + 1, len)
+  const name = readIdentifier(source, after, len)
+  if (name) exports.add(name.name)
+  return name?.end ?? after + 1
+}
+
+function consumeOneExportAt(source: string, i: number, len: number, exports: Set<string>): number {
+  const pos = skipTrivia(source, i + 6, len)
+
+  if (isKeywordAt(source, pos, 'type') || isKeywordAt(source, pos, 'interface')) {
+    return pos + 1
+  }
+
+  if (source.charCodeAt(pos) === CH_STAR) {
+    return addExportStarAsName(source, pos, len, exports)
+  }
+
+  if (isKeywordAt(source, pos, 'default')) {
+    exports.add('default')
+    return pos + 7
+  }
+
+  if (source.charCodeAt(pos) === CH_OPEN_BRACE) {
+    return addExportBraceListNames(source, pos, len, exports)
+  }
+
+  const declEnd = addExportDeclarationName(source, pos, len, exports)
+  if (declEnd !== null) return declEnd
+
+  return i + 1
+}
+
 export function collectExportNames(source: string): string[] {
   const exports = new Set<string>()
   let i = 0
@@ -857,73 +1096,7 @@ export function collectExportNames(source: string): string[] {
       continue
     }
 
-    let pos = skipTrivia(source, i + 6, len)
-
-    if (isKeywordAt(source, pos, 'type') || isKeywordAt(source, pos, 'interface')) {
-      i = pos + 1
-      continue
-    }
-
-    if (source.charCodeAt(pos) === CH_STAR) {
-      let afterStar = skipTrivia(source, pos + 1, len)
-      if (isKeywordAt(source, afterStar, 'as')) {
-        afterStar = skipTrivia(source, afterStar + 2, len)
-        const ns = readIdentifier(source, afterStar, len)
-        if (ns) exports.add(ns.name)
-        i = ns?.end ?? afterStar + 1
-      } else {
-        i = pos + 1
-      }
-      continue
-    }
-
-    if (isKeywordAt(source, pos, 'default')) {
-      exports.add('default')
-      i = pos + 7
-      continue
-    }
-
-    if (source.charCodeAt(pos) === CH_OPEN_BRACE) {
-      const close = skipBalancedBraceList(source, pos, len)
-      const list = source.slice(pos + 1, close - 1)
-      for (const part of list.split(',')) {
-        const trimmed = part.trim()
-        if (!trimmed || trimmed.startsWith('type ') || trimmed.startsWith('typeof ')) continue
-        const asParts = trimmed.split(/\s+as\s+/)
-        const exportedName = (asParts.at(-1) ?? '').trim()
-        if (exportedName !== '' && exportedName !== 'type') exports.add(exportedName)
-      }
-      i = close
-      continue
-    }
-
-    if (isKeywordAt(source, pos, 'async')) {
-      pos = skipTrivia(source, pos + 5, len)
-    }
-
-    if (
-      isKeywordAt(source, pos, 'function') ||
-      isKeywordAt(source, pos, 'class') ||
-      isKeywordAt(source, pos, 'const') ||
-      isKeywordAt(source, pos, 'let') ||
-      isKeywordAt(source, pos, 'var')
-    ) {
-      const keywordLen = isKeywordAt(source, pos, 'function')
-        ? 8
-        : isKeywordAt(source, pos, 'class')
-          ? 5
-          : isKeywordAt(source, pos, 'const')
-            ? 5
-            : 3
-      let after = skipTrivia(source, pos + keywordLen, len)
-      if (source.charCodeAt(after) === CH_STAR) after = skipTrivia(source, after + 1, len)
-      const name = readIdentifier(source, after, len)
-      if (name) exports.add(name.name)
-      i = name?.end ?? after + 1
-      continue
-    }
-
-    i++
+    i = consumeOneExportAt(source, i, len, exports)
   }
 
   return [...exports]
@@ -933,19 +1106,12 @@ function skipBalancedBraceList(source: string, start: number, len: number): numb
   let i = start
   let depth = 0
   while (i < len) {
+    const skipped = skipStringOrCommentAt(source, i, len)
+    if (skipped != null) {
+      i = skipped
+      continue
+    }
     const ch = source.charCodeAt(i)
-    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
-      i = skipString(source, i, len, ch)
-      continue
-    }
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
-      i = skipSingleLineComment(source, i, len)
-      continue
-    }
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
-      i = skipMultiLineComment(source, i, len)
-      continue
-    }
     if (ch === CH_OPEN_BRACE) {
       depth++
       i++
@@ -960,6 +1126,20 @@ function skipBalancedBraceList(source: string, start: number, len: number): numb
     i++
   }
   return i
+}
+
+function skipStringOrCommentAt(source: string, i: number, len: number): number | null {
+  const ch = source.charCodeAt(i)
+  if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+    return skipString(source, i, len, ch)
+  }
+  if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
+    return skipSingleLineComment(source, i, len)
+  }
+  if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
+    return skipMultiLineComment(source, i, len)
+  }
+  return null
 }
 
 export function getDirectives(source: string): DirectiveResult {
@@ -1002,58 +1182,68 @@ function canPrecedeRegexCode(ch: number): boolean {
   )
 }
 
+function skipBackwardBlockComment(source: string, i: number): number {
+  i -= 2
+  while (i >= 1) {
+    if (source.charCodeAt(i) === CH_STAR && source.charCodeAt(i - 1) === CH_SLASH) {
+      return i - 2
+    }
+    i--
+  }
+  return -1
+}
+
+function skipBackwardLineCommentIfPresent(source: string, i: number): number | null {
+  let checkPos = i
+  while (
+    checkPos >= 0 &&
+    source.charCodeAt(checkPos) !== CH_LF &&
+    source.charCodeAt(checkPos) !== CH_CR
+  ) {
+    checkPos--
+  }
+  let afterNewline = checkPos + 1
+  while (
+    afterNewline < i &&
+    (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)
+  ) {
+    afterNewline++
+  }
+  if (
+    afterNewline < i &&
+    source.charCodeAt(afterNewline) === CH_SLASH &&
+    source.charCodeAt(afterNewline + 1) === CH_SLASH
+  ) {
+    return afterNewline - 1
+  }
+  return null
+}
+
+function skipBackwardTriviaAt(source: string, i: number): number | null {
+  const ch = source.charCodeAt(i)
+  if (isWhitespaceCode(ch)) return i - 1
+
+  if (i >= 1 && ch === CH_SLASH && source.charCodeAt(i - 1) === CH_STAR) {
+    return skipBackwardBlockComment(source, i)
+  }
+
+  if (i >= 1 && ch === CH_SLASH && source.charCodeAt(i - 1) === CH_SLASH) {
+    return i - 2
+  }
+
+  return skipBackwardLineCommentIfPresent(source, i)
+}
+
 function getPreviousToken(source: string, pos: number): string | undefined {
   let i = pos - 1
 
   while (i >= 0) {
-    const ch = source.charCodeAt(i)
-    if (isWhitespaceCode(ch)) {
-      i--
-      continue
-    }
-
-    if (i >= 1 && ch === CH_SLASH && source.charCodeAt(i - 1) === CH_STAR) {
-      i -= 2
-      while (i >= 1) {
-        if (source.charCodeAt(i) === CH_STAR && source.charCodeAt(i - 1) === CH_SLASH) {
-          i -= 2
-          break
-        }
-        i--
-      }
+    const skipped = skipBackwardTriviaAt(source, i)
+    if (skipped !== null) {
+      i = skipped
       if (i < 0) return undefined
       continue
     }
-
-    if (i >= 1 && ch === CH_SLASH && source.charCodeAt(i - 1) === CH_SLASH) {
-      i -= 2
-      continue
-    }
-
-    let checkPos = i
-    while (
-      checkPos >= 0 &&
-      source.charCodeAt(checkPos) !== CH_LF &&
-      source.charCodeAt(checkPos) !== CH_CR
-    ) {
-      checkPos--
-    }
-    let afterNewline = checkPos + 1
-    while (
-      afterNewline < i &&
-      (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)
-    ) {
-      afterNewline++
-    }
-    if (
-      afterNewline < i &&
-      source.charCodeAt(afterNewline) === CH_SLASH &&
-      source.charCodeAt(afterNewline + 1) === CH_SLASH
-    ) {
-      i = afterNewline - 1
-      continue
-    }
-
     break
   }
 
@@ -1071,55 +1261,13 @@ function getPreviousToken(source: string, pos: number): string | undefined {
 function getPreviousNonTriviaCharCode(source: string, pos: number): number {
   let i = pos - 1
   while (i >= 0) {
-    const ch = source.charCodeAt(i)
-    if (isWhitespaceCode(ch)) {
-      i--
-      continue
-    }
-
-    if (i >= 1 && ch === CH_SLASH && source.charCodeAt(i - 1) === CH_STAR) {
-      i -= 2
-      while (i >= 1) {
-        if (source.charCodeAt(i) === CH_STAR && source.charCodeAt(i - 1) === CH_SLASH) {
-          i -= 2
-          break
-        }
-        i--
-      }
+    const skipped = skipBackwardTriviaAt(source, i)
+    if (skipped !== null) {
+      i = skipped
       if (i < 0) return -1
       continue
     }
-
-    if (i >= 1 && ch === CH_SLASH && source.charCodeAt(i - 1) === CH_SLASH) {
-      i -= 2
-      continue
-    }
-
-    let checkPos = i
-    while (
-      checkPos >= 0 &&
-      source.charCodeAt(checkPos) !== CH_LF &&
-      source.charCodeAt(checkPos) !== CH_CR
-    ) {
-      checkPos--
-    }
-    let afterNewline = checkPos + 1
-    while (
-      afterNewline < i &&
-      (source.charCodeAt(afterNewline) === CH_SPACE || source.charCodeAt(afterNewline) === CH_TAB)
-    ) {
-      afterNewline++
-    }
-    if (
-      afterNewline < i &&
-      source.charCodeAt(afterNewline) === CH_SLASH &&
-      source.charCodeAt(afterNewline + 1) === CH_SLASH
-    ) {
-      i = afterNewline - 1
-      continue
-    }
-
-    return ch
+    return source.charCodeAt(i)
   }
 
   return -1
@@ -1198,45 +1346,41 @@ function trySkipJSX(source: string, i: number, len: number): number {
   return -1
 }
 
+function advanceRegexChar(
+  source: string,
+  i: number,
+  len: number,
+  inCharClass: boolean,
+): { i: number; inCharClass: boolean; done: boolean } {
+  const ch = source.charCodeAt(i)
+  if (ch === CH_BACKSLASH) return { i: i + 2, inCharClass, done: false }
+
+  if (inCharClass) {
+    return { i: i + 1, inCharClass: ch !== CH_CLOSE_BRACKET, done: false }
+  }
+
+  if (ch === CH_OPEN_BRACKET) return { i: i + 1, inCharClass: true, done: false }
+
+  if (ch === CH_SLASH) {
+    i++
+    while (i < len && isIdentifierPartCode(source.charCodeAt(i))) i++
+    return { i, inCharClass, done: true }
+  }
+
+  if (isLineTerminatorCode(ch)) return { i, inCharClass, done: true }
+
+  return { i: i + 1, inCharClass, done: false }
+}
+
 function skipRegex(source: string, i: number, len: number): number {
   i++
   let inCharClass = false
 
   while (i < len) {
-    const ch = source.charCodeAt(i)
-    if (ch === CH_BACKSLASH) {
-      i += 2
-      continue
-    }
-
-    if (inCharClass) {
-      if (ch === CH_CLOSE_BRACKET) {
-        inCharClass = false
-      }
-      i++
-      continue
-    }
-
-    if (ch === CH_OPEN_BRACKET) {
-      inCharClass = true
-      i++
-      continue
-    }
-
-    if (ch === CH_SLASH) {
-      i++
-      while (i < len && isIdentifierPartCode(source.charCodeAt(i))) {
-        i++
-      }
-
-      return i
-    }
-
-    if (isLineTerminatorCode(ch)) {
-      return i
-    }
-
-    i++
+    const step = advanceRegexChar(source, i, len, inCharClass)
+    i = step.i
+    inCharClass = step.inCharClass
+    if (step.done) return i
   }
 
   return i
@@ -1309,6 +1453,31 @@ export interface ExportDefaultValueLocation {
  * expression body (brace/paren/bracket depth, strings, comments, JSX, regex).
  * Avoids the classic `[^;]+` trap that truncates arrow-function bodies.
  */
+function readExportDefaultBindingName(
+  source: string,
+  valueStart: number,
+  len: number,
+): string | null {
+  let pos = valueStart
+
+  if (isKeywordAt(source, pos, 'async')) {
+    const afterAsync = skipTrivia(source, pos + 5, len)
+    if (isKeywordAt(source, afterAsync, 'function')) pos = afterAsync
+  }
+
+  if (!isKeywordAt(source, pos, 'function') && !isKeywordAt(source, pos, 'class')) {
+    return null
+  }
+
+  const keywordLen = isKeywordAt(source, pos, 'function') ? 8 : 5
+  let afterKeyword = skipTrivia(source, pos + keywordLen, len)
+  if (source.charCodeAt(afterKeyword) === CH_STAR) {
+    afterKeyword = skipTrivia(source, afterKeyword + 1, len)
+  }
+  const name = readIdentifier(source, afterKeyword, len)
+  return name ? name.name : null
+}
+
 export function locateExportDefaultValue(source: string): ExportDefaultValueLocation | null {
   const len = source.length
   let i = 0
@@ -1320,45 +1489,28 @@ export function locateExportDefaultValue(source: string): ExportDefaultValueLoca
       continue
     }
 
-    if (isKeywordAt(source, i, 'export')) {
-      const afterExport = skipTrivia(source, i + 6, len)
-      if (!isKeywordAt(source, afterExport, 'default')) {
-        i++
-        continue
-      }
-
-      const valueStart = skipTrivia(source, afterExport + 7, len)
-      let pos = valueStart
-      let bindingName: string | null = null
-
-      if (isKeywordAt(source, pos, 'async')) {
-        const afterAsync = skipTrivia(source, pos + 5, len)
-        if (isKeywordAt(source, afterAsync, 'function')) pos = afterAsync
-      }
-
-      if (isKeywordAt(source, pos, 'function') || isKeywordAt(source, pos, 'class')) {
-        const keywordLen = isKeywordAt(source, pos, 'function') ? 8 : 5
-        let afterKeyword = skipTrivia(source, pos + keywordLen, len)
-        if (source.charCodeAt(afterKeyword) === CH_STAR) {
-          afterKeyword = skipTrivia(source, afterKeyword + 1, len)
-        }
-        const name = readIdentifier(source, afterKeyword, len)
-        if (name) bindingName = name.name
-      }
-
-      const valueEnd = scanExportDefaultValueEnd(source, valueStart, len)
-      const statementEnd = consumeTrailingSemicolon(source, valueEnd, len)
-
-      return {
-        exportStart: i,
-        valueStart,
-        valueEnd,
-        statementEnd,
-        bindingName,
-      }
+    if (!isKeywordAt(source, i, 'export')) {
+      i++
+      continue
     }
 
-    i++
+    const afterExport = skipTrivia(source, i + 6, len)
+    if (!isKeywordAt(source, afterExport, 'default')) {
+      i++
+      continue
+    }
+
+    const valueStart = skipTrivia(source, afterExport + 7, len)
+    const bindingName = readExportDefaultBindingName(source, valueStart, len)
+    const valueEnd = scanExportDefaultValueEnd(source, valueStart, len)
+
+    return {
+      exportStart: i,
+      valueStart,
+      valueEnd,
+      statementEnd: consumeTrailingSemicolon(source, valueEnd, len),
+      bindingName,
+    }
   }
 
   return null
@@ -1406,168 +1558,209 @@ function isExpressionContinuationAt(source: string, i: number, len: number): boo
 
 const NON_TERMINATING_EXPR_KEYWORDS = new Set(['typeof', 'void', 'delete', 'await', 'yield', 'new'])
 
-function scanExportDefaultValueEnd(source: string, start: number, len: number): number {
-  let i = start
-  let paren = 0
-  let brace = 0
-  let bracket = 0
-  let lastCanTerminate = false
+interface ExprScanState {
+  i: number
+  paren: number
+  brace: number
+  bracket: number
+  lastCanTerminate: boolean
+}
 
+function trySkipStringCommentOrRegex(source: string, state: ExprScanState, len: number): boolean {
+  const ch = source.charCodeAt(state.i)
+  if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
+    state.i = skipString(source, state.i, len, ch)
+    state.lastCanTerminate = true
+    return true
+  }
+  if (ch === CH_SLASH && source.charCodeAt(state.i + 1) === CH_SLASH) {
+    state.i = skipSingleLineComment(source, state.i, len)
+    return true
+  }
+  if (ch === CH_SLASH && source.charCodeAt(state.i + 1) === CH_STAR) {
+    state.i = skipMultiLineComment(source, state.i, len)
+    return true
+  }
+  if (
+    ch === CH_SLASH &&
+    source.charCodeAt(state.i + 1) !== CH_SLASH &&
+    source.charCodeAt(state.i + 1) !== CH_STAR &&
+    canPrecedeRegexWithKeywords(source, state.i)
+  ) {
+    state.i = skipRegex(source, state.i, len)
+    state.lastCanTerminate = true
+    return true
+  }
+  return false
+}
+
+function trySkipJsxInExpr(source: string, state: ExprScanState, len: number): boolean {
+  if (source.charCodeAt(state.i) !== CH_LT) return false
+  if (state.paren !== 0 || state.brace !== 0 || state.bracket !== 0) return false
+  const jsxEnd = trySkipJSX(source, state.i, len)
+  if (jsxEnd === -1) return false
+  state.i = jsxEnd
+  state.lastCanTerminate = true
+  return true
+}
+
+function applyGroupingChar(ch: number, state: ExprScanState): boolean | null {
+  if (ch === CH_OPEN_PAREN) {
+    state.paren++
+    state.lastCanTerminate = false
+    state.i++
+    return false
+  }
+  if (ch === CH_CLOSE_PAREN) {
+    state.paren = Math.max(0, state.paren - 1)
+    state.lastCanTerminate = true
+    state.i++
+    return false
+  }
+  if (ch === CH_OPEN_BRACE) {
+    state.brace++
+    state.lastCanTerminate = false
+    state.i++
+    return false
+  }
+  if (ch === CH_CLOSE_BRACE) {
+    state.brace = Math.max(0, state.brace - 1)
+    state.lastCanTerminate = true
+    state.i++
+    return state.paren === 0 && state.brace === 0 && state.bracket === 0
+  }
+  if (ch === CH_OPEN_BRACKET) {
+    state.bracket++
+    state.lastCanTerminate = false
+    state.i++
+    return false
+  }
+  if (ch === CH_CLOSE_BRACKET) {
+    state.bracket = Math.max(0, state.bracket - 1)
+    state.lastCanTerminate = true
+    state.i++
+    return false
+  }
+  return null
+}
+
+function tryTerminateAtTopLevel(
+  source: string,
+  state: ExprScanState,
+  len: number,
+  ch: number,
+): number | null {
+  if (state.paren !== 0 || state.brace !== 0 || state.bracket !== 0) return null
+  if (ch === CH_SEMICOLON) return state.i
+  if (!isLineTerminatorCode(ch)) return null
+  const afterNl = skipTrivia(source, state.i + 1, len)
+  if (!state.lastCanTerminate || isExpressionContinuationAt(source, afterNl, len)) {
+    state.i++
+    return -1 // sentinel: consumed, keep scanning
+  }
+  return state.i
+}
+
+function skipNumericLiteral(source: string, i: number, len: number): number {
+  i++
   while (i < len) {
-    const ch = source.charCodeAt(i)
-
-    if (ch === CH_SINGLE_QUOTE || ch === CH_DOUBLE_QUOTE || ch === CH_BACKTICK) {
-      i = skipString(source, i, len, ch)
-      lastCanTerminate = true
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_SLASH) {
-      i = skipSingleLineComment(source, i, len)
-      continue
-    }
-
-    if (ch === CH_SLASH && source.charCodeAt(i + 1) === CH_STAR) {
-      i = skipMultiLineComment(source, i, len)
-      continue
-    }
-
+    const d = source.charCodeAt(i)
     if (
-      ch === CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_SLASH &&
-      source.charCodeAt(i + 1) !== CH_STAR &&
-      canPrecedeRegexWithKeywords(source, i)
+      (d >= CH_0 && d <= CH_9) ||
+      d === CH_DOT ||
+      d === 110 /* n */ ||
+      d === 101 /* e */ ||
+      d === 69 /* E */
     ) {
-      i = skipRegex(source, i, len)
-      lastCanTerminate = true
-      continue
-    }
-
-    if (ch === CH_LT && paren === 0 && brace === 0 && bracket === 0) {
-      const jsxEnd = trySkipJSX(source, i, len)
-      if (jsxEnd !== -1) {
-        i = jsxEnd
-        lastCanTerminate = true
-        continue
-      }
-    }
-
-    if (ch === CH_OPEN_PAREN) {
-      paren++
-      lastCanTerminate = false
       i++
       continue
     }
-    if (ch === CH_CLOSE_PAREN) {
-      paren = Math.max(0, paren - 1)
-      lastCanTerminate = true
-      i++
-      continue
-    }
-    if (ch === CH_OPEN_BRACE) {
-      brace++
-      lastCanTerminate = false
-      i++
-      continue
-    }
-    if (ch === CH_CLOSE_BRACE) {
-      brace = Math.max(0, brace - 1)
-      lastCanTerminate = true
-      i++
-      // Declaration bodies (`function () {}`, `class {}`) end when the outer
-      // brace closes at depth 0.
-      if (paren === 0 && brace === 0 && bracket === 0) return i
-      continue
-    }
-    if (ch === CH_OPEN_BRACKET) {
-      bracket++
-      lastCanTerminate = false
-      i++
-      continue
-    }
-    if (ch === CH_CLOSE_BRACKET) {
-      bracket = Math.max(0, bracket - 1)
-      lastCanTerminate = true
-      i++
-      continue
-    }
+    break
+  }
+  return i
+}
 
-    if (paren === 0 && brace === 0 && bracket === 0) {
-      if (ch === CH_SEMICOLON) return i
+function isBinaryOrUnaryOpCode(ch: number): boolean {
+  return (
+    ch === CH_DOT ||
+    ch === CH_COMMA ||
+    ch === CH_COLON ||
+    ch === CH_QUESTION ||
+    ch === CH_EQUALS ||
+    ch === CH_PLUS ||
+    ch === CH_MINUS ||
+    ch === CH_STAR ||
+    ch === CH_SLASH ||
+    ch === CH_PERCENT ||
+    ch === CH_AMP ||
+    ch === CH_PIPE ||
+    ch === CH_CARET ||
+    ch === CH_EXCL ||
+    ch === CH_TILDE ||
+    ch === CH_LT ||
+    ch === CH_GT
+  )
+}
 
-      if (isLineTerminatorCode(ch)) {
-        const afterNl = skipTrivia(source, i + 1, len)
-        if (!lastCanTerminate || isExpressionContinuationAt(source, afterNl, len)) {
-          i++
-          continue
-        }
-        return i
-      }
+function advanceExprAtom(source: string, state: ExprScanState, len: number): void {
+  const ch = source.charCodeAt(state.i)
+
+  if (isIdentifierStartCode(ch)) {
+    const id = readIdentifier(source, state.i, len)
+    if (id) {
+      state.lastCanTerminate = !NON_TERMINATING_EXPR_KEYWORDS.has(id.name)
+      state.i = id.end
+      return
     }
-
-    if (isIdentifierStartCode(ch)) {
-      const id = readIdentifier(source, i, len)
-      if (id) {
-        lastCanTerminate = !NON_TERMINATING_EXPR_KEYWORDS.has(id.name)
-        i = id.end
-        continue
-      }
-    }
-
-    if (ch >= CH_0 && ch <= CH_9) {
-      lastCanTerminate = true
-      i++
-      while (i < len) {
-        const d = source.charCodeAt(i)
-        if (
-          (d >= CH_0 && d <= CH_9) ||
-          d === CH_DOT ||
-          d === 110 /* n */ ||
-          d === 101 /* e */ ||
-          d === 69 /* E */
-        ) {
-          i++
-          continue
-        }
-        break
-      }
-      continue
-    }
-
-    if (ch === CH_EQUALS && source.charCodeAt(i + 1) === CH_GT) {
-      lastCanTerminate = false
-      i += 2
-      continue
-    }
-
-    if (
-      ch === CH_DOT ||
-      ch === CH_COMMA ||
-      ch === CH_COLON ||
-      ch === CH_QUESTION ||
-      ch === CH_EQUALS ||
-      ch === CH_PLUS ||
-      ch === CH_MINUS ||
-      ch === CH_STAR ||
-      ch === CH_SLASH ||
-      ch === CH_PERCENT ||
-      ch === CH_AMP ||
-      ch === CH_PIPE ||
-      ch === CH_CARET ||
-      ch === CH_EXCL ||
-      ch === CH_TILDE ||
-      ch === CH_LT ||
-      ch === CH_GT
-    ) {
-      lastCanTerminate = false
-      i++
-      continue
-    }
-
-    i++
   }
 
-  return i
+  if (ch >= CH_0 && ch <= CH_9) {
+    state.lastCanTerminate = true
+    state.i = skipNumericLiteral(source, state.i, len)
+    return
+  }
+
+  if (ch === CH_EQUALS && source.charCodeAt(state.i + 1) === CH_GT) {
+    state.lastCanTerminate = false
+    state.i += 2
+    return
+  }
+
+  if (isBinaryOrUnaryOpCode(ch)) {
+    state.lastCanTerminate = false
+    state.i++
+    return
+  }
+
+  state.i++
+}
+
+function scanExportDefaultValueEnd(source: string, start: number, len: number): number {
+  const state: ExprScanState = {
+    i: start,
+    paren: 0,
+    brace: 0,
+    bracket: 0,
+    lastCanTerminate: false,
+  }
+
+  while (state.i < len) {
+    if (trySkipStringCommentOrRegex(source, state, len)) continue
+    if (trySkipJsxInExpr(source, state, len)) continue
+
+    const ch = source.charCodeAt(state.i)
+    const groupingDone = applyGroupingChar(ch, state)
+    if (groupingDone === true) return state.i
+    if (groupingDone === false) continue
+
+    const terminated = tryTerminateAtTopLevel(source, state, len, ch)
+    if (terminated === -1) continue
+    if (terminated !== null) return terminated
+
+    advanceExprAtom(source, state, len)
+  }
+
+  return state.i
 }
 
 /**

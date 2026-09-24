@@ -76,21 +76,27 @@ function registerClientComponent(
   g['~clientComponents']![componentId] = componentInfo
   g['~clientComponentPaths']![componentPath] = componentId
 
+  registerClientComponentNameAliases(componentId, componentPath, component)
+}
+
+function registerClientComponentNameAliases(
+  componentId: string,
+  componentPath: string,
+  component: unknown,
+): void {
   if (component != null && typeof component === 'object') {
     const candidate = component as ClientComponentCandidate
-    if (
-      (candidate.name != null && candidate.name !== '') ||
-      (candidate.displayName != null && candidate.displayName !== '')
-    ) {
-      const componentName =
-        candidate.name != null && candidate.name !== '' ? candidate.name : candidate.displayName
-      if (componentName != null && componentName !== '')
-        g['~clientComponentNames']![componentName] = componentId
-    }
+    const componentName =
+      candidate.name != null && candidate.name !== ''
+        ? candidate.name
+        : candidate.displayName != null && candidate.displayName !== ''
+          ? candidate.displayName
+          : undefined
+    if (componentName != null && componentName !== '')
+      g['~clientComponentNames']![componentName] = componentId
   }
 
   const pathName = extractComponentNameFromPath(componentPath)
-
   if (pathName != null && pathName !== '') g['~clientComponentNames']![pathName] = componentId
 }
 

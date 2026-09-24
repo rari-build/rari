@@ -214,26 +214,131 @@ export type BuildEntriesWithViteEnvironmentOptions = Readonly<{
   label?: string
 }>
 
+function partitionViteBuildOutputs(outputs: readonly BuildOutputItem[]): {
+  readonly cssByFileName: Map<string, string>
+  readonly extraFiles: EnvViteExtraFile[]
+  readonly entryOutputs: Map<string, EnvViteBuiltEntry>
+  readonly entryCssFiles: Map<string, string[]>
+} {
+  const cssByFileName = new Map<string, string>()
+  const extraFiles: EnvViteExtraFile[] = []
+  const entryOutputs = new Map<string, EnvViteBuiltEntry>()
+  const entryCssFiles = new Map<string, string[]>()
+
+  for (const item of outputs) {
+    if (item.type === 'asset') {
+      const fileName = toPosixPath(item.fileName)
+      if (fileName.endsWith('.css')) {
+        cssByFileName.set(fileName, assetSourceToString(item.source))
+      } else {
+        extraFiles.push({ fileName, code: item.source })
+      }
+      continue
+    }
+
+    const fileName = toPosixPath(item.fileName)
+    if (item.isEntry) {
+      const entryName = item.name
+      if (entryName == null || entryName === '') continue
+      entryOutputs.set(entryName, {
+        code: item.code,
+        cssAssetSources: [],
+      })
+      entryCssFiles.set(entryName, importedCssFileNames(item.viteMetadata?.importedCss))
+      continue
+    }
+
+    extraFiles.push({
+      fileName,
+      code: item.code,
+    })
+  }
+
+  return { cssByFileName, extraFiles, entryOutputs, entryCssFiles }
+}
+
+function attachEntryCssAssets(
+  entryOutputs: Map<string, EnvViteBuiltEntry>,
+  entryCssFiles: ReadonlyMap<string, readonly string[]>,
+  cssByFileName: ReadonlyMap<string, string>,
+): void {
+  for (const [entryName, built] of entryOutputs) {
+    const cssFileNames = entryCssFiles.get(entryName) ?? []
+    const cssAssetSources = cssFileNames
+      .map(fileName => cssByFileName.get(fileName))
+      .filter((source): source is string => source != null)
+
+    if (cssAssetSources.length === 0 && entryOutputs.size === 1 && cssByFileName.size > 0) {
+      entryOutputs.set(entryName, {
+        ...built,
+        cssAssetSources: [...cssByFileName.values()],
+      })
+      continue
+    }
+
+    entryOutputs.set(entryName, { ...built, cssAssetSources })
+  }
+}
+
+async function buildEntriesSequentially(
+  options: BuildEntriesWithViteEnvironmentOptions,
+): Promise<EnvViteBuildResult | null> {
+  const outputs = new Map<string, EnvViteBuiltEntry>()
+  const extraFiles: EnvViteExtraFile[] = []
+  for (const entry of options.entries) {
+    const result = await buildEntriesWithViteEnvironment({
+      ...options,
+      entries: [entry],
+    })
+    if (result == null) return null
+    for (const [entryName, built] of result.outputs) {
+      outputs.set(entryName, built)
+    }
+    extraFiles.push(...result.extraFiles)
+  }
+  return { outputs, extraFiles }
+}
+
+function applyEnvViteBuildConfig(
+  buildConfig: {
+    write: unknown
+    emptyOutDir: unknown
+    copyPublicDir: unknown
+    minify: unknown
+    emitAssets: unknown
+    rolldownOptions: unknown
+  },
+  options: BuildEntriesWithViteEnvironmentOptions,
+  input: Readonly<Record<string, string>>,
+  previousRolldown: Record<string, unknown>,
+): void {
+  buildConfig.write = false
+  buildConfig.emptyOutDir = false
+  buildConfig.copyPublicDir = false
+  buildConfig.emitAssets = true
+  buildConfig.minify = options.minify === true ? 'oxc' : false
+  buildConfig.rolldownOptions = {
+    ...previousRolldown,
+    input,
+    platform: 'node',
+    output: {
+      format: 'es',
+      entryFileNames: '[name].js',
+      chunkFileNames: 'chunks/[name]-[hash].js',
+      assetFileNames: 'assets/[name]-[hash][extname]',
+      ...(options.codeSplitting === false ? { codeSplitting: false } : {}),
+    },
+    external: [...(options.environmentName === 'ssr' ? SSR_EXTERNALS : RSC_EXTERNALS)],
+  }
+}
+
 export async function buildEntriesWithViteEnvironment(
   options: BuildEntriesWithViteEnvironmentOptions,
 ): Promise<EnvViteBuildResult | null> {
   if (options.entries.length === 0) return { outputs: new Map(), extraFiles: [] }
 
   if (options.codeSplitting === false && options.entries.length > 1) {
-    const outputs = new Map<string, EnvViteBuiltEntry>()
-    const extraFiles: EnvViteExtraFile[] = []
-    for (const entry of options.entries) {
-      const result = await buildEntriesWithViteEnvironment({
-        ...options,
-        entries: [entry],
-      })
-      if (result == null) return null
-      for (const [entryName, built] of result.outputs) {
-        outputs.set(entryName, built)
-      }
-      extraFiles.push(...result.extraFiles)
-    }
-    return { outputs, extraFiles }
+    return buildEntriesSequentially(options)
   }
 
   const environments = options.viteBuilder.environments as Partial<
@@ -256,85 +361,24 @@ export async function buildEntriesWithViteEnvironment(
   const label = options.label ?? options.environmentName.toUpperCase()
 
   try {
-    buildConfig.write = false
-    buildConfig.emptyOutDir = false
-    buildConfig.copyPublicDir = false
-    buildConfig.emitAssets = true
-    buildConfig.minify = options.minify === true ? 'oxc' : false
-    buildConfig.rolldownOptions = {
-      ...previousRolldown,
-      input,
-      platform: 'node',
-      output: {
-        format: 'es',
-        entryFileNames: '[name].js',
-        chunkFileNames: 'chunks/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash][extname]',
-        ...(options.codeSplitting === false ? { codeSplitting: false } : {}),
-      },
-      external: [...(options.environmentName === 'ssr' ? SSR_EXTERNALS : RSC_EXTERNALS)],
-    }
+    applyEnvViteBuildConfig(buildConfig, options, input, previousRolldown)
 
     const buildResult = await options.viteBuilder.build(env)
     const outputs = collectBuildOutputs(buildResult)
     if (outputs.length === 0) return null
 
-    const cssByFileName = new Map<string, string>()
-    const extraFiles: EnvViteExtraFile[] = []
-    const entryOutputs = new Map<string, EnvViteBuiltEntry>()
-    const entryCssFiles = new Map<string, string[]>()
-
-    for (const item of outputs) {
-      if (item.type === 'asset') {
-        const fileName = toPosixPath(item.fileName)
-        if (fileName.endsWith('.css')) {
-          cssByFileName.set(fileName, assetSourceToString(item.source))
-        } else {
-          extraFiles.push({ fileName, code: item.source })
-        }
-        continue
-      }
-
-      const fileName = toPosixPath(item.fileName)
-      if (item.isEntry) {
-        const entryName = item.name
-        if (entryName == null || entryName === '') continue
-        entryOutputs.set(entryName, {
-          code: item.code,
-          cssAssetSources: [],
-        })
-        entryCssFiles.set(entryName, importedCssFileNames(item.viteMetadata?.importedCss))
-        continue
-      }
-
-      extraFiles.push({
-        fileName,
-        code: item.code,
-      })
-    }
-
-    for (const [entryName, built] of entryOutputs) {
-      const cssFileNames = entryCssFiles.get(entryName) ?? []
-      const cssAssetSources = cssFileNames
-        .map(fileName => cssByFileName.get(fileName))
-        .filter((source): source is string => source != null)
-
-      if (cssAssetSources.length === 0 && entryOutputs.size === 1 && cssByFileName.size > 0) {
-        entryOutputs.set(entryName, {
-          ...built,
-          cssAssetSources: [...cssByFileName.values()],
-        })
-        continue
-      }
-
-      entryOutputs.set(entryName, { ...built, cssAssetSources })
-    }
+    const partitioned = partitionViteBuildOutputs(outputs)
+    attachEntryCssAssets(
+      partitioned.entryOutputs,
+      partitioned.entryCssFiles,
+      partitioned.cssByFileName,
+    )
 
     for (const entry of options.entries) {
-      if (!entryOutputs.has(entry.entryName)) return null
+      if (!partitioned.entryOutputs.has(entry.entryName)) return null
     }
 
-    return { outputs: entryOutputs, extraFiles }
+    return { outputs: partitioned.entryOutputs, extraFiles: partitioned.extraFiles }
   } catch (error) {
     console.warn(`[rari] Vite ${label} environment build failed:`, error)
     return null

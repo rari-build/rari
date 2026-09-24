@@ -244,6 +244,61 @@ function forgetSourcePath(map: Map<string, string>, sourcePath: string): boolean
   return removed
 }
 
+function contentTypeForImageExt(ext: string): string {
+  switch (ext) {
+    case '.png':
+      return 'image/png'
+    case '.gif':
+      return 'image/gif'
+    case '.webp':
+      return 'image/webp'
+    case '.avif':
+      return 'image/avif'
+    case '.svg':
+      return 'image/svg+xml'
+    default:
+      return 'image/jpeg'
+  }
+}
+
+function decodeUrlPath(urlPath: string): string {
+  try {
+    return decodeURIComponent(urlPath)
+  } catch {
+    return urlPath
+  }
+}
+
+function serveDevStaticImage(
+  sourceByPublicPath: ReadonlyMap<string, string>,
+  url: string | undefined,
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  res: import('node:http').ServerResponse,
+  next: () => void,
+): void {
+  const urlPath = url?.split('?')[0]
+  if (urlPath == null || urlPath === '') {
+    next()
+    return
+  }
+
+  const decodedPath = decodeUrlPath(urlPath)
+  const sourcePath = sourceByPublicPath.get(urlPath) ?? sourceByPublicPath.get(decodedPath)
+  if (sourcePath == null || sourcePath === '') {
+    next()
+    return
+  }
+
+  res.setHeader('Content-Type', contentTypeForImageExt(path.extname(sourcePath).toLowerCase()))
+  res.setHeader('Cache-Control', 'no-cache')
+  fs.createReadStream(sourcePath)
+    .on('error', () => {
+      if (!res.headersSent) res.statusCode = 404
+      res.end()
+    })
+    .pipe(res)
+}
+
 export function createStaticImagePlugin(): Plugin {
   let projectRoot = process.cwd()
   let outDir = path.join(projectRoot, 'dist')
@@ -302,47 +357,7 @@ export function createStaticImagePlugin(): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const urlPath = req.url?.split('?')[0]
-        if (urlPath == null || urlPath === '') {
-          next()
-          return
-        }
-
-        let decodedPath = urlPath
-        try {
-          decodedPath = decodeURIComponent(urlPath)
-        } catch {
-          decodedPath = urlPath
-        }
-
-        const sourcePath = sourceByPublicPath.get(urlPath) ?? sourceByPublicPath.get(decodedPath)
-        if (sourcePath == null || sourcePath === '') {
-          next()
-          return
-        }
-
-        const ext = path.extname(sourcePath).toLowerCase()
-        const contentType =
-          ext === '.png'
-            ? 'image/png'
-            : ext === '.gif'
-              ? 'image/gif'
-              : ext === '.webp'
-                ? 'image/webp'
-                : ext === '.avif'
-                  ? 'image/avif'
-                  : ext === '.svg'
-                    ? 'image/svg+xml'
-                    : 'image/jpeg'
-
-        res.setHeader('Content-Type', contentType)
-        res.setHeader('Cache-Control', 'no-cache')
-        fs.createReadStream(sourcePath)
-          .on('error', () => {
-            if (!res.headersSent) res.statusCode = 404
-            res.end()
-          })
-          .pipe(res)
+        serveDevStaticImage(sourceByPublicPath, req.url, res, next)
       })
     },
   }

@@ -48,24 +48,27 @@ class ResponseCookiesImpl implements ResponseCookies {
   }
 
   toSetCookieHeaders(): string[] {
-    return Array.from(this.cookies.values(), cookie => {
-      let header = `${cookie.name}=${cookie.value}`
-
-      if (cookie.options) {
-        if (cookie.options.path != null && cookie.options.path !== '')
-          header += `; Path=${cookie.options.path}`
-        if (cookie.options.domain != null && cookie.options.domain !== '')
-          header += `; Domain=${cookie.options.domain}`
-        if (cookie.options.maxAge != null) header += `; Max-Age=${cookie.options.maxAge}`
-        if (cookie.options.expires) header += `; Expires=${cookie.options.expires.toUTCString()}`
-        if (cookie.options.httpOnly) header += '; HttpOnly'
-        if (cookie.options.secure) header += '; Secure'
-        if (cookie.options.sameSite) header += `; SameSite=${cookie.options.sameSite}`
-      }
-
-      return header
-    })
+    return Array.from(this.cookies.values(), cookie => formatSetCookieHeader(cookie))
   }
+}
+
+function formatSetCookieHeader(cookie: {
+  readonly name: string
+  readonly value: string
+  readonly options?: CookieOptions
+}): string {
+  let header = `${cookie.name}=${cookie.value}`
+  const options = cookie.options
+  if (options == null) return header
+
+  if (options.path != null && options.path !== '') header += `; Path=${options.path}`
+  if (options.domain != null && options.domain !== '') header += `; Domain=${options.domain}`
+  if (options.maxAge != null) header += `; Max-Age=${options.maxAge}`
+  if (options.expires) header += `; Expires=${options.expires.toUTCString()}`
+  if (options.httpOnly) header += '; HttpOnly'
+  if (options.secure) header += '; Secure'
+  if (options.sameSite) header += `; SameSite=${options.sameSite}`
+  return header
 }
 
 export class RariResponse extends Response {

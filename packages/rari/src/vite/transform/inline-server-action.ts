@@ -151,25 +151,27 @@ function isIdentPart(ch: number): boolean {
 function skipWhitespaceAndComments(source: string, i: number): number {
   const len = source.length
   while (i < len) {
-    const ch = source.charCodeAt(i)
-    if (ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 65279) {
-      i++
-      continue
-    }
-    if (ch === 47 && source.charCodeAt(i + 1) === 47) {
-      i += 2
-      while (i < len && source.charCodeAt(i) !== 10 && source.charCodeAt(i) !== 13) i++
-      continue
-    }
-    if (ch === 47 && source.charCodeAt(i + 1) === 42) {
-      i += 2
-      while (i < len - 1 && (source.charCodeAt(i) !== 42 || source.charCodeAt(i + 1) !== 47)) i++
-      i += 2
-      continue
-    }
-    break
+    const next = skipOneWhitespaceOrComment(source, i, len)
+    if (next == null) break
+    i = next
   }
   return i
+}
+
+function skipOneWhitespaceOrComment(source: string, i: number, len: number): number | null {
+  const ch = source.charCodeAt(i)
+  if (ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 65279) return i + 1
+  if (ch === 47 && source.charCodeAt(i + 1) === 47) {
+    let j = i + 2
+    while (j < len && source.charCodeAt(j) !== 10 && source.charCodeAt(j) !== 13) j++
+    return j
+  }
+  if (ch === 47 && source.charCodeAt(i + 1) === 42) {
+    let j = i + 2
+    while (j < len - 1 && (source.charCodeAt(j) !== 42 || source.charCodeAt(j + 1) !== 47)) j++
+    return j + 2
+  }
+  return null
 }
 
 function skipString(source: string, i: number, quote: number): number {
@@ -216,7 +218,7 @@ function regionEquals(source: string, offset: number, target: string): boolean {
 }
 
 function hasUseServerPrologue(source: string, bodyOpen: number, bodyClose: number): boolean {
-  let i = skipWhitespaceAndComments(source, bodyOpen + 1)
+  const i = skipWhitespaceAndComments(source, bodyOpen + 1)
   if (i >= bodyClose) return false
 
   const ch = source.charCodeAt(i)
@@ -228,7 +230,11 @@ function hasUseServerPrologue(source: string, bodyOpen: number, bodyClose: numbe
   if (contentEnd - contentStart !== USE_SERVER.length) return false
   if (!regionEquals(source, contentStart, USE_SERVER)) return false
 
-  i = afterString
+  return isUseServerPrologueTerminator(source, afterString, bodyClose)
+}
+
+function isUseServerPrologueTerminator(source: string, start: number, bodyClose: number): boolean {
+  let i = start
   while (i < bodyClose) {
     const next = source.charCodeAt(i)
     if (next === 32 || next === 9) {
@@ -240,7 +246,6 @@ function hasUseServerPrologue(source: string, bodyOpen: number, bodyClose: numbe
     if (next === 47 && source.charCodeAt(i + 1) === 42) return true
     return false
   }
-
   return true
 }
 
@@ -272,6 +277,26 @@ function isKeywordAt(source: string, i: number, keyword: string): boolean {
   return true
 }
 
+function collectDestructuredParamNames(paramsRaw: string, i: number, names: Set<string>): number {
+  const ch = paramsRaw.charCodeAt(i)
+  const end = skipBalanced(paramsRaw, i, ch, ch === 123 ? 125 : 93)
+  for (const m of paramsRaw.slice(i, end).matchAll(/[a-z_$][\w$]*/gi)) {
+    if (m[0] !== 'as') names.add(m[0])
+  }
+  return end
+}
+
+function collectRestParamName(paramsRaw: string, i: number, names: Set<string>): number {
+  i += 3
+  i = skipWhitespaceAndComments(paramsRaw, i)
+  const ident = readIdent(paramsRaw, i)
+  if (ident) {
+    names.add(ident.name)
+    return ident.end
+  }
+  return i
+}
+
 function collectParamNames(paramsRaw: string): Set<string> {
   const names = new Set<string>()
   let i = 0
@@ -281,21 +306,11 @@ function collectParamNames(paramsRaw: string): Set<string> {
     if (i >= len) break
     const ch = paramsRaw.charCodeAt(i)
     if (ch === 123 || ch === 91) {
-      const end = skipBalanced(paramsRaw, i, ch, ch === 123 ? 125 : 93)
-      for (const m of paramsRaw.slice(i, end).matchAll(/[a-z_$][\w$]*/gi)) {
-        if (m[0] !== 'as') names.add(m[0])
-      }
-      i = end
+      i = collectDestructuredParamNames(paramsRaw, i, names)
       continue
     }
     if (ch === 46 && paramsRaw.charCodeAt(i + 1) === 46 && paramsRaw.charCodeAt(i + 2) === 46) {
-      i += 3
-      i = skipWhitespaceAndComments(paramsRaw, i)
-      const ident = readIdent(paramsRaw, i)
-      if (ident) {
-        names.add(ident.name)
-        i = ident.end
-      }
+      i = collectRestParamName(paramsRaw, i, names)
       continue
     }
     const ident = readIdent(paramsRaw, i)
@@ -319,20 +334,22 @@ function collectLocalDeclarations(body: string): Set<string> {
   return names
 }
 
+function addNamedImportLocals(specList: string, names: Set<string>): void {
+  for (const part of specList.split(',')) {
+    const trimmed = part.trim()
+    if (!trimmed || trimmed.startsWith('type ')) continue
+    const asParts = trimmed.split(/\s+as\s+/)
+    const local = (asParts.at(-1) ?? '').trim()
+    if (local) names.add(local)
+  }
+}
+
 function collectModuleBindings(source: string): Set<string> {
   const names = new Set<string>()
   for (const m of source.matchAll(
     /\b(?:import|export)\s+(?:type\s+)?(?:\{([^}]+)\}|(\*\s+as\s+[A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*))/g,
   )) {
-    if (m[1]) {
-      for (const part of m[1].split(',')) {
-        const trimmed = part.trim()
-        if (!trimmed || trimmed.startsWith('type ')) continue
-        const asParts = trimmed.split(/\s+as\s+/)
-        const local = (asParts.at(-1) ?? '').trim()
-        if (local) names.add(local)
-      }
-    }
+    if (m[1]) addNamedImportLocals(m[1], names)
     if (m[2]) {
       const ns = /as\s+([A-Za-z_$][\w$]*)/.exec(m[2])
       if (ns) names.add(ns[1])
@@ -430,6 +447,39 @@ function isObjectLiteralKey(body: string, identStart: number, identEnd: number):
   return prev === 123 || prev === 44
 }
 
+function tryResolveAssignedBindingRange(
+  source: string,
+  cursor: number,
+  actionStart: number,
+): {
+  start: number
+  exportKind: 'default' | 'named' | null
+  bindingName: string | null
+} | null {
+  if (cursor <= 0 || source.charCodeAt(cursor - 1) !== 61 /* = */) return null
+
+  const beforeEq = skipWsBack(source, cursor - 1)
+  const nameEnd = beforeEq
+  let nameStart = nameEnd
+  while (nameStart > 0 && isIdentPart(source.charCodeAt(nameStart - 1))) nameStart--
+  if (nameStart >= nameEnd || !isIdentStart(source.charCodeAt(nameStart))) return null
+
+  const bindingName = source.slice(nameStart, nameEnd)
+  const beforeName = skipWsBack(source, nameStart)
+  const declStart =
+    keywordEndsAt(source, beforeName, 'const') ??
+    keywordEndsAt(source, beforeName, 'let') ??
+    keywordEndsAt(source, beforeName, 'var')
+  if (declStart == null) return null
+
+  const beforeDecl = skipWsBack(source, declStart)
+  const exportStart = keywordEndsAt(source, beforeDecl, 'export')
+  if (exportStart != null) {
+    return { start: actionStart, exportKind: 'named', bindingName }
+  }
+  return { start: actionStart, exportKind: null, bindingName }
+}
+
 function resolveActionReplaceRange(
   source: string,
   actionStart: number,
@@ -447,33 +497,144 @@ function resolveActionReplaceRange(
     if (exportStart != null) return { start: exportStart, exportKind: 'default', bindingName: null }
   }
 
-  if (cursor > 0 && source.charCodeAt(cursor - 1) === 61 /* = */) {
-    const beforeEq = skipWsBack(source, cursor - 1)
-    const nameEnd = beforeEq
-    let nameStart = nameEnd
-    while (nameStart > 0 && isIdentPart(source.charCodeAt(nameStart - 1))) nameStart--
-    if (nameStart < nameEnd && isIdentStart(source.charCodeAt(nameStart))) {
-      const bindingName = source.slice(nameStart, nameEnd)
-      const beforeName = skipWsBack(source, nameStart)
-      const declStart =
-        keywordEndsAt(source, beforeName, 'const') ??
-        keywordEndsAt(source, beforeName, 'let') ??
-        keywordEndsAt(source, beforeName, 'var')
-      if (declStart != null) {
-        const beforeDecl = skipWsBack(source, declStart)
-        const exportStart = keywordEndsAt(source, beforeDecl, 'export')
-        if (exportStart != null) {
-          return { start: actionStart, exportKind: 'named', bindingName }
-        }
-        return { start: actionStart, exportKind: null, bindingName }
-      }
-    }
-  }
+  const assigned = tryResolveAssignedBindingRange(source, cursor, actionStart)
+  if (assigned != null) return assigned
 
   const exportStart = keywordEndsAt(source, cursor, 'export')
   if (exportStart != null) return { start: exportStart, exportKind: 'named', bindingName: null }
 
   return { start: actionStart, exportKind: null, bindingName: null }
+}
+
+function tryLocateFunctionAction(
+  source: string,
+  start: number,
+  pos: number,
+  isAsync: boolean,
+): { action: LocatedAction | null; nextI: number } | null {
+  if (!isKeywordAt(source, pos, 'function')) return null
+
+  pos = skipWhitespaceAndComments(source, pos + 8)
+  if (source.charCodeAt(pos) === 42) pos = skipWhitespaceAndComments(source, pos + 1)
+
+  let name: string | null = null
+  const ident = readIdent(source, pos)
+  if (ident) {
+    name = ident.name
+    pos = skipWhitespaceAndComments(source, ident.end)
+  }
+
+  if (source.charCodeAt(pos) !== 40) return { action: null, nextI: start + 1 }
+
+  const paramsEnd = skipBalanced(source, pos, 40, 41)
+  const paramsRaw = source.slice(pos + 1, paramsEnd - 1)
+  pos = skipWhitespaceAndComments(source, paramsEnd)
+  if (source.charCodeAt(pos) !== 123) return { action: null, nextI: start + 1 }
+
+  const bodyClose = skipBalanced(source, pos, 123, 125) - 1
+  if (!hasUseServerPrologue(source, pos, bodyClose)) {
+    return { action: null, nextI: pos + 1 }
+  }
+
+  return {
+    action: {
+      start,
+      end: bodyClose + 1,
+      bodyOpen: pos,
+      bodyClose,
+      paramsRaw,
+      isAsync,
+      name,
+      kind: name != null ? 'declaration' : 'expression',
+    },
+    nextI: bodyClose + 1,
+  }
+}
+
+function tryLocateArrowAction(
+  source: string,
+  start: number,
+  paramsOpen: number,
+  isAsync: boolean,
+): { action: LocatedAction | null; nextI: number } | null {
+  if (source.charCodeAt(paramsOpen) !== 40) return null
+
+  const paramsEnd = skipBalanced(source, paramsOpen, 40, 41)
+  const paramsRaw = source.slice(paramsOpen + 1, paramsEnd - 1)
+  let after = skipWhitespaceAndComments(source, paramsEnd)
+  if (source.charCodeAt(after) !== 61 || source.charCodeAt(after + 1) !== 62) return null
+
+  after = skipWhitespaceAndComments(source, after + 2)
+  if (source.charCodeAt(after) !== 123) return null
+
+  const bodyClose = skipBalanced(source, after, 123, 125) - 1
+  if (!hasUseServerPrologue(source, after, bodyClose)) {
+    return { action: null, nextI: after + 1 }
+  }
+
+  return {
+    action: {
+      start,
+      end: bodyClose + 1,
+      bodyOpen: after,
+      bodyClose,
+      paramsRaw,
+      isAsync,
+      name: null,
+      kind: 'arrow',
+    },
+    nextI: bodyClose + 1,
+  }
+}
+
+// oxlint-disable typescript/prefer-readonly-parameter-types
+function tryScanAsyncOrFunctionAction(
+  source: string,
+  i: number,
+  actions: LocatedAction[],
+): number | null {
+  if (!isKeywordAt(source, i, 'async') && !isKeywordAt(source, i, 'function')) return null
+
+  const start = i
+  let pos = i
+  let isAsync = false
+  if (isKeywordAt(source, pos, 'async')) {
+    isAsync = true
+    pos = skipWhitespaceAndComments(source, pos + 5)
+  }
+
+  const fnResult = tryLocateFunctionAction(source, start, pos, isAsync)
+  if (fnResult != null) {
+    if (fnResult.action != null) actions.push(fnResult.action)
+    return fnResult.nextI
+  }
+
+  if (!isAsync) return null
+
+  const arrow = tryLocateArrowAction(source, start, pos, true)
+  if (arrow == null) return null
+  if (arrow.action != null) actions.push(arrow.action)
+  return arrow.nextI
+}
+
+function advanceLocateActionsAt(source: string, i: number, actions: LocatedAction[]): number {
+  const ch = source.charCodeAt(i)
+
+  if (ch === 39 || ch === 34 || ch === 96) return skipString(source, i, ch)
+  if (ch === 47 && (source.charCodeAt(i + 1) === 47 || source.charCodeAt(i + 1) === 42)) {
+    return skipWhitespaceAndComments(source, i)
+  }
+
+  const asyncOrFn = tryScanAsyncOrFunctionAction(source, i, actions)
+  if (asyncOrFn != null) return asyncOrFn
+
+  const parenArrow = tryLocateArrowAction(source, i, i, false)
+  if (parenArrow != null) {
+    if (parenArrow.action != null) actions.push(parenArrow.action)
+    return parenArrow.nextI
+  }
+
+  return i + 1
 }
 
 function locateInlineUseServerActions(source: string): LocatedAction[] {
@@ -482,130 +643,64 @@ function locateInlineUseServerActions(source: string): LocatedAction[] {
   let i = 0
 
   while (i < len) {
-    const ch = source.charCodeAt(i)
-
-    if (ch === 39 || ch === 34 || ch === 96) {
-      i = skipString(source, i, ch)
-      continue
-    }
-    if (ch === 47 && (source.charCodeAt(i + 1) === 47 || source.charCodeAt(i + 1) === 42)) {
-      i = skipWhitespaceAndComments(source, i)
-      continue
-    }
-
-    if (isKeywordAt(source, i, 'async') || isKeywordAt(source, i, 'function')) {
-      const start = i
-      let pos = i
-      let isAsync = false
-      if (isKeywordAt(source, pos, 'async')) {
-        isAsync = true
-        pos = skipWhitespaceAndComments(source, pos + 5)
-      }
-
-      if (isKeywordAt(source, pos, 'function')) {
-        pos = skipWhitespaceAndComments(source, pos + 8)
-        if (source.charCodeAt(pos) === 42) pos = skipWhitespaceAndComments(source, pos + 1)
-
-        let name: string | null = null
-        const ident = readIdent(source, pos)
-        if (ident) {
-          name = ident.name
-          pos = skipWhitespaceAndComments(source, ident.end)
-        }
-
-        if (source.charCodeAt(pos) !== 40) {
-          i++
-          continue
-        }
-
-        const paramsEnd = skipBalanced(source, pos, 40, 41)
-        const paramsRaw = source.slice(pos + 1, paramsEnd - 1)
-        pos = skipWhitespaceAndComments(source, paramsEnd)
-        if (source.charCodeAt(pos) !== 123) {
-          i++
-          continue
-        }
-
-        const bodyClose = skipBalanced(source, pos, 123, 125) - 1
-        if (hasUseServerPrologue(source, pos, bodyClose)) {
-          actions.push({
-            start,
-            end: bodyClose + 1,
-            bodyOpen: pos,
-            bodyClose,
-            paramsRaw,
-            isAsync,
-            name,
-            kind: name != null ? 'declaration' : 'expression',
-          })
-          i = bodyClose + 1
-        } else {
-          i = pos + 1
-        }
-        continue
-      }
-
-      if (isAsync && source.charCodeAt(pos) === 40) {
-        const paramsEnd = skipBalanced(source, pos, 40, 41)
-        const paramsRaw = source.slice(pos + 1, paramsEnd - 1)
-        let after = skipWhitespaceAndComments(source, paramsEnd)
-        if (source.charCodeAt(after) === 61 && source.charCodeAt(after + 1) === 62) {
-          after = skipWhitespaceAndComments(source, after + 2)
-          if (source.charCodeAt(after) === 123) {
-            const bodyClose = skipBalanced(source, after, 123, 125) - 1
-            if (hasUseServerPrologue(source, after, bodyClose)) {
-              actions.push({
-                start,
-                end: bodyClose + 1,
-                bodyOpen: after,
-                bodyClose,
-                paramsRaw,
-                isAsync: true,
-                name: null,
-                kind: 'arrow',
-              })
-              i = bodyClose + 1
-            } else {
-              i = after + 1
-            }
-            continue
-          }
-        }
-      }
-    }
-
-    if (source.charCodeAt(i) === 40) {
-      const paramsEnd = skipBalanced(source, i, 40, 41)
-      let after = skipWhitespaceAndComments(source, paramsEnd)
-      if (source.charCodeAt(after) === 61 && source.charCodeAt(after + 1) === 62) {
-        after = skipWhitespaceAndComments(source, after + 2)
-        if (source.charCodeAt(after) === 123) {
-          const bodyClose = skipBalanced(source, after, 123, 125) - 1
-          if (hasUseServerPrologue(source, after, bodyClose)) {
-            actions.push({
-              start: i,
-              end: bodyClose + 1,
-              bodyOpen: after,
-              bodyClose,
-              paramsRaw: source.slice(i + 1, paramsEnd - 1),
-              isAsync: false,
-              name: null,
-              kind: 'arrow',
-            })
-            i = bodyClose + 1
-          } else {
-            i = after + 1
-          }
-          continue
-        }
-      }
-    }
-
-    i++
+    i = advanceLocateActionsAt(source, i, actions)
   }
 
   return actions
 }
+
+function buildActionReplacement(
+  action: LocatedAction,
+  bindExpr: string,
+  moduleId: string,
+  exportKind: 'default' | 'named' | null,
+  bindingName: string | null,
+): { replacement: string; rewrittenExport: string | null } {
+  if (exportKind === 'default') {
+    return {
+      rewrittenExport: 'default',
+      replacement: `export default registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, "default")`,
+    }
+  }
+  if (exportKind === 'named' && action.name != null) {
+    return {
+      rewrittenExport: action.name,
+      replacement: `export const ${action.name} = registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(action.name)})`,
+    }
+  }
+  if (exportKind === 'named' && bindingName != null) {
+    return {
+      rewrittenExport: bindingName,
+      replacement: `registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(bindingName)})`,
+    }
+  }
+  if (action.kind === 'declaration' && action.name != null) {
+    return { replacement: `const ${action.name} = ${bindExpr}`, rewrittenExport: null }
+  }
+  return { replacement: bindExpr, rewrittenExport: null }
+}
+
+function hoistActionDeclaration(
+  hoisted: string[],
+  rewrittenExportNames: string[],
+  asyncKw: string,
+  hoistedName: string,
+  params: string,
+  body: string,
+  moduleId: string,
+  rewrittenExport: string | null,
+): void {
+  if (rewrittenExport == null) {
+    hoisted.unshift(
+      `${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`,
+      `registerServerReference(${hoistedName}, ${JSON.stringify(moduleId)}, ${JSON.stringify(hoistedName)});`,
+    )
+    return
+  }
+  hoisted.unshift(`${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`)
+  rewrittenExportNames.unshift(rewrittenExport)
+}
+// oxlint-enable typescript/prefer-readonly-parameter-types
 
 export function transformInlineServerActions(
   code: string,
@@ -634,7 +729,6 @@ export function transformInlineServerActions(
     const freeVars = collectFreeVars(body, action.paramsRaw, moduleBindings)
     const params = [...freeVars, action.paramsRaw.trim()].filter(p => p !== '').join(', ')
     const asyncKw = action.isAsync ? 'async ' : ''
-
     const bindExpr =
       freeVars.length > 0 ? `${hoistedName}.bind(null, ${freeVars.join(', ')})` : hoistedName
 
@@ -644,36 +738,24 @@ export function transformInlineServerActions(
       bindingName,
     } = resolveActionReplaceRange(result, action.start)
 
-    let replacement = bindExpr
-    let rewrittenExport: string | null = null
+    const { replacement, rewrittenExport } = buildActionReplacement(
+      action,
+      bindExpr,
+      moduleId,
+      exportKind,
+      bindingName,
+    )
 
-    if (exportKind === 'default') {
-      // Cover declaration and arrow/default forms; register under "default" once.
-      rewrittenExport = 'default'
-      replacement = `export default registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, "default")`
-    } else if (exportKind === 'named' && action.name != null) {
-      // export async function name() { 'use server' ... }
-      rewrittenExport = action.name
-      replacement = `export const ${action.name} = registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(action.name)})`
-    } else if (exportKind === 'named' && bindingName != null) {
-      // export const bindingName = async () => { 'use server' ... }
-      // Preserve surrounding binding; register under the exported name once.
-      rewrittenExport = bindingName
-      replacement = `registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(bindingName)})`
-    } else if (action.kind === 'declaration' && action.name != null) {
-      replacement = `const ${action.name} = ${bindExpr}`
-    }
-    // else: non-exported arrow/expression; preserve surrounding binding (replacement = bindExpr)
-
-    if (rewrittenExport == null) {
-      hoisted.unshift(
-        `${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`,
-        `registerServerReference(${hoistedName}, ${JSON.stringify(moduleId)}, ${JSON.stringify(hoistedName)});`,
-      )
-    } else {
-      hoisted.unshift(`${asyncKw}function ${hoistedName}(${params}) {\n${body}\n}`)
-      rewrittenExportNames.unshift(rewrittenExport)
-    }
+    hoistActionDeclaration(
+      hoisted,
+      rewrittenExportNames,
+      asyncKw,
+      hoistedName,
+      params,
+      body,
+      moduleId,
+      rewrittenExport,
+    )
     needsRegisterImport = true
 
     result = result.slice(0, replaceStart) + replacement + result.slice(action.end)
