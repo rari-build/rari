@@ -52,7 +52,7 @@ export const monorepoReadonlyParameterAllows: Array<
   { from: 'package', name: ['UserConfig'], package: 'vite-plus' },
   { from: 'package', name: ['RolldownOutput'], package: 'rolldown' },
   { from: 'package', name: ['ThemeRegistration'], package: '@shikijs/types' },
-  { from: 'package', name: ['PageProps', 'LayoutProps'], package: 'rari' },
+  { from: 'package', name: ['PageProps', 'LayoutProps', 'ErrorProps'], package: 'rari' },
   { from: 'package', name: ['EvaluateOptions'], package: '@mdx-js/mdx' },
   'Page',
   'APIRequestContext',
