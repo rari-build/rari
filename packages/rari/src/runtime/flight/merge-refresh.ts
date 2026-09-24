@@ -75,26 +75,59 @@ function elementChildren(element: React.ReactElement): React.ReactNode[] {
   return childArray(elementPropsRecord(element).children)
 }
 
-function flattenReactNodes(children: React.ReactNode): React.ReactNode[] {
-  if (!Array.isArray(children)) {
-    if (children == null || children === false || children === true) return []
-    return [children]
+function containsNestedArrays(children: React.ReactNode): boolean {
+  return Array.isArray(children) && children.some(child => Array.isArray(child))
+}
+
+function isAlreadyScopedKey(key: string): boolean {
+  return key.startsWith('.') || key.startsWith('$')
+}
+
+function cloneWithScopedKey(element: React.ReactElement, nestPath: string): React.ReactElement {
+  const key = element.key
+  if (typeof key === 'string' && isAlreadyScopedKey(key)) return element
+  const scoped =
+    typeof key === 'string' && key !== '' ? `${nestPath}:${key.replace(/^\.+/, '')}` : nestPath
+  // oxlint-disable-next-line react/no-clone-element
+  return React.cloneElement(element, { key: scoped })
+}
+
+function flattenNestedChild(
+  child: unknown,
+  nestPath: string | null,
+  index: number,
+): React.ReactNode[] {
+  if (Array.isArray(child)) {
+    const path = nestPath == null ? `.${index}` : `${nestPath}:${index}`
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return flattenReactNodes(child as React.ReactNode, path)
+  }
+  if (child == null || child === false || child === true) return []
+  if (isReactElement(child) && nestPath != null) return [cloneWithScopedKey(child, nestPath)]
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return [child as React.ReactNode]
+}
+
+function flattenReactNodes(nodes: React.ReactNode, nestPath: string | null): React.ReactNode[] {
+  if (!Array.isArray(nodes)) {
+    if (nodes == null || nodes === false || nodes === true) return []
+    if (isReactElement(nodes) && nestPath != null) return [cloneWithScopedKey(nodes, nestPath)]
+    return [nodes]
   }
 
   const out: React.ReactNode[] = []
-  for (const child of children) {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    out.push(...flattenReactNodes(child as React.ReactNode))
+  for (let index = 0; index < nodes.length; index += 1) {
+    out.push(...flattenNestedChild(nodes[index], nestPath, index))
   }
   return out
 }
 
 function childArray(children: React.ReactNode): React.ReactNode[] {
-  if (Array.isArray(children)) return flattenReactNodes(children)
   if (children == null || children === false || children === true) return []
   if (isReactElement(children) || typeof children === 'string' || typeof children === 'number') {
     return [children]
   }
+  if (Array.isArray(children)) return flattenReactNodes(children, null)
   // eslint-disable-next-line react/no-children-to-array
   return React.Children.toArray(children)
 }
@@ -248,7 +281,12 @@ function unwrapLayoutReuseMarkers(node: React.ReactNode): React.ReactNode {
   const kids = childArray(props.children)
   if (kids.length === 0) return node
   const unwrappedKids = unwrapChildList(kids)
-  if (unwrappedKids.every((child, index) => child === kids[index])) return node
+  if (
+    !containsNestedArrays(props.children) &&
+    unwrappedKids.every((child, index) => child === kids[index])
+  ) {
+    return node
+  }
   return cloneWithMergedChildren(node, props, collapseNodeList(unwrappedKids))
 }
 
