@@ -586,11 +586,31 @@ function rewriteIdentRefs(source: string, from: string, to: string): string {
   return out + source.slice(last)
 }
 
+function isWsChar(ch: number): boolean {
+  return ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 65279
+}
+
+function skipBlockCommentBack(source: string, i: number): number | null {
+  if (i < 2 || source.charCodeAt(i - 1) !== 47 || source.charCodeAt(i - 2) !== 42) return null
+
+  let j = i - 3
+  while (j >= 0) {
+    if (source.charCodeAt(j) === 47 && source.charCodeAt(j + 1) === 42) return j
+    j--
+  }
+  return null
+}
+
 function skipWsBack(source: string, i: number): number {
   while (i > 0) {
-    const ch = source.charCodeAt(i - 1)
-    if (ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 65279) i--
-    else break
+    if (isWsChar(source.charCodeAt(i - 1))) {
+      i--
+      continue
+    }
+
+    const commentStart = skipBlockCommentBack(source, i)
+    if (commentStart == null) break
+    i = commentStart
   }
   return i
 }

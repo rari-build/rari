@@ -116,7 +116,7 @@ function peekFulfilledFlightContent(
 }
 
 function isDocumentRoot(node: React.ReactNode): node is React.ReactElement {
-  return React.isValidElement(node) && node.type === 'html'
+  return React.isValidElement(node) && (node.type === 'html' || node.type === 'HTML')
 }
 
 function isMergeableFlightRoot(node: React.ReactNode): boolean {
