@@ -283,6 +283,32 @@ describe('analyzeProxySource', () => {
     expect(analysis.rules).toHaveLength(1)
   })
 
+  it('forces runtime for invalid hex or unicode escapes in matcher literals', () => {
+    const invalidHex = `
+      export const config = {
+        matcher: '/api/\\xZZ',
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    const invalidUnicode = `
+      export const config = {
+        matcher: '/api/\\uZZZZ',
+      }
+
+      export function proxy(request) {
+        return RariResponse.next()
+      }
+    `
+    for (const code of [invalidHex, invalidUnicode]) {
+      const analysis = analyzeProxySource(code)
+      expect(analysis.requiresRuntime).toBe(true)
+      expect(analysis.matcher).toBeUndefined()
+    }
+  })
+
   it('forces runtime when string matcher is part of a composite expression', () => {
     const code = `
       export const config = {
