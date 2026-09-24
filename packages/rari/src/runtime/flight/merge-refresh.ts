@@ -72,20 +72,25 @@ function matchingClientShell(current: React.ReactElement, refresh: React.ReactEl
 }
 
 function elementChildren(element: React.ReactElement): React.ReactNode[] {
-  const children = elementPropsRecord(element).children
-  if (Array.isArray(children)) {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return children as React.ReactNode[]
+  return childArray(elementPropsRecord(element).children)
+}
+
+function flattenReactNodes(children: React.ReactNode): React.ReactNode[] {
+  if (!Array.isArray(children)) {
+    if (children == null || children === false || children === true) return []
+    return [children]
   }
-  if (children == null || children === false || children === true) return []
-  return [children]
+
+  const out: React.ReactNode[] = []
+  for (const child of children) {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    out.push(...flattenReactNodes(child as React.ReactNode))
+  }
+  return out
 }
 
 function childArray(children: React.ReactNode): React.ReactNode[] {
-  if (Array.isArray(children)) {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return children as React.ReactNode[]
-  }
+  if (Array.isArray(children)) return flattenReactNodes(children)
   if (children == null || children === false || children === true) return []
   if (isReactElement(children) || typeof children === 'string' || typeof children === 'number') {
     return [children]

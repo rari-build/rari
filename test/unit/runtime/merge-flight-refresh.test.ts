@@ -691,6 +691,27 @@ describe('mergeFlightRefresh', () => {
     expect(main.props.children).toBe('fresh')
   })
 
+  it('flattens multi-child reuse markers beside siblings when unwrapping', () => {
+    const refresh = React.createElement(
+      'div',
+      null,
+      React.createElement(
+        'rari-layout-reuse',
+        { 'data-rari-layout-path': '/' },
+        React.createElement('section', null, 'a'),
+        React.createElement('aside', null, 'b'),
+      ),
+      React.createElement('footer', null, 'footer'),
+    )
+
+    const merged = expectElement(mergeFlightRefresh(null, refresh))
+    const kids = childList(merged)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('section')
+    expect(expectElement(kids[1]).type).toBe('aside')
+    expect(expectElement(kids[2]).type).toBe('footer')
+  })
+
   it('unwraps reuse markers when remaining siblings are only non-element nodes', () => {
     const current = React.createElement('div', null, 'a', 'b', 'c')
     const refresh = React.createElement(
