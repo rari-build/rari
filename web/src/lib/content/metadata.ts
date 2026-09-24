@@ -1,10 +1,12 @@
 import {
   AUTHOR_EXPORT_REGEX,
+  AUTHOR_URL_EXPORT_REGEX,
   DATE_EXPORT_REGEX,
   DESCRIPTION_EXPORT_REGEX,
   HEADING_REGEX,
+  TAGS_EXPORT_REGEX,
   TITLE_EXPORT_REGEX,
-} from '@/lib/utils/regex-constants'
+} from './patterns'
 
 export interface BlogMetadata {
   readonly title?: string
@@ -20,8 +22,8 @@ export function extractBlogMetadata(content: string): BlogMetadata {
   const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
   const dateMatch = content.match(DATE_EXPORT_REGEX)
   const authorMatch = content.match(AUTHOR_EXPORT_REGEX)
-  const authorUrlMatch = /^export\s+const\s+authorUrl\s*=\s*['"]([^'"]+)['"]/m.exec(content)
-  const tagsMatch = /^export\s+const\s+tags\s*=\s*\[([^\]]*)\]/m.exec(content)
+  const authorUrlMatch = AUTHOR_URL_EXPORT_REGEX.exec(content)
+  const tagsMatch = TAGS_EXPORT_REGEX.exec(content)
 
   const tags = tagsMatch
     ? tagsMatch[1]

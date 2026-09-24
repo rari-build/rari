@@ -9,9 +9,9 @@ import Sanity from '@/components/icons/sponsors/Sanity'
 import Sentry from '@/components/icons/sponsors/Sentry'
 import Socket from '@/components/icons/sponsors/Socket'
 import { container } from '@/lib/site/styles'
-import { HEX_REGEX } from '@/lib/utils/regex-constants'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
+const HEX_REGEX = /^#[0-9A-F]{6}$/i
 
 function hexWithAlpha(hex: string, alpha: string): string {
   if (HEX_REGEX.test(hex)) {

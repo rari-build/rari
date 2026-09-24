@@ -62,7 +62,7 @@
         "src/content/**/*.mdx", // Blog/docs MDX loaded via filesystem
         "src/components/docs/CodeBlock.tsx", // MDX client component
         "src/components/docs/MermaidChart.tsx", // MDX client component
-        "src/components/docs/TerminalBlock.tsx", // MDX client component
+        "src/components/ui/TerminalBlock.tsx", // MDX client component
         "src/components/icons/File.tsx", // MDX client component
         "src/components/icons/Terminal2.tsx" // MDX client component
       ],
