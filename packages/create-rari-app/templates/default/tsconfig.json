@@ -19,5 +19,6 @@
     "noEmit": true,
     "isolatedModules": true,
     "skipLibCheck": true
-  }
+  },
+  "include": ["src", "node_modules/.rari/types/**/*.d.ts"]
 }
