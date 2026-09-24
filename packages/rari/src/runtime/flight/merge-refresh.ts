@@ -436,12 +436,27 @@ function isEmptyContentSlot(element: React.ReactElement): boolean {
   return elementChildren(element).length === 0
 }
 
+function elementsMatchForMerge(current: React.ReactElement, refresh: React.ReactElement): boolean {
+  if (matchingClientShell(current, refresh)) return true
+  if (current.type !== refresh.type) return false
+  return (current.key ?? null) === (refresh.key ?? null)
+}
+
 function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
   const kids = elementChildren(host)
   if (kids.length === 1 && isReactElement(kids[0])) {
     return mergeFlightRefresh(kids[0], nextPage)
   }
-  return nextPage
+  if (!isReactElement(nextPage) || kids.length === 0) return nextPage
+
+  const matchIndex = kids.findIndex(
+    child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
+  )
+  if (matchIndex < 0) return nextPage
+
+  const nextKids = [...kids]
+  nextKids[matchIndex] = mergeFlightRefresh(kids[matchIndex], nextPage)
+  return nextKids
 }
 
 function spliceAtLayoutPath(

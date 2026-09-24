@@ -216,6 +216,38 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(kids[2]).type).toBe('footer')
   })
 
+  it('preserves siblings when merging a matching child into a multi-child main host', () => {
+    const page = clientRef('src/app/page.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        'main',
+        null,
+        React.createElement('aside', null, 'sidebar'),
+        React.createElement(page, { key: '/' }, 'home'),
+      ),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        'rari-layout-reuse',
+        { 'data-rari-layout-path': '/' },
+        React.createElement(clientRef('src/app/page.tsx'), { key: '/' }, 'about'),
+      ),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const main = expectElement(childList(mergedBody)[0])
+    const kids = childList(main)
+    expect(kids).toHaveLength(2)
+    expect(expectElement(kids[0]).type).toBe('aside')
+    expect(expectElement(kids[0]).props.children).toBe('sidebar')
+    expect(clientReferenceId(expectElement(kids[1]).type)).toBe('src/app/page.tsx')
+    expect(expectElement(kids[1]).props.children).toBe('about')
+  })
+
   it('does not splice into the first sibling when layout path misses and there is no main', () => {
     const current = React.createElement(
       'body',
