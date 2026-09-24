@@ -69,6 +69,7 @@ import {
   resetClientHeadExtras,
   VIRTUAL_CLIENT_ENTRY,
 } from './client-head'
+import { createEnvTypesPlugin } from './env-types'
 import { createFindSourceMapURLPlugin } from './find-source-map-url'
 import { createFontPlugin } from './font/plugin'
 import { HMRCoordinator } from './hmr/coordinator'
@@ -2618,6 +2619,11 @@ ${clientTransformedCode}`
 
   plugins.push(
     mainPlugin,
+    createEnvTypesPlugin(
+      options.projectRoot != null && options.projectRoot !== ''
+        ? options.projectRoot
+        : process.cwd(),
+    ),
     createSilenceReactDirectiveLogsPlugin(),
     createStaticImagePlugin(),
     createFontPlugin(),
