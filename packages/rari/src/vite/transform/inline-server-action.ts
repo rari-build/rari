@@ -278,10 +278,34 @@ function isKeywordAt(source: string, i: number, keyword: string): boolean {
 }
 
 function collectDestructuredParamNames(paramsRaw: string, i: number, names: Set<string>): number {
-  const ch = paramsRaw.charCodeAt(i)
-  const end = skipBalanced(paramsRaw, i, ch, ch === 123 ? 125 : 93)
-  for (const m of paramsRaw.slice(i, end).matchAll(/[a-z_$][\w$]*/gi)) {
-    if (m[0] !== 'as') names.add(m[0])
+  const open = paramsRaw.charCodeAt(i)
+  const close = open === 123 ? 125 : 93
+  const end = skipBalanced(paramsRaw, i, open, close)
+  let j = i + 1
+  while (j < end - 1) {
+    j = skipWhitespaceAndComments(paramsRaw, j)
+    if (j >= end - 1) break
+    const ch = paramsRaw.charCodeAt(j)
+    if (ch === 123 || ch === 91) {
+      j = collectDestructuredParamNames(paramsRaw, j, names)
+      continue
+    }
+    if (ch === 46 && paramsRaw.charCodeAt(j + 1) === 46 && paramsRaw.charCodeAt(j + 2) === 46) {
+      j = collectRestParamName(paramsRaw, j, names)
+      continue
+    }
+    const ident = readIdent(paramsRaw, j)
+    if (ident == null) {
+      j++
+      continue
+    }
+    const afterIdent = skipWhitespaceAndComments(paramsRaw, ident.end)
+    if (open === 123 && paramsRaw.charCodeAt(afterIdent) === 58) {
+      j = afterIdent + 1
+      continue
+    }
+    names.add(ident.name)
+    j = ident.end
   }
   return end
 }
@@ -536,6 +560,9 @@ function tryLocateFunctionAction(
     return { action: null, nextI: pos + 1 }
   }
 
+  const beforeStart = skipWsBack(source, start)
+  const isAssigned = beforeStart > 0 && source.charCodeAt(beforeStart - 1) === 61 /* = */
+
   return {
     action: {
       start,
@@ -545,7 +572,7 @@ function tryLocateFunctionAction(
       paramsRaw,
       isAsync,
       name,
-      kind: name != null ? 'declaration' : 'expression',
+      kind: name != null && !isAssigned ? 'declaration' : 'expression',
     },
     nextI: bodyClose + 1,
   }
@@ -557,10 +584,18 @@ function tryLocateArrowAction(
   paramsOpen: number,
   isAsync: boolean,
 ): { action: LocatedAction | null; nextI: number } | null {
-  if (source.charCodeAt(paramsOpen) !== 40) return null
+  let paramsEnd: number
+  let paramsRaw: string
+  if (source.charCodeAt(paramsOpen) === 40) {
+    paramsEnd = skipBalanced(source, paramsOpen, 40, 41)
+    paramsRaw = source.slice(paramsOpen + 1, paramsEnd - 1)
+  } else {
+    const ident = readIdent(source, paramsOpen)
+    if (ident == null) return null
+    paramsEnd = ident.end
+    paramsRaw = ident.name
+  }
 
-  const paramsEnd = skipBalanced(source, paramsOpen, 40, 41)
-  const paramsRaw = source.slice(paramsOpen + 1, paramsEnd - 1)
   let after = skipWhitespaceAndComments(source, paramsEnd)
   if (source.charCodeAt(after) !== 61 || source.charCodeAt(after + 1) !== 62) return null
 
@@ -662,7 +697,7 @@ function buildActionReplacement(
       replacement: `export default registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, "default")`,
     }
   }
-  if (exportKind === 'named' && action.name != null) {
+  if (exportKind === 'named' && action.name != null && action.kind === 'declaration') {
     return {
       rewrittenExport: action.name,
       replacement: `export const ${action.name} = registerServerReference(${bindExpr}, ${JSON.stringify(moduleId)}, ${JSON.stringify(action.name)})`,

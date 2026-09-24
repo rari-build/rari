@@ -10,13 +10,19 @@ interface HtmlBoundaryTracker {
   trackHtmlBoundaries: (text: string) => boolean
   getState: () => string
 }
+function stripTsForVm(source: string): string {
+  return source
+    .replaceAll(': number | boolean', '')
+    .replaceAll(': string', '')
+    .replaceAll(': number', '')
+}
 
 function loadTracker(): () => HtmlBoundaryTracker {
   const sourcePath = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     '../../../crates/rari/src/rendering/layout/js/html_boundaries.ts',
   )
-  const source = fs.readFileSync(sourcePath, 'utf8').replace(/\(text: string\)/g, '(text)')
+  const source = stripTsForVm(fs.readFileSync(sourcePath, 'utf8'))
   const sandbox: { rariCreateHtmlBoundaryTracker?: () => HtmlBoundaryTracker } = {}
   vm.runInNewContext(
     `${source}\nthis.rariCreateHtmlBoundaryTracker = rariCreateHtmlBoundaryTracker`,

@@ -85,6 +85,24 @@ describe('mergeFlightRefresh', () => {
     expect(mergedChild.props.children).toBe('fresh')
   })
 
+  it('consumes nested reuse markers inside a matching client shell', () => {
+    const shell = clientRef('src/app/providers.tsx')
+    const current = React.createElement(
+      shell,
+      { key: 'providers' },
+      React.createElement('main', null, 'home'),
+    )
+    const refresh = React.createElement(
+      clientRef('src/app/providers.tsx'),
+      { key: 'providers' },
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    expect(merged.type).toBe(shell)
+    expect(expectElement(childList(merged)[0]).props.children).toBe('about')
+  })
+
   it('replaces the tree when client component ids differ', () => {
     const current = React.createElement(clientRef('src/app/A.tsx'), { key: '/actions' })
     const refresh = React.createElement(clientRef('src/app/B.tsx'), { key: '/actions' })
