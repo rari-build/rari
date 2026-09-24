@@ -22,7 +22,10 @@ use super::{
     ImageError,
     cache::{self, ImageCache},
     config::{ImageConfig, LocalPattern, RemotePattern},
-    types::{DEFAULT_IMAGE_QUALITY, ImageFormat, OptimizeParams, OptimizedImage},
+    types::{
+        BLUR_PLACEHOLDER_QUALITY, BLUR_PLACEHOLDER_WIDTH, DEFAULT_IMAGE_QUALITY, ImageFormat,
+        OptimizeParams, OptimizedImage,
+    },
 };
 use crate::{
     server::core::utils::path_validation::validate_safe_path,
@@ -423,6 +426,7 @@ impl ImageOptimizer {
                 w: Some(*width),
                 q: *q,
                 f: Some(format.extension().to_string()),
+                blur: None,
             };
             let cache_key = Self::generate_cache_key(&params);
             if self.cache.get(&cache_key).await.is_none() {
@@ -468,6 +472,7 @@ impl ImageOptimizer {
                         w: Some(width),
                         q,
                         f: Some(format.extension().to_string()),
+                        blur: None,
                     };
 
                     let cache_key = Self::generate_cache_key(&params);
@@ -573,6 +578,7 @@ impl ImageOptimizer {
                 w: Some(*width),
                 q: *q,
                 f: Some(format.extension().to_string()),
+                blur: None,
             };
             let cache_key = Self::generate_cache_key(&params);
             if self.cache.get(&cache_key).await.is_none() {
@@ -607,6 +613,7 @@ impl ImageOptimizer {
                         w: Some(width),
                         q,
                         f: Some(format.extension().to_string()),
+                        blur: None,
                     };
 
                     let cache_key = Self::generate_cache_key(&params);
@@ -720,6 +727,13 @@ impl ImageOptimizer {
         self.validate_url(&params.url)?;
 
         let source = self.fetch_image(&params.url).await?;
+        if let Err(error) = self.cache_blur_data_url_from_source(&params.url, &source).await {
+            tracing::debug!(
+                error = %error,
+                url = %params.url,
+                "[rari] Failed to cache blur data URL"
+            );
+        }
 
         let params_clone = params.clone();
         let config_clone = self.config.clone();
@@ -742,6 +756,88 @@ impl ImageOptimizer {
             .await;
 
         Ok((optimized, false))
+    }
+
+    pub async fn is_cached(&self, params: &OptimizeParams) -> bool {
+        self.cache.get(&Self::generate_cache_key(params)).await.is_some()
+    }
+
+    pub async fn get_blur_data_url(&self, url: &str) -> Option<String> {
+        let cached = self.cache.get(&Self::blur_cache_key(url)).await?;
+        String::from_utf8(cached.data.clone()).ok()
+    }
+
+    pub async fn ensure_blur_data_url(&self, url: &str) -> Result<String, ImageError> {
+        if let Some(existing) = self.get_blur_data_url(url).await {
+            return Ok(existing);
+        }
+
+        self.validate_url(url)?;
+        let source = self.fetch_image(url).await?;
+        let data_url = self.cache_blur_data_url_from_source(url, &source).await?;
+        Ok(data_url)
+    }
+
+    pub fn blur_placeholder_params(url: impl Into<String>) -> OptimizeParams {
+        OptimizeParams {
+            url: url.into(),
+            w: Some(BLUR_PLACEHOLDER_WIDTH),
+            q: BLUR_PLACEHOLDER_QUALITY,
+            f: Some("jpeg".to_string()),
+            blur: None,
+        }
+    }
+
+    fn blur_cache_key(url: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(b"blur:");
+        hasher.update(url.as_bytes());
+        format!("blur-{}", hex::encode(hasher.finalize()))
+    }
+
+    async fn cache_blur_data_url_from_source(
+        &self,
+        url: &str,
+        source: &[u8],
+    ) -> Result<String, ImageError> {
+        if let Some(existing) = self.get_blur_data_url(url).await {
+            return Ok(existing);
+        }
+
+        let source = source.to_vec();
+        let data_url =
+            task::spawn_blocking(move || Self::generate_blur_data_url(&source)).await.map_err(
+                |e| ImageError::ProcessingError(format!("Blur generation task failed: {e}")),
+            )??;
+
+        self.cache
+            .put(
+                Self::blur_cache_key(url),
+                cache::CachedImage {
+                    data: data_url.as_bytes().to_vec(),
+                    width: BLUR_PLACEHOLDER_WIDTH,
+                    height: 1,
+                    format: ImageFormat::Jpeg,
+                },
+            )
+            .await;
+
+        Ok(data_url)
+    }
+
+    fn generate_blur_data_url(source: &[u8]) -> Result<String, ImageError> {
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+        let img = image::load_from_memory(source)
+            .map_err(|e| ImageError::ProcessingError(format!("Failed to decode image: {e}")))?;
+        let tiny = if img.width() > BLUR_PLACEHOLDER_WIDTH {
+            img.resize(BLUR_PLACEHOLDER_WIDTH, u32::MAX, FilterType::Triangle)
+        } else {
+            img
+        };
+        let jpeg = Self::encode_jpeg(&tiny, BLUR_PLACEHOLDER_QUALITY)?;
+        Ok(format!("data:image/jpeg;base64,{}", STANDARD.encode(jpeg)))
     }
 
     fn generate_cache_key(params: &OptimizeParams) -> String {
@@ -1516,6 +1612,13 @@ mod tests {
             0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92,
             0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
         ]
+    }
+
+    #[test]
+    fn generate_blur_data_url_from_png() {
+        let data_url = ImageOptimizer::generate_blur_data_url(&tiny_png()).expect("blur");
+        assert!(data_url.starts_with("data:image/jpeg;base64,"));
+        assert!(data_url.len() > "data:image/jpeg;base64,".len());
     }
 
     fn assets_config() -> ImageConfig {

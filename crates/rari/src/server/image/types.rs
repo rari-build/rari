@@ -3,6 +3,8 @@ use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Deserializer, Serialize, de::Error};
 
 pub const DEFAULT_IMAGE_QUALITY: u8 = 75;
+pub const BLUR_PLACEHOLDER_WIDTH: u32 = 16;
+pub const BLUR_PLACEHOLDER_QUALITY: u8 = 25;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Archive, RkyvDeserialize, RkyvSerialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
@@ -65,6 +67,8 @@ pub struct OptimizeParams {
     pub q: u8,
     #[serde(default)]
     pub f: Option<String>,
+    #[serde(default)]
+    pub blur: Option<String>,
 }
 
 fn default_quality() -> u8 {

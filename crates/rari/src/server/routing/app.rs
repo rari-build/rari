@@ -60,6 +60,7 @@ use crate::{
             },
         },
         error_response,
+        image::schedule_image_prewarm,
         middleware::request_context::RequestContext,
         rendering::{
             metadata::apply_page_metadata, pretty_html::pretty_print_html,
@@ -222,6 +223,7 @@ async fn merge_response_cache_tags(state: &ServerState, base_tags: Vec<String>) 
 }
 
 pub(crate) fn wrap_html_with_metadata(html_content: String, state: &ServerState) -> String {
+    schedule_image_prewarm(state, &html_content);
     if state.config.is_development() { pretty_print_html(&html_content) } else { html_content }
 }
 

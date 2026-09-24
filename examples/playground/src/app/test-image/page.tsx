@@ -46,6 +46,7 @@ export default function TestImagePage() {
               width={1200}
               height={600}
               quality={75}
+              placeholder="blur"
               className="w-full h-auto"
             />
           </div>
@@ -246,7 +247,7 @@ export default function TestImagePage() {
             <h2 className="text-2xl font-bold text-gray-900">Blur Placeholder</h2>
           </div>
           <p className="text-sm text-gray-600 mb-6">
-            Smooth loading experience with low-quality image placeholders
+            Automatic LQIP from the optimizer. No manual blurDataURL required.
           </p>
           <div className="rounded-lg overflow-hidden border border-gray-200">
             <Image
@@ -255,7 +256,6 @@ export default function TestImagePage() {
               width={1200}
               height={800}
               placeholder="blur"
-              blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWEREiMxUf/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
               className="w-full h-auto"
             />
           </div>

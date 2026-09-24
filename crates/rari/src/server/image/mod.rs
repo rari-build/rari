@@ -1,12 +1,11 @@
-use std::env;
+use std::{env, sync::Arc};
 
 pub mod cache;
 mod config;
 mod optimizer;
+mod prewarm;
 mod scanner;
 mod types;
-
-use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
@@ -16,9 +15,15 @@ use axum::{
 pub use cache::ImageCache;
 pub use config::{ImageConfig, ImageVariant, LocalPattern, RemotePattern};
 pub use optimizer::{ImageOptimizer, PreloadImage};
+pub use prewarm::{
+    extract_optimize_params_from_html, schedule_image_prewarm, schedule_prewarm_from_html,
+};
 use rari_error::RariError;
 pub use scanner::{ImageUsageManifest, ScanError, scan_for_image_usage};
-pub use types::{DEFAULT_IMAGE_QUALITY, ImageFormat, OptimizeParams, OptimizedImage};
+pub use types::{
+    BLUR_PLACEHOLDER_QUALITY, BLUR_PLACEHOLDER_WIDTH, DEFAULT_IMAGE_QUALITY, ImageFormat,
+    OptimizeParams, OptimizedImage,
+};
 
 use crate::server::{config::Config, error_response};
 
@@ -28,11 +33,34 @@ pub struct ImageState {
     pub optimizer: Arc<ImageOptimizer>,
 }
 
+fn wants_blur_data_url(blur: Option<&str>) -> bool {
+    matches!(blur, Some("1" | "true" | "yes"))
+}
+
 #[expect(clippy::missing_errors_doc)]
 pub async fn handle_image_request(
     State(state): State<ImageState>,
     Query(params): Query<OptimizeParams>,
 ) -> Result<Response, ImageError> {
+    if wants_blur_data_url(params.blur.as_deref()) {
+        let data_url = state.optimizer.ensure_blur_data_url(&params.url).await?;
+        let is_production = env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
+        let cache_header = if is_production {
+            "public, max-age=31536000, immutable"
+        } else {
+            "public, max-age=0, must-revalidate"
+        };
+        return Ok((
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+                (header::CACHE_CONTROL, cache_header),
+            ],
+            data_url,
+        )
+            .into_response());
+    }
+
     let (optimized, cache_hit) = state.optimizer.optimize(params).await?;
 
     let content_type = match optimized.format {
