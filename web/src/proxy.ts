@@ -1,10 +1,9 @@
 import type { RariRequest } from 'rari'
 import { RariResponse } from 'rari'
-import { TRAILING_SLASH_REGEX } from '@/lib/utils/regex-constants'
 
 export function proxy(request: RariRequest) {
   const { pathname } = request.rariUrl
-  const normalizedPath = pathname.replace(TRAILING_SLASH_REGEX, '')
+  const normalizedPath = pathname.replace(/\/$/, '')
 
   if (normalizedPath === '/docs' || normalizedPath === '/getting-started')
     return RariResponse.redirect(new URL('/docs/getting-started', request.url), 308)

@@ -1,7 +1,9 @@
 'use client'
 
 import type { JSX } from 'react'
-import { PACKAGE_NAME_REGEX, WHITESPACE_SPLIT_REGEX } from '@/lib/utils/regex-constants'
+
+const PACKAGE_NAME_REGEX = /^[@\w.:/-]+$/
+const WHITESPACE_SPLIT_REGEX = /(\s+)/
 
 export function highlightCommand(command: string): JSX.Element {
   const parts = command.split(WHITESPACE_SPLIT_REGEX)

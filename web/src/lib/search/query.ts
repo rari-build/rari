@@ -1,6 +1,6 @@
 import type { SearchResult } from './types'
 import { getDocsDir } from '@/lib/content'
-import { WHITESPACE_REGEX } from '@/lib/utils/regex-constants'
+import { WHITESPACE_REGEX } from '@/lib/utils/whitespace'
 import {
   angleBracketRegex,
   extractExcerpt,
