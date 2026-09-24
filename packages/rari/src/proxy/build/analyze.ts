@@ -195,8 +195,9 @@ function appendDecodedEscape(
   const simple = decodeSimpleEscape(escaped)
   if (simple != null) return { out: out + simple, i }
   const hex = decodeHexOrUnicodeEscape(raw, i, escaped)
-  if (hex == null) return { out: out + escaped, i }
-  return { out: out + hex.char, i: hex.end }
+  if (hex != null) return { out: out + hex.char, i: hex.end }
+  if (escaped === 'x' || escaped === 'u') return null
+  return { out: out + escaped, i }
 }
 
 function decodeJsStringLiteral(raw: string, quote: "'" | '"' | '`'): string | null {
