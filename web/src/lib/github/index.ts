@@ -191,3 +191,18 @@ export async function getLatestRariVersion(): Promise<string> {
     return '0.0.0'
   }
 }
+
+export interface RepoChrome {
+  readonly version: string
+  readonly stars: number | null
+  readonly commitHash: string | null
+}
+
+export async function getRepoChrome(): Promise<RepoChrome> {
+  const [version, stars, commitHash] = await Promise.all([
+    getLatestRariVersion(),
+    getRepoStars(),
+    getLatestCommitHash(),
+  ])
+  return { version, stars, commitHash }
+}

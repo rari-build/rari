@@ -1,16 +1,12 @@
 'use client'
 
 import type { PackageManager } from '@/providers/usePackageManager'
-import { useClipboard } from '@/lib/hooks/use-clipboard'
-import { highlightCommand } from '@/lib/mdx/highlight-command'
-import { code } from '@/lib/site/styles'
 import { usePackageManager } from '@/providers/usePackageManager'
 import Bun from '../icons/Bun'
-import Check from '../icons/Check'
-import Copy from '../icons/Copy'
 import Npm from '../icons/Npm'
 import Pnpm from '../icons/Pnpm'
 import Yarn from '../icons/Yarn'
+import CommandPanel from './CommandPanel'
 
 interface PackageManagerCommands {
   readonly pnpm: string
@@ -66,25 +62,31 @@ export default function PackageManagerTabs(props: PackageManagerTabsProps) {
   const available = availableManagers(commands)
   const { packageManager: preferred, setPackageManager: setActiveTab } = usePackageManager()
   const selected = resolveSelectedManager(available, preferred)
-  const { copied, copyToClipboard } = useClipboard()
   const selectedCommand = commands[selected]
 
   return (
-    <div className={code.panel}>
-      <div
-        className="flex items-center gap-1 bg-muted px-2 py-1.5 border-b border-edge overflow-x-auto"
-        role="tablist"
-        aria-label="Package manager selection"
-      >
-        {available.map(pm => {
-          const Icon = packageManagerIcons[pm]
-          return (
-            <button
-              key={pm}
-              onClick={() => {
-                setActiveTab(pm)
-              }}
-              className={`
+    <CommandPanel
+      command={selectedCommand}
+      contentProps={{
+        'role': 'tabpanel',
+        'id': `${selected}-panel`,
+        'aria-labelledby': `${selected}-tab`,
+      }}
+      header={
+        <div
+          className="flex items-center gap-1 bg-muted px-2 py-1.5 border-b border-edge overflow-x-auto"
+          role="tablist"
+          aria-label="Package manager selection"
+        >
+          {available.map(pm => {
+            const Icon = packageManagerIcons[pm]
+            return (
+              <button
+                key={pm}
+                onClick={() => {
+                  setActiveTab(pm)
+                }}
+                className={`
               relative inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded
               transition-colors duration-200 shrink-0
               ${
@@ -93,46 +95,19 @@ export default function PackageManagerTabs(props: PackageManagerTabsProps) {
                   : 'text-fg-muted hover:text-fg hover:bg-hover'
               }
             `}
-              type="button"
-              role="tab"
-              aria-selected={selected === pm}
-              aria-controls={`${pm}-panel`}
-              id={`${pm}-tab`}
-            >
-              <Icon className="w-4 h-4" />
-              <span className="truncate font-medium">{pm}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      <div
-        className="relative"
-        role="tabpanel"
-        id={`${selected}-panel`}
-        aria-labelledby={`${selected}-tab`}
-      >
-        <span className="absolute top-2 right-2 text-xs text-fg-muted font-mono opacity-100 lg:group-hover:opacity-0 transition-opacity duration-200 z-10">
-          bash
-        </span>
-        <button
-          onClick={() => {
-            void copyToClipboard(selectedCommand)
-          }}
-          className={`${code.copyButton} top-2`}
-          type="button"
-          aria-label="Copy code to clipboard"
-        >
-          {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-        </button>
-
-        <pre className="font-mono text-sm px-4 py-3 pr-12 m-0 overflow-x-auto max-w-full">
-          <code className="whitespace-pre wrap-break-word">
-            <span className="text-fg-muted select-none">$ </span>
-            {highlightCommand(selectedCommand)}
-          </code>
-        </pre>
-      </div>
-    </div>
+                type="button"
+                role="tab"
+                aria-selected={selected === pm}
+                aria-controls={`${pm}-panel`}
+                id={`${pm}-tab`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="truncate font-medium">{pm}</span>
+              </button>
+            )
+          })}
+        </div>
+      }
+    />
   )
 }

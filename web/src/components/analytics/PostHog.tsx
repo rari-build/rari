@@ -2,6 +2,7 @@
 
 import type { PostHog as PostHogClient } from 'posthog-js'
 import { useEffect, useState } from 'react'
+import { useIdleLoad } from '@/lib/hooks/use-idle-load'
 
 function isRariNavigateEvent(event: Event): event is CustomEvent<{ to: string }> {
   if (!(event instanceof CustomEvent)) return false
@@ -56,31 +57,17 @@ function usePostHogPageViews(pathname: string | undefined, posthog: PostHogClien
 export function PostHog({ pathname }: Readonly<{ pathname?: string }>) {
   const [client, setClient] = useState<PostHogClient | null>(null)
 
-  useEffect(() => {
+  useIdleLoad(() => {
     const key = import.meta.env.VITE_POSTHOG_KEY
     const host = import.meta.env.VITE_POSTHOG_HOST
-    if (key == null || key === '' || host == null || host === '') return undefined
+    if (key == null || key === '' || host == null || host === '') return
 
-    const onInteraction = () => {
-      void loadAndInitPostHog(key, host)
-        .then(setClient)
-        .catch((error: unknown) => {
-          console.warn('[PostHog] Failed to initialize:', error)
-        })
-    }
-
-    document.addEventListener('click', onInteraction, { once: true, passive: true })
-    document.addEventListener('scroll', onInteraction, { once: true, passive: true })
-    document.addEventListener('keydown', onInteraction, { once: true, passive: true })
-    const timer = setTimeout(onInteraction, 3000)
-
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener('click', onInteraction)
-      document.removeEventListener('scroll', onInteraction)
-      document.removeEventListener('keydown', onInteraction)
-    }
-  }, [])
+    void loadAndInitPostHog(key, host)
+      .then(setClient)
+      .catch((error: unknown) => {
+        console.warn('[PostHog] Failed to initialize:', error)
+      })
+  }, 3000)
 
   usePostHogPageViews(pathname, client)
 

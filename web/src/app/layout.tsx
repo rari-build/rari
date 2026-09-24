@@ -1,5 +1,6 @@
 import type { LayoutProps, Metadata } from 'rari'
 import type { CSSProperties } from 'react'
+import { Suspense } from 'react'
 import Footer from '@/components/ui/Footer'
 import Sidebar from '@/components/ui/Sidebar'
 import { getLatestRariVersion } from '@/lib/github'
@@ -7,9 +8,12 @@ import { siteUrl } from '@/lib/site'
 import { Providers } from '@/providers'
 import './globals.css'
 
-export default async function Layout({ children, pathname }: LayoutProps) {
+async function SidebarWithVersion() {
   const version = await getLatestRariVersion()
+  return <Sidebar version={version} />
+}
 
+export default function Layout({ children, pathname }: LayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -29,12 +33,16 @@ export default async function Layout({ children, pathname }: LayoutProps) {
             }
           >
             <div className="flex min-h-screen">
-              <Sidebar version={version} />
+              <Suspense fallback={<Sidebar version="" />}>
+                <SidebarWithVersion />
+              </Suspense>
               <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
                 <main className="flex-1 min-w-0 bg-canvas rounded-b-md overflow-hidden">
                   {children}
                 </main>
-                <Footer />
+                <Suspense fallback={null}>
+                  <Footer />
+                </Suspense>
               </div>
             </div>
           </div>

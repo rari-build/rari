@@ -7,8 +7,7 @@ import Discord from '../icons/Discord'
 import Github from '../icons/Github'
 
 export default async function Footer() {
-  const stars = await getRepoStars()
-  const commitHash = await getLatestCommitHash()
+  const [stars, commitHash] = await Promise.all([getRepoStars(), getLatestCommitHash()])
   const copyrightYear = currentYear()
 
   return (

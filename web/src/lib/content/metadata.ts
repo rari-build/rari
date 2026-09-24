@@ -56,15 +56,8 @@ export function extractMetadataWithFallback(content: string): {
   title?: string
   description?: string
 } {
-  const titleMatch = content.match(TITLE_EXPORT_REGEX)
-  const descriptionMatch = content.match(DESCRIPTION_EXPORT_REGEX)
-
-  if (titleMatch || descriptionMatch) {
-    return {
-      title: titleMatch?.[2],
-      description: descriptionMatch?.[2],
-    }
-  }
+  const basic = extractBasicMetadata(content)
+  if (basic.title != null || basic.description != null) return basic
 
   const headingMatch = content.match(HEADING_REGEX)
   if (headingMatch) {
