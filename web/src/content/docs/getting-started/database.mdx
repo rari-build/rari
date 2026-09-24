@@ -33,8 +33,9 @@ rari's Rust runtime delivers exceptional performance for database-heavy applicat
 2. Create a new project and copy your connection string
 3. Add it to your `.env` file:
 
-<CodeBlock filename=".env" language="bash">{`DATABASE_URL="postgresql://user:password@ep-cool-darkness-123456.us-east-2.aws.neon.tech/dbname?sslmode=require"
-`}</CodeBlock>
+```bash title=".env"
+DATABASE_URL="postgresql://user:password@ep-cool-darkness-123456.us-east-2.aws.neon.tech/dbname?sslmode=require"
+```
 
 ## Database Clients
 
@@ -42,63 +43,51 @@ Any Node.js-compatible database client works here. Here are the most popular opt
 
 ### Postgres Clients
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add @neondatabase/serverless',
-    npm: 'npm install @neondatabase/serverless',
-    yarn: 'yarn add @neondatabase/serverless',
-    bun: 'bun add @neondatabase/serverless'
-  }}
-/>
+```package-managers
+pnpm: pnpm add @neondatabase/serverless
+npm: npm install @neondatabase/serverless
+yarn: yarn add @neondatabase/serverless
+bun: bun add @neondatabase/serverless
+```
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add postgres',
-    npm: 'npm install postgres',
-    yarn: 'yarn add postgres',
-    bun: 'bun add postgres'
-  }}
-/>
+```package-managers
+pnpm: pnpm add postgres
+npm: npm install postgres
+yarn: yarn add postgres
+bun: bun add postgres
+```
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add pg && pnpm add -D @types/pg',
-    npm: 'npm install pg && npm install -D @types/pg',
-    yarn: 'yarn add pg && yarn add -D @types/pg',
-    bun: 'bun add pg && bun add -D @types/pg'
-  }}
-/>
+```package-managers
+pnpm: pnpm add pg && pnpm add -D @types/pg
+npm: npm install pg && npm install -D @types/pg
+yarn: yarn add pg && yarn add -D @types/pg
+bun: bun add pg && bun add -D @types/pg
+```
 
 Note: The Neon serverless driver uses HTTP-based connections (not TCP), which works great with rari.
 
 ### ORMs and Query Builders
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add drizzle-orm && pnpm add -D drizzle-kit',
-    npm: 'npm install drizzle-orm && npm install -D drizzle-kit',
-    yarn: 'yarn add drizzle-orm && yarn add -D drizzle-kit',
-    bun: 'bun add drizzle-orm && bun add -D drizzle-kit'
-  }}
-/>
+```package-managers
+pnpm: pnpm add drizzle-orm && pnpm add -D drizzle-kit
+npm: npm install drizzle-orm && npm install -D drizzle-kit
+yarn: yarn add drizzle-orm && yarn add -D drizzle-kit
+bun: bun add drizzle-orm && bun add -D drizzle-kit
+```
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add @prisma/client && pnpm add -D prisma',
-    npm: 'npm install @prisma/client && npm install -D prisma',
-    yarn: 'yarn add @prisma/client && yarn add -D prisma',
-    bun: 'bun add @prisma/client && bun add -D prisma'
-  }}
-/>
+```package-managers
+pnpm: pnpm add @prisma/client && pnpm add -D prisma
+npm: npm install @prisma/client && npm install -D prisma
+yarn: yarn add @prisma/client && yarn add -D prisma
+bun: bun add @prisma/client && bun add -D prisma
+```
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add kysely',
-    npm: 'npm install kysely',
-    yarn: 'yarn add kysely',
-    bun: 'bun add kysely'
-  }}
-/>
+```package-managers
+pnpm: pnpm add kysely
+npm: npm install kysely
+yarn: yarn add kysely
+bun: bun add kysely
+```
 
 ## Querying in Server Components
 
@@ -108,17 +97,18 @@ Server Components can query databases directly. They're async by default, so you
 
 The Neon serverless driver uses HTTP instead of TCP, making it lightweight and ideal for modern frameworks like rari:
 
-<CodeBlock filename="src/app/posts/page.tsx" language="tsx">{`import { neon } from '@neondatabase/serverless'
+```tsx title="src/app/posts/page.tsx"
+import { neon } from '@neondatabase/serverless'
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export default async function PostsPage() {
-  const posts = await sql\`
+  const posts = await sql`
     SELECT id, title, content, created_at
     FROM posts
     ORDER BY created_at DESC
     LIMIT 10
-  \`
+  `
 
   return (
     <div>
@@ -135,11 +125,12 @@ export default async function PostsPage() {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 ### Using node-postgres (pg)
 
-<CodeBlock filename="src/lib/db.ts" language="typescript">{`import { Pool } from 'pg'
+```typescript title="src/lib/db.ts"
+import { Pool } from 'pg'
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -150,9 +141,10 @@ export const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 })
-`}</CodeBlock>
+```
 
-<CodeBlock filename="src/app/users/page.tsx" language="tsx">{`import { pool } from '@/lib/db'
+```tsx title="src/app/users/page.tsx"
+import { pool } from '@/lib/db'
 
 export default async function UsersPage() {
   const result = await pool.query(
@@ -172,11 +164,12 @@ export default async function UsersPage() {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 ### Using Postgres.js
 
-<CodeBlock filename="src/lib/db.ts" language="typescript">{`import postgres from 'postgres'
+```typescript title="src/lib/db.ts"
+import postgres from 'postgres'
 
 export const sql = postgres(process.env.DATABASE_URL!, {
   ssl: 'require',
@@ -184,15 +177,16 @@ export const sql = postgres(process.env.DATABASE_URL!, {
   idle_timeout: 20,
   connect_timeout: 10,
 })
-`}</CodeBlock>
+```
 
-<CodeBlock filename="src/app/users/page.tsx" language="tsx">{`import { sql } from '@/lib/db'
+```tsx title="src/app/users/page.tsx"
+import { sql } from '@/lib/db'
 
 export default async function UsersPage() {
-  const users = await sql\`
+  const users = await sql`
     SELECT id, name, email FROM users
     ORDER BY created_at DESC
-  \`
+  `
 
   return (
     <div>
@@ -207,18 +201,20 @@ export default async function UsersPage() {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 ### Using Drizzle ORM
 
-<CodeBlock filename="src/lib/db.ts" language="typescript">{`import { drizzle } from 'drizzle-orm/neon-serverless'
+```typescript title="src/lib/db.ts"
+import { drizzle } from 'drizzle-orm/neon-serverless'
 import { neon } from '@neondatabase/serverless'
 
 const sql = neon(process.env.DATABASE_URL!)
 export const db = drizzle(sql)
-`}</CodeBlock>
+```
 
-<CodeBlock filename="src/lib/schema.ts" language="typescript">{`import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core'
+```typescript title="src/lib/schema.ts"
+import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core'
 
 export const posts = pgTable('posts', {
   id: serial('id').primaryKey(),
@@ -226,9 +222,10 @@ export const posts = pgTable('posts', {
   content: text('content').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
-`}</CodeBlock>
+```
 
-<CodeBlock filename="src/app/posts/page.tsx" language="tsx">{`import { db } from '@/lib/db'
+```tsx title="src/app/posts/page.tsx"
+import { db } from '@/lib/db'
 import { posts } from '@/lib/schema'
 import { desc } from 'drizzle-orm'
 
@@ -253,8 +250,7 @@ export default async function PostsPage() {
     </div>
   )
 }
-`}</CodeBlock>
-
+```
 
 ## Mutations with Server Actions
 
@@ -262,7 +258,8 @@ Server Actions let you mutate database data from client components while keeping
 
 ### Creating a Server Action
 
-<CodeBlock filename="src/actions/posts.ts" language="typescript">{`'use server'
+```typescript title="src/actions/posts.ts"
+'use server'
 
 import { neon } from '@neondatabase/serverless'
 
@@ -286,10 +283,10 @@ export async function createPost(formData: FormData) {
   try {
     const userId = await getCurrentUserId()
 
-    await sql\`
+    await sql`
       INSERT INTO posts (title, content, user_id)
-      VALUES (\${title}, \${content}, \${userId})
-    \`
+      VALUES (${title}, ${content}, ${userId})
+    `
 
     return { success: true }
   } catch (error) {
@@ -302,11 +299,11 @@ export async function deletePost(postId: number) {
   try {
     const userId = await getCurrentUserId()
 
-    const result = await sql\`
+    const result = await sql`
       DELETE FROM posts
-      WHERE id = \${postId} AND user_id = \${userId}
+      WHERE id = ${postId} AND user_id = ${userId}
       RETURNING id
-    \`
+    `
 
     if (result.length === 0) {
       return { success: false, error: 'Post not found or unauthorized' }
@@ -318,11 +315,12 @@ export async function deletePost(postId: number) {
     return { success: false, error: 'Failed to delete post' }
   }
 }
-`}</CodeBlock>
+```
 
 ### Using Server Actions in Client Components
 
-<CodeBlock filename="src/components/CreatePostForm.tsx" language="tsx">{`'use client'
+```tsx title="src/components/CreatePostForm.tsx"
+'use client'
 
 import { createPost } from '@/actions/posts'
 import { useState } from 'react'
@@ -363,13 +361,14 @@ export default function CreatePostForm() {
     </form>
   )
 }
-`}</CodeBlock>
+```
 
 ## API Routes with Databases
 
 For REST APIs or webhooks, use API routes to query databases:
 
-<CodeBlock filename="src/app/api/posts/route.ts" language="typescript">{`import { neon } from '@neondatabase/serverless'
+```typescript title="src/app/api/posts/route.ts"
+import { neon } from '@neondatabase/serverless'
 import { ApiResponse } from 'rari'
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -390,12 +389,12 @@ export async function GET(request: Request) {
         ? Math.min(parsedLimit, 100)
         : 10
 
-    const posts = await sql\`
+    const posts = await sql`
       SELECT id, title, content, created_at
       FROM posts
       ORDER BY created_at DESC
-      LIMIT \${limit}
-    \`
+      LIMIT ${limit}
+    `
 
     return ApiResponse.json({ posts })
   } catch (error) {
@@ -427,11 +426,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const result = await sql\`
+    const result = await sql`
       INSERT INTO posts (title, content, user_id)
-      VALUES (\${title}, \${content}, \${userId})
+      VALUES (${title}, ${content}, ${userId})
       RETURNING id, title, content, created_at
-    \`
+    `
 
     return ApiResponse.json({ post: result[0] }, { status: 201 })
   } catch (error) {
@@ -442,7 +441,7 @@ export async function POST(request: Request) {
     )
   }
 }
-`}</CodeBlock>
+```
 
 ## Request Deduplication
 
@@ -450,37 +449,38 @@ Identical `fetch()` requests made during the same render pass are automatically 
 
 For database queries and other async operations, use `React.cache()` to manually deduplicate calls:
 
-<CodeBlock filename="src/lib/queries.ts" language="typescript">{`import { cache } from 'react'
+```typescript title="src/lib/queries.ts"
+import { cache } from 'react'
 import { neon } from '@neondatabase/serverless'
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export const getUser = cache(async (userId: number) => {
-  const users = await sql\`
-    SELECT id, name, email FROM users WHERE id = \${userId}
-  \`
+  const users = await sql`
+    SELECT id, name, email FROM users WHERE id = ${userId}
+  `
   return users[0]
 })
-`}</CodeBlock>
+```
 
 Now multiple components can call `getUser(1)` and only one database query will execute per request.
-
 
 ## Streaming with Suspense
 
 Stream database results progressively using Suspense boundaries. This lets you show a loading state while data is being fetched:
 
-<CodeBlock filename="src/app/dashboard/page.tsx" language="tsx">{`import { Suspense } from 'react'
+```tsx title="src/app/dashboard/page.tsx"
+import { Suspense } from 'react'
 import { neon } from '@neondatabase/serverless'
 
 const sql = neon(process.env.DATABASE_URL!)
 
 async function RecentPosts() {
-  const posts = await sql\`
+  const posts = await sql`
     SELECT id, title FROM posts
     ORDER BY created_at DESC
     LIMIT 5
-  \`
+  `
 
   return (
     <ul>
@@ -492,9 +492,9 @@ async function RecentPosts() {
 }
 
 async function UserStats() {
-  const stats = await sql\`
+  const stats = await sql`
     SELECT COUNT(*) as count FROM users
-  \`
+  `
 
   return <p>Total users: {stats[0].count}</p>
 }
@@ -514,13 +514,14 @@ export default function DashboardPage() {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 ## Connection Pooling
 
 For traditional Postgres clients like `pg`, use connection pooling to manage database connections efficiently:
 
-<CodeBlock filename="src/lib/db.ts" language="typescript">{`import { Pool } from 'pg'
+```typescript title="src/lib/db.ts"
+import { Pool } from 'pg'
 
 // Create a single pool instance
 export const pool = new Pool({
@@ -537,7 +538,7 @@ export const pool = new Pool({
 process.on('SIGTERM', async () => {
   await pool.end()
 })
-`}</CodeBlock>
+```
 
 With Neon's serverless driver (`@neondatabase/serverless`), connection pooling is handled automatically. No configuration needed. The driver uses HTTP connections which don't require traditional pooling.
 
@@ -547,7 +548,8 @@ Note: By default, SSL certificate verification is enabled for security. Only set
 
 Store database credentials in environment variables, never in your code:
 
-<CodeBlock filename=".env" language="bash">{`# Neon Postgres
+```bash title=".env"
+# Neon Postgres
 DATABASE_URL="postgresql://user:password@ep-cool-darkness-123456.us-east-2.aws.neon.tech/dbname?sslmode=require"
 
 # Alternative: separate connection details
@@ -556,7 +558,7 @@ DB_PORT="5432"
 DB_NAME="dbname"
 DB_USER="user"
 DB_PASSWORD="password"
-`}</CodeBlock>
+```
 
 Add `.env` to your `.gitignore` to keep credentials out of version control.
 
@@ -566,40 +568,40 @@ Use your ORM's migration tool or a standalone migration runner:
 
 ### Drizzle Kit
 
-<CodeBlock language="bash">{`# Generate migration from schema changes
+```bash
+# Generate migration from schema changes
 npx drizzle-kit generate
 
 # Apply migrations
 npx drizzle-kit migrate
-`}</CodeBlock>
+```
 
 ### Prisma
 
-<CodeBlock language="bash">{`# Create migration
+```bash
+# Create migration
 npx prisma migrate dev --name init
 
 # Apply migrations in production
 npx prisma migrate deploy
-`}</CodeBlock>
+```
 
 ### node-pg-migrate
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add node-pg-migrate',
-    npm: 'npm install node-pg-migrate',
-    yarn: 'yarn add node-pg-migrate',
-    bun: 'bun add node-pg-migrate'
-  }}
-/>
+```package-managers
+pnpm: pnpm add node-pg-migrate
+npm: npm install node-pg-migrate
+yarn: yarn add node-pg-migrate
+bun: bun add node-pg-migrate
+```
 
-<CodeBlock language="bash">{`# Create migration
+```bash
+# Create migration
 npx node-pg-migrate create initial-schema
 
 # Run migrations
 npx node-pg-migrate up
-`}</CodeBlock>
-
+```
 
 ## Best Practices
 
@@ -607,7 +609,8 @@ npx node-pg-migrate up
 
 Query databases directly in Server Components instead of creating API routes:
 
-<CodeBlock language="tsx">{`// Good: Direct database query in Server Component
+```tsx
+// Good: Direct database query in Server Component
 export default async function PostsPage() {
   const posts = await db.select().from(posts)
   return <PostsList posts={posts} />
@@ -618,13 +621,14 @@ export default async function PostsPage() {
   const posts = await fetch('/api/posts').then(r => r.json())
   return <PostsList posts={posts} />
 }
-`}</CodeBlock>
+```
 
 ### Use Server Actions for Mutations
 
 Keep database mutations secure with Server Actions:
 
-<CodeBlock language="typescript">{`// Good: Server Action with 'use server'
+```typescript
+// Good: Server Action with 'use server'
 'use server'
 export async function createPost(data: FormData) {
   await db.insert(posts).values({ ... })
@@ -635,13 +639,14 @@ export async function createPost(data: FormData) {
 export async function createPost() {
   await db.insert(posts).values({ ... }) // Database credentials exposed!
 }
-`}</CodeBlock>
+```
 
 ### Handle Errors Gracefully
 
 Always handle database errors and provide fallbacks:
 
-<CodeBlock language="tsx">{`export default async function PostsPage() {
+```tsx
+export default async function PostsPage() {
   try {
     const posts = await db.select().from(posts)
     return <PostsList posts={posts} />
@@ -650,43 +655,46 @@ Always handle database errors and provide fallbacks:
     return <p>Failed to load posts. Please try again later.</p>
   }
 }
-`}</CodeBlock>
+```
 
 ### Use Prepared Statements
 
 Prevent SQL injection by using parameterized queries. Tagged template literals automatically escape parameters, but avoid manual string concatenation:
 
-<CodeBlock language="typescript">{`// Good: Parameterized query with tagged template
-await sql\`SELECT * FROM users WHERE id = \${userId}\`
+```typescript
+// Good: Parameterized query with tagged template
+await sql`SELECT * FROM users WHERE id = ${userId}`
 
 // Dangerous: Manual string concatenation bypasses escaping
 const query = "SELECT * FROM users WHERE id = '" + userId + "'"
 await sql(query) // SQL injection risk!
-`}</CodeBlock>
+```
 
 ### Cache Expensive Queries
 
 Use `React.cache()` for queries called multiple times per request:
 
-<CodeBlock language="typescript">{`import { cache } from 'react'
+```typescript
+import { cache } from 'react'
 
 export const getSettings = cache(async () => {
   return await db.select().from(settings)
 })
-`}</CodeBlock>
+```
 
 ### Monitor Query Performance
 
 Log slow queries in development to identify performance bottlenecks:
 
-<CodeBlock language="typescript">{`const start = Date.now()
+```typescript
+const start = Date.now()
 const result = await db.select().from(posts)
 const duration = Date.now() - start
 
 if (duration > 100) {
-  console.warn(\`Slow query: \${duration}ms\`)
+  console.warn(`Slow query: ${duration}ms`)
 }
-`}</CodeBlock>
+```
 
 ## Other Databases
 
@@ -694,16 +702,15 @@ Any database with a Node.js client will work:
 
 ### MySQL
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add mysql2',
-    npm: 'npm install mysql2',
-    yarn: 'yarn add mysql2',
-    bun: 'bun add mysql2'
-  }}
-/>
+```package-managers
+pnpm: pnpm add mysql2
+npm: npm install mysql2
+yarn: yarn add mysql2
+bun: bun add mysql2
+```
 
-<CodeBlock language="typescript">{`import mysql from 'mysql2/promise'
+```typescript
+import mysql from 'mysql2/promise'
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -716,20 +723,19 @@ export default async function UsersPage() {
   const [rows] = await pool.query('SELECT * FROM users')
   return <UsersList users={rows} />
 }
-`}</CodeBlock>
+```
 
 ### MongoDB
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add mongodb',
-    npm: 'npm install mongodb',
-    yarn: 'yarn add mongodb',
-    bun: 'bun add mongodb'
-  }}
-/>
+```package-managers
+pnpm: pnpm add mongodb
+npm: npm install mongodb
+yarn: yarn add mongodb
+bun: bun add mongodb
+```
 
-<CodeBlock language="typescript">{`import { MongoClient } from 'mongodb'
+```typescript
+import { MongoClient } from 'mongodb'
 
 const client = new MongoClient(process.env.MONGODB_URI!)
 const db = client.db('myapp')
@@ -738,22 +744,21 @@ export default async function PostsPage() {
   const posts = await db.collection('posts').find().toArray()
   return <PostsList posts={posts} />
 }
-`}</CodeBlock>
+```
 
 Note: In production, use a singleton pattern to reuse the `MongoClient` connection across requests. Creating a new client at module scope works, but you should handle connection lifecycle properly. Consider using a connection helper that caches the client promise and handles `client.connect()` and graceful shutdown.
 
 ### SQLite
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add better-sqlite3 && pnpm add -D @types/better-sqlite3',
-    npm: 'npm install better-sqlite3 && npm install -D @types/better-sqlite3',
-    yarn: 'yarn add better-sqlite3 && yarn add -D @types/better-sqlite3',
-    bun: 'bun add better-sqlite3 && bun add -D @types/better-sqlite3'
-  }}
-/>
+```package-managers
+pnpm: pnpm add better-sqlite3 && pnpm add -D @types/better-sqlite3
+npm: npm install better-sqlite3 && npm install -D @types/better-sqlite3
+yarn: yarn add better-sqlite3 && yarn add -D @types/better-sqlite3
+bun: bun add better-sqlite3 && bun add -D @types/better-sqlite3
+```
 
-<CodeBlock language="typescript">{`// better-sqlite3 is synchronous - no async/await needed
+```typescript
+// better-sqlite3 is synchronous - no async/await needed
 import Database from 'better-sqlite3'
 
 const db = new Database('myapp.db')
@@ -762,7 +767,7 @@ export default function PostsPage() {
   const posts = db.prepare('SELECT * FROM posts').all()
   return <PostsList posts={posts} />
 }
-`}</CodeBlock>
+```
 
 ## Next Steps
 

@@ -19,13 +19,13 @@ The suite in <a href="https://github.com/rari-build/benchmarks" target="_blank" 
 
 The homepage bench has no `loading.tsx`, so rari serves the pre-compressed response cache after the first render. `/stream` has to do real Fizz work on every request.
 
-| Metric | rari | Next.js |
-| --- | --- | --- |
-| **TTFB** | **1ms** | 12ms |
-| **First content** | 107ms | 108ms |
-| **Last byte** | 1007ms | 1009ms |
-| **Resolved cards** | 10/10 | 10/10 |
-| **HTTP frames** | 12 | 10 |
+| Metric                        | rari        | Next.js     |
+| ----------------------------- | ----------- | ----------- |
+| **TTFB**                      | **1ms**     | 12ms        |
+| **First content**             | 107ms       | 108ms       |
+| **Last byte**                 | 1007ms      | 1009ms      |
+| **Resolved cards**            | 10/10       | 10/10       |
+| **HTTP frames**               | 12          | 10          |
 | **Throughput (15s, 25 conn)** | 24.99 req/s | 24.99 req/s |
 
 TTFB is 11.1x faster. First content is a wash. Last byte and throughput match because both runtimes wait on the same promises. Each request is held open for ~1s by the card delays, so 25 connections top out at ~25 req/s. 24.99 on both sides is that ceiling.
@@ -42,7 +42,7 @@ Axum flushes the shell before Fizz has HTML. The chunked response yields `<!DOCT
 
 TTFB is 1ms because the shell leaves before V8 finishes the first HTML string. The cards still wait ~1000ms; that's the fixture.
 
-<MermaidChart>{`
+```mermaid
 sequenceDiagram
     participant Browser
     participant Axum
@@ -64,7 +64,7 @@ sequenceDiagram
     Axum-->>Browser: first content (~107ms)
     Fizz-->>Axum: remaining cards + Flight tail
     Axum-->>Browser: last byte (~1007ms)
-`}</MermaidChart>
+```
 
 ## What's left
 
@@ -72,10 +72,11 @@ Rust↔JS hops are still there, and this path has no CDN in front of the process
 
 You can reproduce the run:
 
-<CodeBlock language="bash">{`# https://github.com/rari-build/benchmarks
+```bash
+# https://github.com/rari-build/benchmarks
 just benchmark-all
 # or just streamtest
-`}</CodeBlock>
+```
 
 Same apps, same `/stream` route, same 15s streaming throughput run. Methodology lives in that repo.
 

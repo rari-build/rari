@@ -9,7 +9,9 @@ Applications run on a Rust server with an embedded V8 runtime. The deployment wo
 
 Run `rari build` to create a production build:
 
-<TerminalBlock command="rari build" />
+```terminal
+rari build
+```
 
 This cleans any previous `dist/` output, then runs three steps in sequence:
 
@@ -23,19 +25,21 @@ The output goes to `dist/`. This directory and your `node_modules` are everythin
 
 Run `rari start` to launch the production server:
 
-<TerminalBlock command="rari start" />
+```terminal
+rari start
+```
 
 The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway, Render), it automatically binds to `0.0.0.0` so the host can route external traffic to your app.
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|---|---|---|
-| `PORT` | Server port | `3000` |
-| `RSC_PORT` | Alternative server port (fallback if `PORT` is not set) | `3000` |
-| `NODE_ENV` | Environment mode | `production` for `rari start`, `development` for `rari dev` |
-| `RUST_LOG` | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error` |
-| `RARI_HOST` | Server bind address | `127.0.0.1` (`0.0.0.0` on Railway and Render) |
+| Variable    | Description                                                        | Default                                                     |
+| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `PORT`      | Server port                                                        | `3000`                                                      |
+| `RSC_PORT`  | Alternative server port (fallback if `PORT` is not set)            | `3000`                                                      |
+| `NODE_ENV`  | Environment mode                                                   | `production` for `rari start`, `development` for `rari dev` |
+| `RUST_LOG`  | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error`                                                     |
+| `RARI_HOST` | Server bind address                                                | `127.0.0.1` (`0.0.0.0` on Railway and Render)               |
 
 `PORT` takes precedence over `RSC_PORT`. Most hosting platforms set `PORT` automatically.
 
@@ -43,11 +47,14 @@ The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway
 
 rari has built-in support for [Railway](https://railway.app). Run the deploy command to generate the configuration files:
 
-<TerminalBlock command="rari deploy railway" />
+```terminal
+rari deploy railway
+```
 
 This creates a `railway.toml` in your project root and updates your `package.json`:
 
-<CodeBlock filename="railway.toml" language="toml">{`[build]
+```toml title="railway.toml"
+[build]
 builder = "RAILPACK"
 
 [deploy]
@@ -56,7 +63,7 @@ healthcheckPath = "/_rari/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-`}</CodeBlock>
+```
 
 Your `package.json` gets these changes:
 
@@ -80,8 +87,8 @@ Railway is auto-detected via the `RAILWAY_ENVIRONMENT` environment variable, and
 
 The Rust runtime requires `libfontconfig1` for image and font rendering. On Railway, add this variable to your service:
 
-| Variable | Value |
-|---|---|
+| Variable                       | Value            |
+| ------------------------------ | ---------------- |
 | `RAILPACK_DEPLOY_APT_PACKAGES` | `libfontconfig1` |
 
 You can set this in the Railway dashboard under your service's Variables tab.
@@ -90,11 +97,14 @@ You can set this in the Railway dashboard under your service's Variables tab.
 
 rari also has built-in support for [Render](https://render.com). Run the deploy command to generate the configuration files:
 
-<TerminalBlock command="rari deploy render" />
+```terminal
+rari deploy render
+```
 
 This creates a `render.yaml` in your project root and updates your `package.json`:
 
-<CodeBlock filename="render.yaml" language="yaml">{`services:
+```yaml title="render.yaml"
+services:
   - type: web
     name: rari-app
     runtime: node
@@ -107,7 +117,7 @@ This creates a `render.yaml` in your project root and updates your `package.json
         value: production
       - key: RUST_LOG
         value: info
-`}</CodeBlock>
+```
 
 The same `package.json` changes apply as with Railway: `scripts.start`, `engines.node`, and the `rari` dependency.
 
@@ -129,7 +139,8 @@ The Rust runtime requires `libfontconfig1` for image and font rendering. Render'
 
 You can deploy rari to any platform that runs Node.js ≥ 24.21.0. The general steps:
 
-<CodeBlock language="bash">{`# Install dependencies
+```bash
+# Install dependencies
 npm install
 
 # Build for production
@@ -137,7 +148,7 @@ npx rari build
 
 # Start the server
 PORT=8080 npx rari start
-`}</CodeBlock>
+```
 
 The key requirements:
 
@@ -149,7 +160,8 @@ The key requirements:
 
 For containerized deployments, a minimal Dockerfile:
 
-<CodeBlock filename="Dockerfile" language="dockerfile">{`FROM node:24.21-slim
+```dockerfile title="Dockerfile"
+FROM node:24.21-slim
 
 RUN apt-get update && apt-get install -y libfontconfig1 && rm -rf /var/lib/apt/lists/*
 
@@ -166,7 +178,7 @@ ENV PORT=3000
 EXPOSE 3000
 
 CMD ["npm", "start"]
-`}</CodeBlock>
+```
 
 The server binds to `0.0.0.0` automatically on Railway and Render, but defaults to `127.0.0.1` elsewhere. For containerized or cloud deployments, make sure your networking layer routes traffic to the server's bound address and port.
 

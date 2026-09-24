@@ -22,22 +22,23 @@ Missing features forced me to prioritize what users needed, and live traffic exp
 
 You can verify these yourself:
 
-<CodeBlock language="bash">{`# Homepage
-curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build
+```bash
+# Homepage
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\nTime: %{time_total}s\nSize: %{size_download} bytes\n" -o /dev/null https://rari.build
 # Best: 0.119s | 6.2 KB
 
 # Blog listing
-curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/blog
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\nTime: %{time_total}s\nSize: %{size_download} bytes\n" -o /dev/null https://rari.build/blog
 # Best: 0.122s | 3.9 KB
 
 # Documentation page
-curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/docs/getting-started
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\nTime: %{time_total}s\nSize: %{size_download} bytes\n" -o /dev/null https://rari.build/docs/getting-started
 # Best: 0.164s | 12.0 KB
 
 # Enterprise page
-curl -H "Accept-Encoding: zstd, br, gzip" -w "\\nTime: %{time_total}s\\nSize: %{size_download} bytes\\n" -o /dev/null https://rari.build/enterprise
+curl -H "Accept-Encoding: zstd, br, gzip" -w "\nTime: %{time_total}s\nSize: %{size_download} bytes\n" -o /dev/null https://rari.build/enterprise
 # Best: 0.122s | 6.6 KB
-`}</CodeBlock>
+```
 
 Average across all routes: ~153ms response time. These are production numbers, not synthetic benchmarks. The internet-facing timings include network latency, TLS, and transfer time.
 
@@ -48,10 +49,12 @@ All pages use the pre-compressed response cache: after the first request, rari s
 The heaviest page is the Getting Started docs, which includes syntax highlighting, PostHog analytics, and Sentry error tracking with session replay. Like all pages on rari.build, it uses the pre-compressed response cache: the first request renders and caches, every subsequent request serves pre-compressed bytes from memory.
 
 **Total Page Weight (First Load):**
+
 - **345 KB transferred** (compressed via zstd/brotli/gzip)
 - **1.0 MB uncompressed** (28 requests)
 
 **Breakdown (compressed transfer sizes):**
+
 - Initial HTML (server-rendered): 13.5 KB
 - Critical JavaScript: ~124 KB
   - React + main bundle: ~90 KB
@@ -188,7 +191,7 @@ A listener task sits in a `tokio::select!` loop receiving these updates. When on
 
 One chunked HTTP connection carries it all. Shell arrives, browser paints, boundary updates trickle in, content swaps happen without re-renders. When everything resolves, the server closes the stream. The RSC payload gets embedded in a `<script>` tag at the end for hydration.
 
-<MermaidChart>{`
+```mermaid
 graph TB
     subgraph Client["Browser / Client"]
         HTML["HTML<br/>(13.5 KB)"]
@@ -250,7 +253,7 @@ graph TB
     style Build fill:#1f2937,stroke:#10b981,stroke-width:2px
     style React fill:#1f2937,stroke:#8b5cf6,stroke-width:2px
     style Client fill:#1f2937,stroke:#f97316,stroke-width:2px
-`}</MermaidChart>
+```
 
 ### The CLI and build toolchain
 

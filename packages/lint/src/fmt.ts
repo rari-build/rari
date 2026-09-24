@@ -27,12 +27,18 @@ export const fmt: OxfmtConfig = {
       'unknown',
     ],
   },
-  ignorePatterns: [...ignorePatterns, '**/*.mdx'],
+  ignorePatterns,
   overrides: [
     {
       files: ['**/*.{json,jsonc}'],
       options: {
         trailingComma: 'none',
+      },
+    },
+    {
+      files: ['**/*.mdx'],
+      options: {
+        embeddedLanguageFormatting: 'off',
       },
     },
   ],

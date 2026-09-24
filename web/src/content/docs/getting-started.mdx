@@ -19,46 +19,43 @@ Before you begin, ensure you have the following installed:
 
 The fastest way to get started is with our project generator:
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm create rari-app@latest my-rari-app',
-    npm: 'npm create rari-app@latest my-rari-app',
-    yarn: 'yarn create rari-app my-rari-app',
-    bun: 'bun create rari-app my-rari-app'
-  }}
-/>
+```package-managers
+pnpm: pnpm create rari-app@latest my-rari-app
+npm: npm create rari-app@latest my-rari-app
+yarn: yarn create rari-app my-rari-app
+bun: bun create rari-app my-rari-app
+```
 
 Navigate to your project directory:
 
-<TerminalBlock command="cd my-rari-app" />
+```terminal
+cd my-rari-app
+```
 
 Start the development server:
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm dev',
-    npm: 'npm run dev',
-    yarn: 'yarn dev',
-    bun: 'bun dev'
-  }}
-/>
+```package-managers
+pnpm: pnpm dev
+npm: npm run dev
+yarn: yarn dev
+bun: bun dev
+```
 
 ### Option 2: Add to Existing Vite Project
 
 If you have an existing Vite + React project:
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add rari',
-    npm: 'npm install rari',
-    yarn: 'yarn add rari',
-    bun: 'bun add rari'
-  }}
-/>
+```package-managers
+pnpm: pnpm add rari
+npm: npm install rari
+yarn: yarn add rari
+bun: bun add rari
+```
 
 Update your `vite.config.ts`:
 
-<CodeBlock filename="vite.config.ts" language="typescript">{`import { rari } from 'rari/vite'
+```typescript title="vite.config.ts"
+import { rari } from 'rari/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -66,7 +63,7 @@ export default defineConfig({
     rari(),
   ],
 })
-`}</CodeBlock>
+```
 
 ## Your First App Router Page
 
@@ -74,7 +71,8 @@ With the app router, your application structure is based on the `src/app/` direc
 
 Create `src/app/layout.tsx` (root layout):
 
-<CodeBlock filename="src/app/layout.tsx" language="tsx">{`import type { LayoutProps } from 'rari'
+```tsx title="src/app/layout.tsx"
+import type { LayoutProps } from 'rari'
 import './globals.css'
 
 export default function Layout({ children }: LayoutProps) {
@@ -96,11 +94,12 @@ export const metadata = {
   title: 'My rari App',
   description: 'Built with rari',
 }
-`}</CodeBlock>
+```
 
 Create `src/app/page.tsx` (home page):
 
-<CodeBlock filename="src/app/page.tsx" language="tsx">{`import type { PageProps } from 'rari'
+```tsx title="src/app/page.tsx"
+import type { PageProps } from 'rari'
 import Counter from '@/components/Counter'
 
 // This is a React Server Component - runs on the server!
@@ -132,11 +131,12 @@ export const metadata = {
   title: 'Home | My rari App',
   description: 'Welcome to my rari application',
 }
-`}</CodeBlock>
+```
 
 Create `src/components/Counter.tsx` (client component):
 
-<CodeBlock filename="src/components/Counter.tsx" language="tsx">{`'use client'
+```tsx title="src/components/Counter.tsx"
+'use client'
 
 import { useState } from 'react'
 
@@ -152,24 +152,23 @@ export default function Counter() {
     </div>
   )
 }
-`}</CodeBlock>
+```
 
 ## Using NPM Packages
 
 The Rust runtime handles standard `node_modules` resolution. You can `import` from any npm package the same way you would in Node. Unlike most Rust-based JS runtimes, there are no URL imports or special npm specifiers. Your existing `package.json` workflow just works.
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm add marked',
-    npm: 'npm install marked',
-    yarn: 'yarn add marked',
-    bun: 'bun add marked'
-  }}
-/>
+```package-managers
+pnpm: pnpm add marked
+npm: npm install marked
+yarn: yarn add marked
+bun: bun add marked
+```
 
 Create `src/components/MarkdownPost.tsx`:
 
-<CodeBlock filename="src/components/MarkdownPost.tsx" language="tsx">{`import { marked } from 'marked'
+```tsx title="src/components/MarkdownPost.tsx"
+import { marked } from 'marked'
 
 interface MarkdownPostProps {
   content: string
@@ -191,21 +190,22 @@ export default async function MarkdownPost({ content, title }: MarkdownPostProps
     </article>
   )
 }
-`}</CodeBlock>
+```
 
 Use it in a page:
 
-<CodeBlock filename="src/app/blog/page.tsx" language="tsx">{`import MarkdownPost from '@/components/MarkdownPost'
+```tsx title="src/app/blog/page.tsx"
+import MarkdownPost from '@/components/MarkdownPost'
 
-const blogPost = \`
+const blogPost = `
 # Welcome to rari!
 
-This markdown is processed **on the server** using the \\\`marked\\\` package.
+This markdown is processed **on the server** using the \`marked\` package.
 
 - Fast server-side rendering
 - Universal NPM package support
 - Zero configuration required
-\`
+`
 
 export default function BlogPage() {
   return (
@@ -219,52 +219,48 @@ export const metadata = {
   title: 'Blog | My rari App',
   description: 'Read our latest posts',
 }
-`}</CodeBlock>
+```
 
 ## Development Workflow
 
 ### Start Development Server
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm dev',
-    npm: 'npm run dev',
-    yarn: 'yarn dev',
-    bun: 'bun dev'
-  }}
-/>
+```package-managers
+pnpm: pnpm dev
+npm: npm run dev
+yarn: yarn dev
+bun: bun dev
+```
 
 Your app will be available at `http://localhost:5173` (Vite default) with:
+
 - **Hot module reloading** for instant updates
 - **Error overlay** for debugging
 - **TypeScript support** out of the box
 
 ### Build for Production
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm build',
-    npm: 'npm run build',
-    yarn: 'yarn build',
-    bun: 'bun build'
-  }}
-/>
+```package-managers
+pnpm: pnpm build
+npm: npm run build
+yarn: yarn build
+bun: bun build
+```
 
 This creates an optimized production build with:
+
 - **Automatic code splitting**
 - **Asset optimization**
 - **Server bundle generation**
 
 ### Start Production Server
 
-<PackageManagerTabs
-  commands={{
-    pnpm: 'pnpm start',
-    npm: 'npm start',
-    yarn: 'yarn start',
-    bun: 'bun start'
-  }}
-/>
+```package-managers
+pnpm: pnpm start
+npm: npm start
+yarn: yarn start
+bun: bun start
+```
 
 Runs your optimized app in production mode.
 
@@ -272,7 +268,8 @@ Runs your optimized app in production mode.
 
 A typical rari project (created with `create-rari-app`) looks like this:
 
-<CodeBlock language="bash">{`my-rari-app/
+```bash
+my-rari-app/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx
@@ -296,30 +293,34 @@ A typical rari project (created with `create-rari-app`) looks like this:
 ├── vite.config.ts
 ├── tsconfig.json
 └── .gitignore
-`}</CodeBlock>
+```
 
 ## Server vs Client Components
 
 ### Server Components (Default)
+
 - Run on the server during rendering
 - Can use async/await and server-only APIs
 - Cannot use browser APIs or event handlers
 - Automatically serialized for the client
 
-<CodeBlock language="tsx">{`export default async function ServerComponent() {
+```tsx
+export default async function ServerComponent() {
   const data = await fetch('https://api.example.com/data')
   const result = await data.json()
   return <div>{result.message}</div>
 }
-`}</CodeBlock>
+```
 
 ### Client Components
+
 - Run in the browser
 - Can use hooks, event handlers, browser APIs
 - Cannot use server-only APIs
 - Use `'use client'` directive to mark explicitly
 
-<CodeBlock language="tsx">{`'use client'
+```tsx
+'use client'
 
 import { useState } from 'react'
 
@@ -332,13 +333,15 @@ export default function ClientComponent() {
     </button>
   )
 }
-`}</CodeBlock>
+```
 
 ### Server Actions
+
 - Use `'use server'` directive for server functions that can be called from client components
 - Place in `src/actions/` directory for organization
 
-<CodeBlock filename="src/actions/user-actions.ts" language="tsx">{`'use server'
+```tsx title="src/actions/user-actions.ts"
+'use server'
 
 type CreateUserState = {
   success: boolean
@@ -365,11 +368,12 @@ export async function deleteUser(id: string) {
   await database.users.delete(id)
   return { success: true }
 }
-`}</CodeBlock>
+```
 
 Use server actions in client components with `useActionState`:
 
-<CodeBlock filename="src/components/UserForm.tsx" language="tsx">{`'use client'
+```tsx title="src/components/UserForm.tsx"
+'use client'
 
 import { useActionState } from 'react'
 import { createUser } from '@/actions/user-actions'
@@ -389,7 +393,7 @@ export default function UserForm() {
     </form>
   )
 }
-`}</CodeBlock>
+```
 
 ## Next Steps
 
