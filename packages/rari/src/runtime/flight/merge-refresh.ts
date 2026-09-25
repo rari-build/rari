@@ -79,13 +79,8 @@ function containsNestedArrays(children: React.ReactNode): boolean {
   return Array.isArray(children) && children.some(child => Array.isArray(child))
 }
 
-function isAlreadyScopedKey(key: string): boolean {
-  return key.startsWith('.') || key.startsWith('$')
-}
-
 function cloneWithScopedKey(element: React.ReactElement, nestPath: string): React.ReactElement {
   const key = element.key
-  if (typeof key === 'string' && isAlreadyScopedKey(key)) return element
   const scoped =
     typeof key === 'string' && key !== '' ? `${nestPath}:${key.replace(/^\.+/, '')}` : nestPath
   // oxlint-disable-next-line react/no-clone-element
@@ -103,7 +98,9 @@ function flattenNestedChild(
     return flattenReactNodes(child as React.ReactNode, path)
   }
   if (child == null || child === false || child === true) return []
-  if (isReactElement(child) && nestPath != null) return [cloneWithScopedKey(child, nestPath)]
+  if (isReactElement(child) && nestPath != null) {
+    return [cloneWithScopedKey(child, `${nestPath}:${index}`)]
+  }
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return [child as React.ReactNode]
 }

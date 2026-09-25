@@ -27,6 +27,22 @@ function readSources(map: object): readonly string[] | undefined {
   return sources.every(entry => typeof entry === 'string') ? sources : undefined
 }
 
+export function adaptServerTransformSourceMap(
+  map: object,
+  moduleUrl: string,
+  base: string,
+): object {
+  const sources = readSources(map)
+  return {
+    ...map,
+    ...(sources != null
+      ? {
+          sources: sources.map(source => rewriteModuleSourceUrl(source, moduleUrl, base)),
+        }
+      : {}),
+  }
+}
+
 function findSourceMapURL(
   server: ViteDevServer,
   filename: string,
@@ -81,18 +97,7 @@ function serverEnvironmentSourceMap(
     (filename.startsWith('/') ? rscGraph.urlToModuleMap.get(filename) : undefined)
   const map = mod?.transformResult?.map
   if (mod == null || map == null) return undefined
-  const mappings =
-    typeof map.mappings === 'string' && map.mappings !== '' ? `;;${map.mappings}` : map.mappings
-  const sources = readSources(map)
-  return {
-    ...map,
-    mappings,
-    ...(sources != null
-      ? {
-          sources: sources.map(source => rewriteModuleSourceUrl(source, mod.url, base)),
-        }
-      : {}),
-  }
+  return adaptServerTransformSourceMap(map, mod.url, base)
 }
 
 function clientEnvironmentSourceMap(
