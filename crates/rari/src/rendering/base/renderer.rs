@@ -415,21 +415,24 @@ globalThis['~errors'].batch.push({{
             .await
             .map_err(|e| RariError::internal(format!("resync: RSC renderer failed: {e}")))?;
 
-        let _ = runtime
+        runtime
             .execute_script(
                 "resync_route_composer.ts".to_string(),
                 ROUTE_COMPOSER_SCRIPT.to_string(),
             )
-            .await;
-        let _ = runtime
+            .await
+            .map_err(|e| RariError::internal(format!("resync: route composer failed: {e}")))?;
+        runtime
             .execute_script("resync_fizz_render.ts".to_string(), FIZZ_RENDER_SCRIPT.to_string())
-            .await;
-        let _ = runtime
+            .await
+            .map_err(|e| RariError::internal(format!("resync: fizz render failed: {e}")))?;
+        runtime
             .execute_script(
                 "resync_streaming_fizz.ts".to_string(),
                 STREAMING_FIZZ_SCRIPT.to_string(),
             )
-            .await;
+            .await
+            .map_err(|e| RariError::internal(format!("resync: streaming fizz failed: {e}")))?;
 
         let components: Vec<(String, String, Vec<String>)> = {
             let registry = self.component_registry.lock();

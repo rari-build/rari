@@ -73,6 +73,21 @@ describe('adaptServerTransformSourceMap', () => {
     })
   })
 
+  it('treats URL sourceRoot without a trailing slash as a file path prefix', () => {
+    const map = {
+      version: 3,
+      sourceRoot: 'https://cdn.example.com/src',
+      sources: ['./page.tsx'],
+      mappings: 'AAAA',
+    }
+
+    expect(adaptServerTransformSourceMap(map, '/src/app/page.tsx', '')).toEqual({
+      version: 3,
+      sources: ['https://cdn.example.com/page.tsx'],
+      mappings: 'AAAA',
+    })
+  })
+
   it('preserves null source entries and still rewrites string sources', () => {
     const map = {
       version: 3,
