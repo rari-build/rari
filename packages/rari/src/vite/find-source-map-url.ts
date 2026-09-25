@@ -36,14 +36,15 @@ function applySourceRoot(source: string, sourceRoot: string | undefined): string
 
   if (isUrlLike(sourceRoot)) {
     try {
-      const base = sourceRoot.endsWith('/') ? sourceRoot : `${sourceRoot}/`
       if (sourceRoot.startsWith('//')) {
-        const url = new URL(source, `https:${base}`)
+        const url = new URL(source, `https:${sourceRoot}`)
         return `//${url.host}${url.pathname}${url.search}${url.hash}`
       }
-      return new URL(source, base).href
+      return new URL(source, sourceRoot).href
     } catch {
-      return sourceRoot.endsWith('/') ? `${sourceRoot}${source}` : `${sourceRoot}/${source}`
+      const lastSlash = sourceRoot.lastIndexOf('/')
+      const prefix = lastSlash >= 0 ? sourceRoot.slice(0, lastSlash + 1) : `${sourceRoot}/`
+      return `${prefix}${source}`
     }
   }
 
