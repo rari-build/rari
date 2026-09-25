@@ -189,7 +189,7 @@
     const hasMetadata =
       metadata != null && typeof metadata === 'object' && Object.keys(metadata).length > 0
 
-    if (hasMetadata && isDocumentReuseMarker(elementToRender)) {
+    if (isDocumentReuseMarker(elementToRender)) {
       const createElement = requireCreateElement()
       elementToRender = createElement(
         'html',
