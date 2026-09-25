@@ -26,11 +26,27 @@ function readSourceRoot(map: object): string | undefined {
   return typeof sourceRoot === 'string' && sourceRoot !== '' ? sourceRoot : undefined
 }
 
+function isUrlLike(value: string): boolean {
+  return value.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(value)
+}
+
 function applySourceRoot(source: string, sourceRoot: string | undefined): string {
   if (sourceRoot == null) return source
-  if (source.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(source) || source.startsWith('/')) {
-    return source
+  if (isUrlLike(source) || source.startsWith('/')) return source
+
+  if (isUrlLike(sourceRoot)) {
+    try {
+      const base = sourceRoot.endsWith('/') ? sourceRoot : `${sourceRoot}/`
+      if (sourceRoot.startsWith('//')) {
+        const url = new URL(source, `https:${base}`)
+        return `//${url.host}${url.pathname}${url.search}${url.hash}`
+      }
+      return new URL(source, base).href
+    } catch {
+      return sourceRoot.endsWith('/') ? `${sourceRoot}${source}` : `${sourceRoot}/${source}`
+    }
   }
+
   const joined = sourceRoot.endsWith('/') ? `${sourceRoot}${source}` : `${sourceRoot}/${source}`
   return path.posix.normalize(joined)
 }

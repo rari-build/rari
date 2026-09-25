@@ -651,8 +651,14 @@ mod tests {
               timings,
               startTotal: performance.now(),
             });
-            const marker = globalThis['~rari'].capturedElement;
-            if (marker.type !== 'rari-layout-reuse') throw new Error('expected reuse marker');
+            const captured = globalThis['~rari'].capturedElement;
+            if (captured.type !== 'html') throw new Error('expected html document wrapper');
+            const head = captured.children?.[0];
+            const body = captured.children?.[1];
+            if (head?.type !== 'head') throw new Error('expected empty head');
+            if (body?.type !== 'body') throw new Error('expected body wrapper');
+            const marker = body.children?.[0];
+            if (marker?.type !== 'rari-layout-reuse') throw new Error('expected reuse marker');
             if (marker.props['data-rari-layout-path'] !== '/') {
               throw new Error('expected reuse path');
             }
