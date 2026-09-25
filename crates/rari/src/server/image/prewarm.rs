@@ -57,28 +57,18 @@ pub fn extract_optimize_params_from_html(html: &str) -> Vec<OptimizeParams> {
         }
     }
 
-    with_blur_placeholders(params, &mut seen)
+    params
 }
 
-fn with_blur_placeholders(
-    mut params: Vec<OptimizeParams>,
-    seen: &mut HashSet<String>,
-) -> Vec<OptimizeParams> {
-    let source_urls: Vec<String> = params.iter().map(|param| param.url.clone()).collect();
-    let mut unique_urls = HashSet::new();
-
-    for url in source_urls {
-        if !unique_urls.insert(url.clone()) {
-            continue;
-        }
-        let blur = ImageOptimizer::blur_placeholder_params(url);
-        let key = optimize_dedupe_key(&blur);
-        if seen.insert(key) {
-            params.push(blur);
+fn unique_source_urls(params: &[OptimizeParams]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut urls = Vec::new();
+    for param in params {
+        if seen.insert(param.url.clone()) {
+            urls.push(param.url.clone());
         }
     }
-
-    params
+    urls
 }
 
 fn parse_optimize_query(query: &str) -> Option<OptimizeParams> {
@@ -114,11 +104,16 @@ fn optimize_dedupe_key(params: &OptimizeParams) -> String {
     )
 }
 
+fn blur_dedupe_key(url: &str) -> String {
+    format!("blur|{url}")
+}
+
 pub fn schedule_prewarm_from_html(optimizer: Arc<ImageOptimizer>, html: &str) {
     let params = extract_optimize_params_from_html(html);
     if params.is_empty() {
         return;
     }
+    let blur_urls = unique_source_urls(&params);
 
     tokio::spawn(async move {
         let mut warmed = 0usize;
@@ -147,6 +142,26 @@ pub fn schedule_prewarm_from_html(optimizer: Arc<ImageOptimizer>, html: &str) {
             }
         }
 
+        for url in blur_urls {
+            let Some(_guard) = try_claim_prewarm_key(blur_dedupe_key(&url)) else {
+                skipped += 1;
+                continue;
+            };
+
+            if optimizer.get_blur_data_url(&url).await.is_some() {
+                skipped += 1;
+                continue;
+            }
+
+            match optimizer.ensure_blur_data_url(&url).await {
+                Ok(_) => warmed += 1,
+                Err(error) => {
+                    failed += 1;
+                    tracing::debug!(error = %error, "[rari] Image blur prewarm skipped");
+                }
+            }
+        }
+
         if warmed > 0 || failed > 0 {
             tracing::debug!(warmed, skipped, failed, "[rari] Image prewarm finished");
         }
@@ -163,9 +178,7 @@ pub fn schedule_image_prewarm(state: &ServerState, html: &str) {
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {
-    use crate::server::image::{
-        BLUR_PLACEHOLDER_QUALITY, BLUR_PLACEHOLDER_WIDTH, extract_optimize_params_from_html,
-    };
+    use super::{extract_optimize_params_from_html, unique_source_urls};
 
     #[test]
     fn extracts_unique_optimize_params_from_html() {
@@ -177,7 +190,7 @@ mod tests {
         "#;
 
         let params = extract_optimize_params_from_html(html);
-        assert_eq!(params.len(), 5);
+        assert_eq!(params.len(), 3);
 
         let remote = params.iter().find(|p| p.url.contains("cdn.example")).expect("remote");
         assert_eq!(remote.w, Some(750));
@@ -187,15 +200,10 @@ mod tests {
             params.iter().find(|p| p.url == "/hero.jpg" && p.w == Some(640)).expect("hero 640");
         assert_eq!(hero_640.f.as_deref(), Some("avif"));
 
-        let hero_blur = params
-            .iter()
-            .find(|p| {
-                p.url == "/hero.jpg"
-                    && p.w == Some(BLUR_PLACEHOLDER_WIDTH)
-                    && p.q == BLUR_PLACEHOLDER_QUALITY
-            })
-            .expect("hero blur");
-        assert_eq!(hero_blur.f.as_deref(), Some("jpeg"));
+        let blur_urls = unique_source_urls(&params);
+        assert_eq!(blur_urls.len(), 2);
+        assert!(blur_urls.iter().any(|url| url == "/hero.jpg"));
+        assert!(blur_urls.iter().any(|url| url.contains("cdn.example")));
     }
 
     #[test]
