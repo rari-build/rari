@@ -58,6 +58,21 @@ describe('adaptServerTransformSourceMap', () => {
     })
   })
 
+  it('resolves URL-based sourceRoot without corrupting the scheme', () => {
+    const map = {
+      version: 3,
+      sourceRoot: 'https://cdn.example.com/src/',
+      sources: ['./page.tsx', '../lib/util.ts'],
+      mappings: 'AAAA',
+    }
+
+    expect(adaptServerTransformSourceMap(map, '/src/app/page.tsx', '')).toEqual({
+      version: 3,
+      sources: ['https://cdn.example.com/src/page.tsx', 'https://cdn.example.com/lib/util.ts'],
+      mappings: 'AAAA',
+    })
+  })
+
   it('preserves null source entries and still rewrites string sources', () => {
     const map = {
       version: 3,
