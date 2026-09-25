@@ -733,6 +733,29 @@ describe('mergeFlightRefresh', () => {
     expect(kids[1].key).toBeTruthy()
   })
 
+  it('scopes identical dollar-prefixed keys among nested siblings by index', () => {
+    const nestedChildren: React.ReactNode = [
+      [
+        React.createElement('span', { key: '$dup' }, 'a'),
+        React.createElement('span', { key: '$dup' }, 'b'),
+      ],
+    ]
+    const base = React.createElement('div', null)
+    const refresh = {
+      ...base,
+      props: { ...base.props, children: nestedChildren },
+    }
+
+    const merged = expectElement(mergeFlightRefresh(null, refresh))
+    const kids = childList(merged).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(kids[0].props.children).toBe('a')
+    expect(kids[1].props.children).toBe('b')
+    expect(kids[0].key).not.toBe(kids[1].key)
+    expect(String(kids[0].key)).toContain('0')
+    expect(String(kids[1].key)).toContain('1')
+  })
+
   it('unwraps reuse markers when remaining siblings are only non-element nodes', () => {
     const current = React.createElement('div', null, 'a', 'b', 'c')
     const refresh = React.createElement(
