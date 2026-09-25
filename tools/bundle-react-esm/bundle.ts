@@ -472,7 +472,7 @@ async function main(): Promise<void> {
 
   fs.writeFileSync(
     path.join(OUT_DIR, 'versions.json'),
-    `${JSON.stringify(VENDORED_VERSIONS, null, 2)}\n`,
+    `${JSON.stringify(VENDORED_VERSIONS)}\n`,
     'utf-8',
   )
   console.log('  versions.json')
