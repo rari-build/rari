@@ -1,6 +1,6 @@
 import type { PageProps } from 'rari'
 import { accessSync, readdirSync, readFileSync } from 'node:fs'
-import MdxRenderer from '@/components/docs/MdxRenderer'
+import MdxRenderer from '@/components/mdx/MdxRenderer'
 import { getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
 import { extractBasicMetadata } from '@/lib/content/metadata'
 import { container } from '@/lib/site/styles'

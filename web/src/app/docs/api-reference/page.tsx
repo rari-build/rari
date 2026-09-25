@@ -1,7 +1,7 @@
 import type { Metadata } from 'rari'
-import Breadcrumbs from '@/components/docs/Breadcrumbs'
-import PageHeader from '@/components/docs/PageHeader'
-import TrailCard from '@/components/marketing/TrailCard'
+import Breadcrumbs from '@/components/content/Breadcrumbs'
+import PageHeader from '@/components/content/PageHeader'
+import TrailCard from '@/components/TrailCard'
 import { container } from '@/lib/site/styles'
 
 export default function ApiReferencePage() {
