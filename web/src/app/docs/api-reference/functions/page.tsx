@@ -1,8 +1,8 @@
 import type { Metadata } from 'rari'
-import Breadcrumbs from '@/components/docs/Breadcrumbs'
-import DocsContributePrompt from '@/components/docs/DocsContributePrompt'
-import PageHeader from '@/components/docs/PageHeader'
-import TrailCard from '@/components/marketing/TrailCard'
+import DocsContributePrompt from '@/app/docs/_components/DocsContributePrompt'
+import Breadcrumbs from '@/components/content/Breadcrumbs'
+import PageHeader from '@/components/content/PageHeader'
+import TrailCard from '@/components/TrailCard'
 import { container } from '@/lib/site/styles'
 
 export default function FunctionsPage() {

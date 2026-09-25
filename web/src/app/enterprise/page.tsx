@@ -1,6 +1,6 @@
 import type { Metadata } from 'rari'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
-import TrailCard from '@/components/marketing/TrailCard'
+import TrailCard from '@/components/TrailCard'
 import { container } from '@/lib/site/styles'
 
 export default function EnterprisePage() {

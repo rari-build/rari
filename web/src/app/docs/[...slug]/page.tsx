@@ -1,7 +1,7 @@
 import type { PageProps } from 'rari'
 import { accessSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import MdxRenderer from '@/components/docs/MdxRenderer'
+import MdxRenderer from '@/components/mdx/MdxRenderer'
 import { getDocsDir, getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import { extractMetadataWithFallback } from '@/lib/content/metadata'
 import { container } from '@/lib/site/styles'
