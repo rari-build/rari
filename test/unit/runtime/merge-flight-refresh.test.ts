@@ -479,6 +479,51 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(childList(body)[0]).props.children).toBe('about')
   })
 
+  it('clears stale title and description when the refreshed head is empty', () => {
+    const current = React.createElement(
+      'html',
+      { lang: 'en' },
+      React.createElement(
+        'head',
+        null,
+        React.createElement('meta', { charSet: 'utf-8' }),
+        React.createElement('meta', { name: 'viewport', content: 'width=device-width' }),
+        React.createElement('title', null, 'Home'),
+        React.createElement('meta', { name: 'description', content: 'Home page' }),
+        React.createElement('link', { rel: 'stylesheet', href: '/app.css' }),
+      ),
+      React.createElement('body', { className: 'body' }, React.createElement('main', null, 'home')),
+    )
+    const refresh = React.createElement(
+      'html',
+      null,
+      React.createElement('head', null),
+      React.createElement(
+        'body',
+        null,
+        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
+      ),
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const [head, body] = childList(merged).map(child => expectElement(child))
+    const headKids = childList(head).map(child => expectElement(child))
+
+    expect(headKids.find(child => child.type === 'title')).toBeUndefined()
+    expect(
+      headKids.find(child => child.type === 'meta' && child.props.name === 'description'),
+    ).toBeUndefined()
+    expect(
+      headKids.find(child => child.type === 'meta' && child.props.charSet != null),
+    ).toBeTruthy()
+    expect(
+      headKids.find(child => child.type === 'meta' && child.props.name === 'viewport'),
+    ).toBeTruthy()
+    expect(headKids.find(child => child.type === 'link')?.props.href).toBe('/app.css')
+    expect(body.props.className).toBe('body')
+    expect(expectElement(childList(body)[0]).props.children).toBe('about')
+  })
+
   it('preserves existing viewport when the refreshed head has no replacement', () => {
     const current = React.createElement(
       'html',

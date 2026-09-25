@@ -223,8 +223,6 @@ function mergeDocumentHeads(
   const refreshKids = elementChildren(refreshHead)
   const flatRefreshKids = flattenHeadChildren(refreshKids)
 
-  if (refreshKids.length === 0) return currentHead
-
   const kept = flatCurrentKids.filter(child => {
     if (!isReactElement(child)) return true
     if (child.type === 'title' || child.type === 'TITLE') return false

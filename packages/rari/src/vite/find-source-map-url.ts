@@ -20,11 +20,36 @@ function rewriteModuleSourceUrl(source: string, moduleUrl: string, base: string)
   return `${base}${path.posix.normalize(`${path.posix.dirname(moduleUrl)}/${source}`)}`
 }
 
-function readSources(map: object): readonly string[] | undefined {
+function readSourceRoot(map: object): string | undefined {
+  if (!('sourceRoot' in map)) return undefined
+  const sourceRoot: unknown = Reflect.get(map, 'sourceRoot')
+  return typeof sourceRoot === 'string' && sourceRoot !== '' ? sourceRoot : undefined
+}
+
+function applySourceRoot(source: string, sourceRoot: string | undefined): string {
+  if (sourceRoot == null) return source
+  if (source.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(source) || source.startsWith('/')) {
+    return source
+  }
+  const joined = sourceRoot.endsWith('/') ? `${sourceRoot}${source}` : `${sourceRoot}/${source}`
+  return path.posix.normalize(joined)
+}
+
+function readSources(map: object): readonly (string | null)[] | undefined {
   if (!('sources' in map)) return undefined
   const sources: unknown = Reflect.get(map, 'sources')
   if (!Array.isArray(sources)) return undefined
-  return sources.every(entry => typeof entry === 'string') ? sources : undefined
+  return sources.every(entry => entry === null || typeof entry === 'string') ? sources : undefined
+}
+
+function rewriteSourceEntry(
+  source: string | null,
+  moduleUrl: string,
+  base: string,
+  sourceRoot: string | undefined,
+): string | null {
+  if (source == null) return null
+  return rewriteModuleSourceUrl(applySourceRoot(source, sourceRoot), moduleUrl, base)
 }
 
 export function adaptServerTransformSourceMap(
@@ -33,14 +58,15 @@ export function adaptServerTransformSourceMap(
   base: string,
 ): object {
   const sources = readSources(map)
-  return {
+  if (sources == null) return map
+
+  const sourceRoot = readSourceRoot(map)
+  const adapted: Record<string, unknown> = {
     ...map,
-    ...(sources != null
-      ? {
-          sources: sources.map(source => rewriteModuleSourceUrl(source, moduleUrl, base)),
-        }
-      : {}),
+    sources: sources.map(source => rewriteSourceEntry(source, moduleUrl, base, sourceRoot)),
   }
+  delete adapted.sourceRoot
+  return adapted
 }
 
 function findSourceMapURL(
@@ -111,15 +137,7 @@ function clientEnvironmentSourceMap(
     const mod = server.environments.client.moduleGraph.urlToModuleMap.get(url)
     const map = mod?.transformResult?.map
     if (mod == null || map == null) return undefined
-    const sources = readSources(map)
-    return {
-      ...map,
-      ...(sources != null
-        ? {
-            sources: sources.map(source => rewriteModuleSourceUrl(source, mod.url, base)),
-          }
-        : {}),
-    }
+    return adaptServerTransformSourceMap(map, mod.url, base)
   } catch {
     return undefined
   }
