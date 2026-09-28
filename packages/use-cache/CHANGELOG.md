@@ -1,3 +1,15 @@
+## [@rari/use-cache@0.17.0] - 2026-09-28
+
+### 🚀 Features
+
+- add to linting configuration and update pnpm workspace by @skiniks
+
+### 🚜 Refactor
+
+- update linting configurations and sorting rules for JSON files by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.16.0...@rari/use-cache@0.17.0
 ## [@rari/use-cache@0.16.0] - 2026-09-23
 
 ## Highlights

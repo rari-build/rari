@@ -2,12 +2,12 @@ catalogMode: prefer
 
 minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
-  - '@rari/use-cache-darwin-arm64@0.16.0'
-  - '@rari/use-cache-darwin-x64@0.16.0'
-  - '@rari/use-cache-linux-arm64@0.16.0'
-  - '@rari/use-cache-linux-x64@0.16.0'
-  - '@rari/use-cache-win32-arm64@0.16.0'
-  - '@rari/use-cache-win32-x64@0.16.0'
+  - '@rari/use-cache-darwin-arm64@0.17.0'
+  - '@rari/use-cache-darwin-x64@0.17.0'
+  - '@rari/use-cache-linux-arm64@0.17.0'
+  - '@rari/use-cache-linux-x64@0.17.0'
+  - '@rari/use-cache-win32-arm64@0.17.0'
+  - '@rari/use-cache-win32-x64@0.17.0'
   - rari-darwin-arm64@0.16.0
   - rari-darwin-x64@0.16.0
   - rari-linux-arm64@0.16.0
@@ -92,7 +92,7 @@ catalogs:
   monitoring:
     '@sentry/react': ^11.0.0
   rari:
-    '@rari/use-cache': ^0.16.0
+    '@rari/use-cache': ^0.17.0
     # rari: ^0.16.0
   react:
     '@types/react': ^19.3.0
