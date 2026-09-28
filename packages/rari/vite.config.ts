@@ -6,7 +6,14 @@ import { createReactCompilerPlugin } from './src/vite/transform/react-compiler'
 
 export default defineConfig({
   fmt: monorepoFmt,
-  lint: monorepoLint,
+  lint: {
+    ...monorepoLint,
+    ignorePatterns: [
+      ...(monorepoLint.ignorePatterns ?? []),
+      'src/font/google.ts',
+      'src/vite/transform/react-refresh-runtime.ts',
+    ],
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),

@@ -351,7 +351,7 @@ impl Default for StaticConfig {
     fn default() -> Self {
         Self {
             dev_public_dir: PathBuf::from("public"),
-            prod_public_dir: PathBuf::from("dist"),
+            prod_public_dir: PathBuf::from("dist/client"),
             enable_directory_listing: false,
             cache_control: "public, max-age=31536000".to_string(),
         }
@@ -1242,7 +1242,7 @@ mod tests {
         assert_eq!(dev_config.public_dir(), &PathBuf::from("public"));
 
         let prod_config = Config::new(Mode::Production);
-        assert_eq!(prod_config.public_dir(), &PathBuf::from("dist"));
+        assert_eq!(prod_config.public_dir(), &PathBuf::from("dist/client"));
     }
 
     #[test]

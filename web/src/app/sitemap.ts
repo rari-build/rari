@@ -38,13 +38,13 @@ async function getDocPages(): Promise<DocPage[]> {
     } catch {}
   }
 
-  await scanDir(getDocsDir())
+  await scanDir(await getDocsDir())
 
   return pages
 }
 
 export default async function sitemap(): Promise<Sitemap> {
-  const blogPosts = getBlogPostsMinimal()
+  const blogPosts = await getBlogPostsMinimal()
   const docPages = await getDocPages()
 
   return [

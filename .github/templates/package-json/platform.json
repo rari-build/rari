@@ -22,6 +22,6 @@
   },
   "files": ["LICENSE", "README.md", "{BIN_FILE}"],
   "engines": {
-    "node": ">=24.21.0"
+    "node": "^24.21.0 || >=26.0.0"
   }
 }

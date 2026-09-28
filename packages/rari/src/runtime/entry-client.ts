@@ -240,17 +240,6 @@ async function createElementFromFlightBytes(
   return createFromReadableStream(stream)
 }
 
-function resolveRscServerUrl(): string {
-  if (!import.meta.env.DEV) return window.location.origin
-  if (import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== '')
-    return import.meta.env.RARI_SERVER_URL
-  const port =
-    import.meta.env.VITE_RSC_PORT != null && import.meta.env.VITE_RSC_PORT !== ''
-      ? import.meta.env.VITE_RSC_PORT
-      : '3000'
-  return `http://localhost:${port}`
-}
-
 async function hydrateFromEmbeddedPayload(
   embeddedPayloadBytes: Uint8Array,
 ): Promise<{ readonly ok: boolean; readonly errorMessage: string }> {
@@ -264,7 +253,7 @@ async function hydrateFromEmbeddedPayload(
 
     try {
       const currentPath = window.location.pathname + window.location.search
-      const response = await fetch(resolveRscServerUrl() + currentPath, {
+      const response = await fetch(currentPath, {
         headers: { Accept: 'text/x-component' },
         cache: 'no-store',
       })
@@ -296,7 +285,7 @@ async function fetchInitialRscElement(): Promise<
 > {
   try {
     const currentPath = window.location.pathname + window.location.search
-    const response = await fetch(resolveRscServerUrl() + currentPath, {
+    const response = await fetch(currentPath, {
       headers: { Accept: 'text/x-component' },
       cache: 'no-store',
     })

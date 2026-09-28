@@ -108,5 +108,5 @@ fn default_assets_dir() -> String {
 }
 
 fn default_out_dir() -> String {
-    "dist".to_string()
+    "dist/client".to_string()
 }

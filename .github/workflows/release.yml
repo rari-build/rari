@@ -496,22 +496,19 @@ jobs:
       - name: Build addon (Linux)
         if: runner.os == 'Linux'
         run: |
-          cd crates/rari_use_cache
-          pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
+          pnpm exec napi build --release --strip --platform --cwd crates/rari_use_cache --target ${{ matrix.target }}
         env:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Build addon (macOS)
         if: runner.os == 'macOS'
         run: |
-          cd crates/rari_use_cache
-          pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
+          pnpm exec napi build --release --strip --platform --cwd crates/rari_use_cache --target ${{ matrix.target }}
 
       - name: Build addon (Windows)
         if: runner.os == 'Windows'
         run: |
-          cd crates/rari_use_cache
-          pnpm exec napi build --release --strip --platform --target ${{ matrix.target }}
+          pnpm exec napi build --release --strip --platform --cwd crates/rari_use_cache --target ${{ matrix.target }}
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
 

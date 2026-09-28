@@ -4,7 +4,7 @@ mod route_composer;
 pub mod types;
 mod utils;
 
-pub use core::{LayoutHtmlCache, LayoutRenderer};
+pub use core::{LayoutHtmlCache, LayoutRenderer, is_rari_page_not_found};
 
 pub use layout_reuse::{
     pathname_from_router_state_header, router_state_from_headers,

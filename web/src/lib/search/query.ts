@@ -44,7 +44,7 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
     .trim()
   if (!normalizedQuery) return []
 
-  const index = await getSearchIndex(getDocsDir())
+  const index = await getSearchIndex(await getDocsDir())
   const words = normalizedQuery.split(WHITESPACE_REGEX).filter(Boolean)
   const results: Array<SearchResult & { score: number }> = []
 
@@ -63,5 +63,5 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
   return results
     .sort((a, b) => b.score - a.score)
     .slice(0, 10)
-    .map(({ score, ...result }) => result)
+    .map(({ score: _score, ...result }) => result)
 }

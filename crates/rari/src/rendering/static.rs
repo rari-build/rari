@@ -152,7 +152,7 @@ pub struct RscHtmlRenderer {
 
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
-        Self::with_public_dir(runtime, PathBuf::from("dist"))
+        Self::with_public_dir(runtime, PathBuf::from("dist/client"))
     }
 
     pub fn with_public_dir(runtime: Arc<JsExecutionRuntime>, public_dir: PathBuf) -> Self {

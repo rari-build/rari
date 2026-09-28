@@ -2,8 +2,8 @@ import type { Feed } from 'rari'
 import { getAllBlogPosts } from '@/lib/content'
 import { siteUrl } from '@/lib/site'
 
-export default function feed(): Feed {
-  const posts = getAllBlogPosts()
+export default async function feed(): Promise<Feed> {
+  const posts = await getAllBlogPosts()
 
   return {
     title: 'rari Blog',

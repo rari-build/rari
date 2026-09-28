@@ -1,19 +1,19 @@
 import type { PageProps } from 'rari'
-import { accessSync, readdirSync, readFileSync } from 'node:fs'
+import { readdir, readFile } from 'node:fs/promises'
+import { notFound } from 'rari'
 import MdxRenderer from '@/components/mdx/MdxRenderer'
-import { getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
+import { contentFileExists, getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
 import { extractBasicMetadata } from '@/lib/content/metadata'
-import { container } from '@/lib/site/styles'
 
 const DEFAULT_METADATA = {
   title: 'rari Blog',
   description: 'Latest news and updates from the rari team.',
 }
 
-export default function BlogPage({ params }: PageProps) {
+export default async function BlogPage({ params }: PageProps) {
   const slug = params.slug
-
-  if (!isValidSlug(slug)) return <div className={container.base}>Invalid blog post path.</div>
+  if (!isValidSlug(slug)) notFound()
+  if (!(await contentFileExists(await getBlogFilePath(slug)))) notFound()
 
   return (
     <article className="max-w-4xl mx-auto px-4 lg:px-8 py-8 lg:py-12 pt-16 lg:pt-12 w-full">
@@ -22,52 +22,33 @@ export default function BlogPage({ params }: PageProps) {
   )
 }
 
-export function getData({ params }: PageProps) {
+export async function generateMetadata({ params }: PageProps) {
   const slug = params.slug
+  if (!isValidSlug(slug)) return DEFAULT_METADATA
 
-  if (!isValidSlug(slug)) return { notFound: true }
+  const content = await readFile(await getBlogFilePath(slug), 'utf-8').catch(() => null)
+  if (content == null) return DEFAULT_METADATA
 
-  try {
-    accessSync(getBlogFilePath(slug))
-    return { props: {} }
-  } catch {
-    return { notFound: true }
+  const metadata = extractBasicMetadata(content)
+  const title =
+    metadata.title != null && metadata.title !== ''
+      ? `${metadata.title} / rari Blog`
+      : DEFAULT_METADATA.title
+  const description = metadata.description ?? DEFAULT_METADATA.description
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: metadata.title ?? DEFAULT_METADATA.title,
+      description,
+    },
   }
 }
 
-export function generateMetadata({ params }: PageProps) {
-  const slug = params.slug
-
-  if (!isValidSlug(slug)) return DEFAULT_METADATA
-
+export async function generateStaticParams() {
   try {
-    const content = readFileSync(getBlogFilePath(slug), 'utf-8')
-    const metadata = extractBasicMetadata(content)
-
-    const title =
-      metadata.title != null && metadata.title !== ''
-        ? `${metadata.title} / rari Blog`
-        : DEFAULT_METADATA.title
-    const description = metadata.description ?? DEFAULT_METADATA.description
-
-    return {
-      title,
-      description,
-      openGraph: {
-        title: metadata.title ?? DEFAULT_METADATA.title,
-        description,
-      },
-    }
-  } catch {}
-
-  return DEFAULT_METADATA
-}
-
-export function generateStaticParams() {
-  const contentDir = getBlogDir()
-
-  try {
-    const entries = readdirSync(contentDir)
+    const entries = await readdir(await getBlogDir())
     return entries
       .filter(entry => entry.endsWith('.mdx'))
       .map(entry => ({ slug: entry.replace(/\.mdx$/, '') }))

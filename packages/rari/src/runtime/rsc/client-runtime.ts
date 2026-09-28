@@ -29,14 +29,6 @@ if (typeof window !== 'undefined') {
 }
 
 if (import.meta.hot) {
-  function resolveRariServerUrl(): string {
-    if (import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== '')
-      return import.meta.env.RARI_SERVER_URL
-    if (typeof window !== 'undefined') return window.location.origin
-
-    return 'http://localhost:3000'
-  }
-
   function isServerComponent(filePath: string): boolean {
     if (!filePath) return false
     try {
@@ -249,9 +241,7 @@ if (import.meta.hot) {
       return
 
     try {
-      const rariServerUrl = resolveRariServerUrl()
-
-      const reloadResponse = await fetch(`${rariServerUrl}/_rari/hmr`, {
+      const reloadResponse = await fetch('/_rari/hmr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'register', file_path: data.filePath }),
@@ -263,7 +253,7 @@ if (import.meta.hot) {
       if (!parsed.ok) throw new Error(parsed.errorMessage)
       if (parsed.contentUnchanged) return
 
-      await fetch(`${rariServerUrl}/_rari/hmr`, {
+      await fetch('/_rari/hmr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -24,7 +24,7 @@ use super::{
         LOAD_FULL_REACT_VENDORS_SCRIPT, LOAD_RSC_VENDORS_SCRIPT,
         MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
         ROUTE_COMPOSER_SCRIPT, RSC_RENDERER_SCRIPT, SERVER_FUNCTION_RESOLVER,
-        STREAMING_FIZZ_SCRIPT, STREAMING_PIPELINE_READY_CHECK, V8_CACHE_CLEAR_SCRIPT,
+        STREAMING_FIZZ_SCRIPT, STREAMING_PIPELINE_READY_CHECK,
         module_registration_script_from_import, resolve_server_functions_for_component,
     },
     types::{ResourceLimits, ResourceMetrics, ResourceTracker},
@@ -534,15 +534,7 @@ globalThis['~errors'].batch.push({{
 
         self.runtime.clear_module_loader_caches(component_id).await?;
 
-        let force_v8_cache_clear_script =
-            V8_CACHE_CLEAR_SCRIPT.cow_replace("{component_id}", component_id).into_owned();
-
-        self.runtime
-            .broadcast_script(
-                &format!("force_v8_cache_clear_{component_id}.ts"),
-                &force_v8_cache_clear_script,
-            )
-            .await?;
+        self.runtime.invalidate_component(component_id).await?;
 
         Ok(())
     }

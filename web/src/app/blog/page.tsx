@@ -4,8 +4,8 @@ import { getAllBlogPosts, isValidSlug } from '@/lib/content'
 import { container } from '@/lib/site/styles'
 import BlogPostCard from './_components/BlogPostCard'
 
-export default function BlogIndexPage() {
-  const posts = getAllBlogPosts()
+export default async function BlogIndexPage() {
+  const posts = await getAllBlogPosts()
   const validPosts = posts.filter(post => isValidSlug(post.slug))
 
   return (

@@ -1,6 +1,7 @@
 // oxlint-disable-next-line typescript/no-useless-empty-export side-effect import of ambient declarations
 export type {} from './ambient'
 
+export { isNotFoundError, NOT_FOUND_ERROR_DIGEST, notFound } from './navigation/not-found'
 export { RariRequest } from './proxy/http/request'
 export { RariResponse } from './proxy/http/response'
 

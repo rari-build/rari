@@ -1,16 +1,16 @@
-// This is a React Server Component
+/** This is a React Server Component */
 export default async function ServerTime() {
   // This runs on the server!
   const timestamp = new Date().toISOString()
 
   // Simulate some async work
-  await new Promise(resolve => setTimeout(resolve, 100))
+  await new Promise<void>(resolve => {
+    setTimeout(resolve, 100)
+  })
 
   return (
-    <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-8 shadow-sm border border-green-200">
-      <h2 className="text-2xl font-semibold mb-4 text-gray-900">
-        ⚡ Server Component
-      </h2>
+    <div className="bg-linear-to-r from-green-50 to-blue-50 rounded-xl p-8 shadow-sm border border-green-200">
+      <h2 className="text-2xl font-semibold mb-4 text-gray-900">⚡ Server Component</h2>
       <p className="text-gray-600 mb-4">
         This component renders on the server with rari's high-performance Rust runtime.
       </p>

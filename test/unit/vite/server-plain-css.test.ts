@@ -106,7 +106,7 @@ describe('server plain css imports', () => {
 
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
-    const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
+    const cssPath = path.join(outDir, 'client', cssHref.replace(/^\//, ''))
     expect(fs.readFileSync(cssPath, 'utf-8')).toContain('.page { color: red; }')
   })
 
@@ -149,7 +149,7 @@ describe('server plain css imports', () => {
 
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
-    const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
+    const cssPath = path.join(outDir, 'client', cssHref.replace(/^\//, ''))
     expect(fs.readFileSync(cssPath, 'utf-8')).toContain('.acme { color: blue; }')
   })
 
@@ -190,7 +190,7 @@ describe('server plain css imports', () => {
     const exportedUrl = urlMatch![0]
     expect(exportedUrl).toMatch(/^\/assets\/theme-[a-z0-9]+\.css$/)
 
-    const emittedPath = path.join(outDir, exportedUrl.replace(/^\//, ''))
+    const emittedPath = path.join(outDir, 'client', exportedUrl.replace(/^\//, ''))
     expect(fs.existsSync(emittedPath)).toBe(true)
     expect(fs.readFileSync(emittedPath, 'utf-8')).toContain('.theme { color: green; }')
 
@@ -286,7 +286,7 @@ describe('server plain css imports', () => {
     expect(cssHrefs.length).toBeGreaterThan(0)
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
-    const cssPath = path.join(outDir, cssHref.replace(/^\//, ''))
+    const cssPath = path.join(outDir, 'client', cssHref.replace(/^\//, ''))
     const emitted = fs.readFileSync(cssPath, 'utf-8')
     expect(emitted).toContain('.page { color: red; }')
     expect(emitted).not.toContain('@import')
@@ -328,7 +328,10 @@ describe('server plain css imports', () => {
     expect(cssHrefs.length).toBeGreaterThan(0)
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
-    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+    const emitted = fs.readFileSync(
+      path.join(outDir, 'client', cssHref.replace(/^\//, '')),
+      'utf-8',
+    )
     expect(emitted).toContain('.page { color: teal; }')
     expect(emitted).not.toContain('@import')
     expect(emitted).not.toContain('layer(')
@@ -372,7 +375,10 @@ describe('server plain css imports', () => {
     expect(nestedCssHrefs.length).toBeGreaterThan(0)
     const nestedCssHref = nestedCssHrefs[0]
     expect(nestedCssHref).toBeTypeOf('string')
-    const emitted = fs.readFileSync(path.join(outDir, nestedCssHref.replace(/^\//, '')), 'utf-8')
+    const emitted = fs.readFileSync(
+      path.join(outDir, 'client', nestedCssHref.replace(/^\//, '')),
+      'utf-8',
+    )
     expect(emitted).toContain('.nested { color: blue; }')
     expect(emitted).toContain('.page { color: red; }')
     expect(emitted).not.toContain("@import './nested.css'")
@@ -423,7 +429,10 @@ describe('server plain css imports', () => {
     expect(cssHrefs.length).toBeGreaterThan(0)
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
-    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+    const emitted = fs.readFileSync(
+      path.join(outDir, 'client', cssHref.replace(/^\//, '')),
+      'utf-8',
+    )
 
     expect(emitted).toContain('@layer base')
     expect(emitted).toContain('.layered { color: navy; }')
@@ -474,7 +483,10 @@ describe('server plain css imports', () => {
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
     expect(cssHref.startsWith('/assets/server/')).toBe(true)
-    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+    const emitted = fs.readFileSync(
+      path.join(outDir, 'client', cssHref.replace(/^\//, '')),
+      'utf-8',
+    )
     expect(emitted).toContain('.nested { color: purple; }')
     expect(emitted).toContain('.page { color: red; }')
     expect(emitted).not.toContain('url(./nested.css)')
@@ -522,7 +534,10 @@ describe('server plain css imports', () => {
     expect(cssHrefs.length).toBeGreaterThan(0)
     const cssHref = cssHrefs[0]
     expect(cssHref).toBeTypeOf('string')
-    const emitted = fs.readFileSync(path.join(outDir, cssHref.replace(/^\//, '')), 'utf-8')
+    const emitted = fs.readFileSync(
+      path.join(outDir, 'client', cssHref.replace(/^\//, '')),
+      'utf-8',
+    )
 
     expect(emitted).toContain('@layer base')
     expect(emitted).toContain('@layer utilities')

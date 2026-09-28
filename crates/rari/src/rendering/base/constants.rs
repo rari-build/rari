@@ -15,8 +15,6 @@ pub const DEFAULT_MAX_SCRIPT_EXECUTION_TIME_MS: u64 = 3000;
 pub const DEFAULT_MAX_MEMORY_PER_COMPONENT_MB: usize = 50;
 pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 
-pub const V8_CACHE_CLEAR_SCRIPT: &str = include_str!("js/v8_cache_clear.ts");
-
 pub const ACTION_FLIGHT_ENCODE_SCRIPT: &str = concat!(
     include_str!("js/action_flight_shared.ts"),
     include_str!("js/action_flight_encode.ts"),

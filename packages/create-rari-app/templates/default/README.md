@@ -19,6 +19,7 @@ Visit [http://localhost:5173](http://localhost:5173) to see your app.
 ## Features
 
 - **App Router** - File-based routing with layouts, loading states, and error boundaries
+- **Layout-owned document** - Root layout renders `<html>` / `<body>` (no `index.html` shell)
 - **Server-Side Rendering** - Pre-rendered HTML with instant hydration
 - **React Server Components** - Server components by default, client components when you need them
 - **Rust-powered runtime** - HTTP server, RSC renderer, and routing written in Rust with embedded V8
@@ -37,6 +38,7 @@ This rari application is pre-configured for cloud deployment.
 ### Railway
 
 1. Push to GitHub:
+
 ```bash
 git add .
 git commit -m "Initial commit"
@@ -65,6 +67,7 @@ git push origin main
 ### Render
 
 1. Push to GitHub:
+
 ```bash
 git add .
 git commit -m "Initial commit"

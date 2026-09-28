@@ -287,11 +287,90 @@ export default moduleExports;
 `
   }
 
+  function deleteGlobalIfPresent(key: string): boolean {
+    if (g[key] == null) return false
+    delete g[key]
+    return true
+  }
+
+  function keyBelongsToComponent(key: string, componentId: string): boolean {
+    return (
+      key === componentId || key.startsWith(`${componentId}:`) || key.startsWith(`${componentId}#`)
+    )
+  }
+
+  function clearBoundNamedExports(componentId: string): boolean {
+    const moduleNamespace = rsc.modules?.[componentId]
+    if (moduleNamespace == null) return false
+
+    let deleted = false
+    for (const key of Object.keys(moduleNamespace)) {
+      if (
+        key === 'default' ||
+        typeof moduleNamespace[key] !== 'function' ||
+        g[key] !== moduleNamespace[key]
+      ) {
+        continue
+      }
+      if (deleteGlobalIfPresent(key)) deleted = true
+    }
+    return deleted
+  }
+
+  function clearManifestStoresForComponent(componentId: string): boolean {
+    const store = ensureRariManifestStores()
+    const hadManifest =
+      Object.keys(store.serverManifest!).some(key => keyBelongsToComponent(key, componentId)) ||
+      Object.keys(store.ssrModules!).some(key => keyBelongsToComponent(key, componentId))
+    clearManifestEntriesForModule(componentId)
+    return hadManifest
+  }
+
+  function clearRegisteredServerFunctionsForComponent(componentId: string): boolean {
+    const registered = ensureRariManifestStores().registeredServerFunctions
+    if (registered == null) return false
+
+    let deleted = false
+    for (const key of registered) {
+      if (!keyBelongsToComponent(key, componentId)) continue
+      registered.delete(key)
+      deleted = true
+    }
+    return deleted
+  }
+
+  function clearHmrComponent(componentId: string): { success: boolean; deleted: boolean } {
+    let deleted = deleteGlobalIfPresent(componentId)
+
+    const registrationKey = `Component_${componentId.replace(/[^a-z0-9]+/gi, '_')}`
+    if (deleteGlobalIfPresent(registrationKey)) deleted = true
+    if (clearBoundNamedExports(componentId)) deleted = true
+
+    if (rsc.functions?.[componentId] != null) {
+      delete rsc.functions[componentId]
+      deleted = true
+    }
+
+    if (clearManifestStoresForComponent(componentId)) deleted = true
+    if (clearRegisteredServerFunctionsForComponent(componentId)) deleted = true
+
+    if (rsc.modules?.[componentId] != null) {
+      delete rsc.modules[componentId]
+      deleted = true
+    }
+
+    return { success: true, deleted }
+  }
+
+  const rariStore = (g['~rari'] ??= {})
+  rariStore.clearHmrComponent = clearHmrComponent
+
   g.RscModuleManager = {
     register: g.registerModule,
     getFunction: g.getServerFunction,
     createPromise: g.createServerFunctionPromise,
     discoverExports: g.discoverModuleExports,
+    unregister: clearHmrComponent,
     stubs: {
       loader: g.createLoaderStub,
       component: g.createComponentStub,

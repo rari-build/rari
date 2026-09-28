@@ -10,6 +10,7 @@ import {
   hasTopLevelUseServerDirective,
 } from '@rari/vite/analysis/directives'
 import { describe, expect, it } from 'vite-plus/test'
+import { castMock } from '../../helpers/mock-cast'
 
 const fixturesDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -33,10 +34,9 @@ interface DirectiveCase {
 
 describe('analysis goldens (shared with Rust)', () => {
   it('matches component ID fixtures', () => {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion golden fixture JSON
-    const fixture = JSON.parse(
-      fs.readFileSync(path.join(fixturesDir, 'component-ids.json'), 'utf8'),
-    ) as { cases: ComponentIdCase[] }
+    const fixture = castMock<{ cases: ComponentIdCase[] }>(
+      JSON.parse(fs.readFileSync(path.join(fixturesDir, 'component-ids.json'), 'utf8')),
+    )
     const projectRoot = path.join(os.tmpdir(), 'rari-analysis-golden')
 
     for (const testCase of fixture.cases) {
@@ -47,10 +47,9 @@ describe('analysis goldens (shared with Rust)', () => {
   })
 
   it('matches directive fixtures', () => {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion golden fixture JSON
-    const fixture = JSON.parse(
-      fs.readFileSync(path.join(fixturesDir, 'directives.json'), 'utf8'),
-    ) as { cases: DirectiveCase[] }
+    const fixture = castMock<{ cases: DirectiveCase[] }>(
+      JSON.parse(fs.readFileSync(path.join(fixturesDir, 'directives.json'), 'utf8')),
+    )
 
     for (const testCase of fixture.cases) {
       const directives = getDirectives(testCase.source)

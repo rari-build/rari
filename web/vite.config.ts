@@ -110,6 +110,7 @@ export default defineConfig({
           minShareCount: 10,
           groups: [
             {
+              debugName: 'web-vendor',
               name: moduleId => {
                 if (moduleId.includes('node_modules')) {
                   if (moduleId.includes('posthog')) return 'posthog'

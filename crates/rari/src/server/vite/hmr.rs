@@ -283,76 +283,12 @@ async fn handle_invalidate(
                 tracing::error!("Failed to clear module loader caches for {}: {}", component_id, e);
             }
 
-            let clear_script = format!(
-            r#"
-            (function() {{
-                let clearedCount = 0;
-                const componentId = "{component_id}";
-
-                if (typeof globalThis[componentId] !== 'undefined') {{
-                    delete globalThis[componentId];
-                    clearedCount++;
-                }}
-
-                if (globalThis['~rsc'].modules && globalThis['~rsc'].modules[componentId]) {{
-                    delete globalThis['~rsc'].modules[componentId];
-                    clearedCount++;
-                }}
-
-                if (globalThis['~rsc'].functions && globalThis['~rsc'].functions[componentId]) {{
-                    delete globalThis['~rsc'].functions[componentId];
-                    clearedCount++;
-                }}
-
-                if (globalThis['~rari']?.ssrModules) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key in globalThis['~rari'].ssrModules) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            delete globalThis['~rari'].ssrModules[key];
-                            clearedCount++;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rari']?.serverManifest) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key in globalThis['~rari'].serverManifest) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            delete globalThis['~rari'].serverManifest[key];
-                            clearedCount++;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rari']?.registeredServerFunctions) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key of globalThis['~rari'].registeredServerFunctions) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            globalThis['~rari'].registeredServerFunctions.delete(key);
-                            clearedCount++;
-                        }}
-                    }}
-                }}
-
-                return {{
-                    success: true,
-                    clearedCount: clearedCount,
-                    componentId: componentId
-                }};
-            }})()
-            "#
-        );
-
-            renderer
-                .runtime
-                .broadcast_script(
-                    &format!("hmr_clear_cache_{}.js", component_id.cow_replace('/', "_")),
-                    &clear_script,
-                )
-                .await
+            renderer.runtime.invalidate_component(&component_id).await.map(|()| {
+                serde_json::json!({
+                    "success": true,
+                    "componentId": component_id,
+                })
+            })
         })
         .await
     };

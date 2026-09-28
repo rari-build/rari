@@ -552,6 +552,16 @@ impl AppRouter {
         )
     }
 
+    pub(crate) fn find_not_found_for_route(&self, route: &AppRouteEntry) -> Option<NotFoundEntry> {
+        Self::nearest_boundary_for_route(
+            &self.manifest.not_found,
+            route,
+            |not_found| &not_found.path,
+            |not_found| &not_found.additional_paths,
+            |not_found| &not_found.file_path,
+        )
+    }
+
     fn normalize_path(path: &str) -> String {
         let path = path.trim();
 

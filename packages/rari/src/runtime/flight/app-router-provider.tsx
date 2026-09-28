@@ -6,7 +6,6 @@ import * as React from 'react'
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
 import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-state'
-import { PATH_TRAILING_SLASH_REGEX } from '@/shared/regex-constants'
 import {
   errorMessage,
   getCustomEventDetail,
@@ -168,14 +167,6 @@ function shouldScrollToTopForNavigation(detail: NavigationDetail): boolean {
     !hasHash &&
     detail.options.scroll !== false
   )
-}
-
-function resolveRariServerOrigin(): string {
-  return (
-    import.meta.env.RARI_SERVER_URL != null && import.meta.env.RARI_SERVER_URL !== ''
-      ? import.meta.env.RARI_SERVER_URL
-      : window.location.origin
-  ).replace(PATH_TRAILING_SLASH_REGEX, '')
 }
 
 async function mergeNavigatedFlightPayload(
@@ -496,7 +487,7 @@ export function AppRouterProvider({
 
     const fetchPromise = (async (): Promise<RscPayload | undefined> => {
       try {
-        const url = resolveRariServerOrigin() + pathToFetch + window.location.search
+        const url = pathToFetch + window.location.search
         const response = await fetch(url, {
           headers: {
             'Accept': 'text/x-component',
