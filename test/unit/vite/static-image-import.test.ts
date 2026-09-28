@@ -506,7 +506,7 @@ describe('createStaticImageRolldownPlugin', () => {
   it('does not write an empty static image source map', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rari-static-image-'))
     const outDir = resolveStaticImageOutDir(dir)
-    const mapPath = path.join(outDir, 'server', 'static-image-sources.json')
+    const mapPath = path.join(path.dirname(outDir), 'server', 'static-image-sources.json')
     fs.mkdirSync(path.dirname(mapPath), { recursive: true })
     fs.writeFileSync(mapPath, '{}\n')
 

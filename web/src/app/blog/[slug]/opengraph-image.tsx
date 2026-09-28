@@ -7,7 +7,9 @@ export default async function Image({ params }: PageProps) {
   const slug = params.slug
   const defaults = { title: 'rari Blog' }
 
-  const { title } = isValidSlug(slug) ? await loadOgMeta(getBlogFilePath(slug), defaults) : defaults
+  const { title } = isValidSlug(slug)
+    ? await loadOgMeta(await getBlogFilePath(slug), defaults)
+    : defaults
 
   return generateOGImage({
     title,

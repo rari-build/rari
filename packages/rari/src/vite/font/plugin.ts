@@ -818,7 +818,7 @@ function writeFontAssets(
 export function createFontPlugin(): Plugin {
   let projectRoot = process.cwd()
   let assetsDir = 'assets'
-  let outDir = path.join(projectRoot, 'dist')
+  let outDir = path.join(projectRoot, 'dist', 'client')
   const cssModules = new Map<string, string>()
   const pendingAssets = new Map<string, Buffer>()
 
@@ -900,7 +900,8 @@ export function createFontRolldownPlugin(
   cssCollector?: string[],
   preloadCollector?: string[],
 ) {
-  const resolvedOutDir = outDir != null && outDir !== '' ? outDir : path.join(projectRoot, 'dist')
+  const resolvedOutDir =
+    outDir != null && outDir !== '' ? outDir : path.join(projectRoot, 'dist', 'client')
   const cssModules = new Map<string, string>()
 
   return {

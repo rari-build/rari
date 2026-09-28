@@ -50,7 +50,7 @@ function clientReferenceId(type: unknown): string | undefined {
 function childList(node: React.ReactElement<{ children?: React.ReactNode }>): React.ReactNode[] {
   const children = node.props.children
   if (Array.isArray(children))
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion React children array is widened
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return children as React.ReactNode[]
   if (children != null) return [children]
   return []

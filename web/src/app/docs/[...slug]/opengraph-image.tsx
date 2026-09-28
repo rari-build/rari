@@ -11,7 +11,7 @@ export default async function Image({ params }: PageProps) {
   }
 
   const { title, description } = isValidSlugArray(slug)
-    ? await loadOgMeta(getDocsFilePath(slug), defaults)
+    ? await loadOgMeta(await getDocsFilePath(slug), defaults)
     : defaults
 
   return generateOGImage({

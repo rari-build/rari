@@ -108,25 +108,32 @@ impl RouteComposer {
                     throw new Error('[rari] createPageElement not loaded');
                 }}
 
-                const startPageRender = performance.now();
-                {page_render_script}
+                try {{
+                    const startPageRender = performance.now();
+                    {page_render_script}
 
-                return await globalThis['~rari'].composeRoute({{
-                    pageElement,
-                    layouts: {layouts_json},
-                    templates: {templates_json},
-                    pathname: {pathname_json},
-                    templateKey: {template_key_json},
-                    errorComponentId: {error_component_id_json},
-                    metadata: {metadata_json},
-                    deferRsc: {defer_rsc_js},
-                    captureStreamId: {capture_stream_id_json},
-                    expandRootLayout: {expand_root_js},
-                    reuseLayoutPaths: {reuse_paths_json},
-                    actionPostUrl: {action_post_url_json},
-                    timings,
-                    startTotal,
-                }});
+                    return await globalThis['~rari'].composeRoute({{
+                        pageElement,
+                        layouts: {layouts_json},
+                        templates: {templates_json},
+                        pathname: {pathname_json},
+                        templateKey: {template_key_json},
+                        errorComponentId: {error_component_id_json},
+                        metadata: {metadata_json},
+                        deferRsc: {defer_rsc_js},
+                        captureStreamId: {capture_stream_id_json},
+                        expandRootLayout: {expand_root_js},
+                        reuseLayoutPaths: {reuse_paths_json},
+                        actionPostUrl: {action_post_url_json},
+                        timings,
+                        startTotal,
+                    }});
+                }} catch (error) {{
+                    if (error?.digest === 'RARI_NOT_FOUND' || error?.message === 'RARI_NOT_FOUND') {{
+                        return {{ notFound: true }};
+                    }}
+                    throw error;
+                }}
             }})()
             "
         )

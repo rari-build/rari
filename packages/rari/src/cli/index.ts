@@ -2,7 +2,7 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { existsSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs, styleText } from 'node:util'
@@ -16,7 +16,6 @@ import {
 import {
   findImageConfigPath,
   outDirFromImageConfigPath,
-  resolveConfiguredBuildOutDir,
   resolveViteBuildPackageRoot,
 } from './build-target'
 import { getBinaryPath, getInstallationInstructions } from './platform'
@@ -316,15 +315,12 @@ async function preOptimizeImages() {
   const cwd = process.cwd()
   const { viteBin } = getProjectContext()
   const packageRoot = resolveViteBuildPackageRoot(cwd, viteBin)
-  const configuredOutDir = resolveConfiguredBuildOutDir(packageRoot)
-  const configuredImageConfigPath = resolve(configuredOutDir, 'server', 'image.json')
-  const imageConfigPath = existsSync(configuredImageConfigPath)
-    ? configuredImageConfigPath
-    : findImageConfigPath(packageRoot)
+  const imageConfigPath = findImageConfigPath(packageRoot)
 
   if (imageConfigPath == null) return
 
-  const outDir = outDirFromImageConfigPath(imageConfigPath)
+  const outDir = outDirFromImageConfigPath(imageConfigPath, packageRoot)
+  const serverDir = dirname(imageConfigPath)
 
   let assetsDir = 'assets'
   try {
@@ -342,7 +338,7 @@ async function preOptimizeImages() {
 
   const publicPath = resolve(packageRoot, 'public')
   const distAssetsPath = resolve(outDir, assetsDir)
-  const staticImageMapPath = resolve(outDir, 'server', 'static-image-sources.json')
+  const staticImageMapPath = resolve(serverDir, 'static-image-sources.json')
 
   if (!existsSync(publicPath) && !existsSync(distAssetsPath) && !existsSync(staticImageMapPath))
     return

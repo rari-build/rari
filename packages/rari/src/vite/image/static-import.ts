@@ -123,7 +123,8 @@ const writeSourceMapsByOutDir = new Map<string, Map<string, string>>()
 const buildEntriesByOutDir = new Map<string, Map<string, string>>()
 
 export function resolveStaticImageOutDir(projectRoot: string, outDir?: string): string {
-  const candidate = outDir != null && outDir !== '' ? outDir : path.join(projectRoot, 'dist')
+  const candidate =
+    outDir != null && outDir !== '' ? outDir : path.join(projectRoot, 'dist', 'client')
   return path.isAbsolute(candidate) ? candidate : path.resolve(projectRoot, candidate)
 }
 
@@ -176,11 +177,16 @@ function pruneSharedSourceMap(
   }
 }
 
+function distRootForSourceMap(outDir: string): string {
+  return path.basename(outDir) === 'client' ? path.dirname(outDir) : outDir
+}
+
 function sourceMapFilePath(outDir: string): string {
-  return path.join(outDir, 'server', 'static-image-sources.json')
+  return path.join(distRootForSourceMap(outDir), 'server', 'static-image-sources.json')
 }
 
 function persistSharedSourceMap(outDir: string, shared: Map<string, string>): void {
+  const mapKey = distRootForSourceMap(outDir)
   const mapPath = sourceMapFilePath(outDir)
   if (shared.size === 0) {
     try {
@@ -188,6 +194,7 @@ function persistSharedSourceMap(outDir: string, shared: Map<string, string>): vo
     } catch (error) {
       if (getErrnoCode(error) !== 'ENOENT') throw error
     }
+    writeSourceMapsByOutDir.delete(mapKey)
     return
   }
 
@@ -197,31 +204,34 @@ function persistSharedSourceMap(outDir: string, shared: Map<string, string>): vo
 }
 
 export function beginStaticImageSourceMapBuild(outDir: string): void {
-  if (buildEntriesByOutDir.has(outDir)) return
-  buildEntriesByOutDir.set(outDir, new Map())
+  const mapKey = distRootForSourceMap(outDir)
+  if (buildEntriesByOutDir.has(mapKey)) return
+  buildEntriesByOutDir.set(mapKey, new Map())
 }
 
 export function finalizeStaticImageSourceMapBuild(outDir: string): void {
-  const seen = buildEntriesByOutDir.get(outDir)
+  const mapKey = distRootForSourceMap(outDir)
+  const seen = buildEntriesByOutDir.get(mapKey)
   if (seen == null) return
 
   const mapPath = sourceMapFilePath(outDir)
-  const shared = getSharedSourceMap(outDir, mapPath)
+  const shared = getSharedSourceMap(mapKey, mapPath)
   shared.clear()
   for (const [publicPath, sourcePath] of seen) {
     if (fs.existsSync(sourcePath)) shared.set(publicPath, sourcePath)
   }
   persistSharedSourceMap(outDir, shared)
-  buildEntriesByOutDir.delete(outDir)
+  buildEntriesByOutDir.delete(mapKey)
 }
 
 function writeSourceMap(outDir: string, entries: ReadonlyMap<string, string>): void {
+  const mapKey = distRootForSourceMap(outDir)
   const mapPath = sourceMapFilePath(outDir)
-  const shared = getSharedSourceMap(outDir, mapPath)
+  const shared = getSharedSourceMap(mapKey, mapPath)
 
   for (const [publicPath, sourcePath] of entries) shared.set(publicPath, sourcePath)
 
-  const buildEntries = buildEntriesByOutDir.get(outDir)
+  const buildEntries = buildEntriesByOutDir.get(mapKey)
   if (buildEntries != null) {
     for (const [publicPath, sourcePath] of entries) {
       setSourceMapEntry(buildEntries, publicPath, sourcePath)
@@ -301,7 +311,7 @@ function serveDevStaticImage(
 
 export function createStaticImagePlugin(): Plugin {
   let projectRoot = process.cwd()
-  let outDir = path.join(projectRoot, 'dist')
+  let clientOutDir = path.join(projectRoot, 'dist', 'client')
   let assetsDir = 'assets'
   let isBuildCommand = false
   const sourceByPublicPath = new Map<string, string>()
@@ -312,13 +322,13 @@ export function createStaticImagePlugin(): Plugin {
     configResolved(config) {
       const paths = resolvePluginPaths(config)
       projectRoot = paths.projectRoot
-      outDir = paths.outDir
+      clientOutDir = paths.outDir
       assetsDir = paths.assetsDir
       isBuildCommand = config.command === 'build'
     },
     buildStart() {
       if (!isBuildCommand) return
-      beginStaticImageSourceMapBuild(outDir)
+      beginStaticImageSourceMapBuild(clientOutDir)
     },
     async resolveId(id, importer) {
       if (importer == null || importer === '') return null
@@ -337,7 +347,7 @@ export function createStaticImagePlugin(): Plugin {
       const filePath = id.slice(VIRTUAL_PREFIX.length)
       const built = buildStaticImageModule(filePath, assetsDir)
       setSourceMapEntry(sourceByPublicPath, built.publicPath, filePath)
-      writeSourceMap(outDir, sourceByPublicPath)
+      writeSourceMap(clientOutDir, sourceByPublicPath)
 
       this.emitFile({
         type: 'asset',
@@ -351,9 +361,9 @@ export function createStaticImagePlugin(): Plugin {
       if (change.event !== 'delete') return
       const filePath = stripQuery(id)
       if (!forgetSourcePath(sourceByPublicPath, filePath)) return
-      const buildEntries = buildEntriesByOutDir.get(outDir)
+      const buildEntries = buildEntriesByOutDir.get(distRootForSourceMap(clientOutDir))
       if (buildEntries != null) forgetSourcePath(buildEntries, filePath)
-      writeSourceMap(outDir, sourceByPublicPath)
+      writeSourceMap(clientOutDir, sourceByPublicPath)
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

@@ -608,7 +608,10 @@ async fn compose_action_refresh_route(
         match layout_renderer.check_page_not_found_on(&route_match, &context, sticky_runtime).await
         {
             Ok(true) => {
-                if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
+                if let Some(not_found_entry) = app_router
+                    .find_not_found_for_route(&route_match.route)
+                    .or_else(|| app_router.find_not_found(&route_match.pathname))
+                {
                     route_match.not_found = Some(not_found_entry);
                 }
             }

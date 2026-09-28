@@ -530,7 +530,6 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
-      // @ts-expect-error spying on internal emit method
       const emitSpy = vi.spyOn(builder, 'emitRscEntries')
 
       await builder.rebuildComponent(filePath)
@@ -678,7 +677,6 @@ export async function action() { return {} }`)
 
       vi.mocked(fsSync.promises.stat).mockResolvedValue(mockStat(1000))
 
-      // @ts-expect-error spying on internal emit method
       const emitSpy = vi.spyOn(builder, 'emitRscEntries')
 
       await builder.rebuildComponent(filePath)

@@ -28,7 +28,6 @@ import { patchBrowserClientForFormActions } from '@/shared/patch-flight-browser-
 import {
   EXPORT_NAMED_DECLARATION_REGEX,
   EXTENSION_REGEX,
-  HTTP_PROTOCOL_REGEX,
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
@@ -435,16 +434,24 @@ async function writeImageConfig(
   }
 
   const normalizedAssetsDir = normalizeAssetsDir(assetsDir)
-  const resolvedOutDir = (() => {
-    const candidate = outDir ?? options.serverBuild?.outDir ?? path.join(projectRoot, 'dist')
-    return path.isAbsolute(candidate) ? candidate : path.resolve(projectRoot, candidate)
+  const resolvedClientOutDir = (() => {
+    const candidate = outDir ?? options.serverBuild?.clientOutDir ?? options.serverBuild?.outDir
+    if (candidate != null && candidate !== '') {
+      return path.isAbsolute(candidate) ? candidate : path.resolve(projectRoot, candidate)
+    }
+    return path.join(projectRoot, 'dist', 'client')
   })()
-  const relativeOutDir = toPosixPath(path.relative(projectRoot, resolvedOutDir)) || 'dist'
+  const resolvedDistRoot =
+    path.basename(resolvedClientOutDir) === 'client'
+      ? path.dirname(resolvedClientOutDir)
+      : resolvedClientOutDir
+  const relativeClientOutDir =
+    toPosixPath(path.relative(projectRoot, resolvedClientOutDir)) || 'dist/client'
   const imageConfig = {
     ...DEFAULT_IMAGE_CONFIG,
     ...options.images,
     assetsDir: normalizedAssetsDir,
-    outDir: relativeOutDir,
+    outDir: relativeClientOutDir,
     localPatterns: mergeLocalPatterns(
       options.images?.localPatterns,
       normalizedAssetsDir,
@@ -453,34 +460,11 @@ async function writeImageConfig(
     preoptimizeManifest: imageManifest.images,
   }
 
-  const serverDir = path.join(resolvedOutDir, 'server')
+  const serverDir = path.join(resolvedDistRoot, 'server')
   if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true })
 
   const configPath = path.join(serverDir, 'image.json')
   fs.writeFileSync(configPath, JSON.stringify(imageConfig))
-}
-
-function resolveConfiguredRariServerUrl(): string | null {
-  const rariServerPort = getRariServerPort()
-  if (process.env.RARI_SERVER_URL != null && process.env.RARI_SERVER_URL !== '') {
-    return process.env.RARI_SERVER_URL
-  }
-  if (process.env.RARI_HOST != null && process.env.RARI_HOST !== '') {
-    const host = process.env.RARI_HOST.startsWith('http')
-      ? process.env.RARI_HOST
-      : `http://${process.env.RARI_HOST}`
-    const hostnamePart = host.replace(HTTP_PROTOCOL_REGEX, '')
-    return hostnamePart.includes(':') ? host : `${host}:${rariServerPort}`
-  }
-  return `http://localhost:${rariServerPort}`
-}
-
-function shouldDefineRariServerUrl(command: string): boolean {
-  return (
-    command === 'serve' ||
-    (process.env.RARI_SERVER_URL != null && process.env.RARI_SERVER_URL !== '') ||
-    (process.env.RARI_HOST != null && process.env.RARI_HOST !== '')
-  )
 }
 
 function tryAppendOptionalReactAlias(
@@ -1060,6 +1044,9 @@ for (const [path, config] of Object.entries(lazyComponentRegistry)) {
 }
 
 function applyRariEnvironments(config: UserConfig): void {
+  config.build ??= {}
+  config.build.outDir ??= 'dist/client'
+
   config.environments ??= {}
 
   config.environments.rsc = {
@@ -1089,6 +1076,10 @@ function applyRariEnvironments(config: UserConfig): void {
   config.environments.client = {
     consumer: 'client',
     resolve: { conditions: ['browser', 'import'] },
+    build: {
+      outDir: config.build.outDir,
+      copyPublicDir: true,
+    },
     ...config.environments.client,
   }
 }
@@ -1129,6 +1120,35 @@ function applyRariServerProxy(config: UserConfig): void {
   config.server.proxy['/assets'] = proxyTarget
 }
 
+const RARI_VENDOR_GROUP_DEBUG_NAME = 'rari-vendor'
+const rariVendorGroupOwners = new WeakMap<object, object>()
+
+function ensureRariVendorGroup(
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  userGroups: Array<object & { test?: unknown; name?: unknown; debugName?: string }>,
+): void {
+  let hasOwnedVendorGroup = false
+  for (let i = userGroups.length - 1; i >= 0; i--) {
+    const group = userGroups[i]
+    if (!rariVendorGroupOwners.has(group)) continue
+    if (rariVendorGroupOwners.get(group) === userGroups) {
+      hasOwnedVendorGroup = true
+      continue
+    }
+    userGroups.splice(i, 1)
+  }
+  if (hasOwnedVendorGroup) return
+
+  const vendorGroup = {
+    debugName: RARI_VENDOR_GROUP_DEBUG_NAME,
+    name(moduleId: string) {
+      return vendorChunkNameForModule(moduleId, userGroups)
+    },
+  }
+  rariVendorGroupOwners.set(vendorGroup, userGroups)
+  userGroups.push(vendorGroup)
+}
+
 function applyRariBuildCodeSplitting(config: UserConfig): void {
   config.build ??= {}
   config.build.rolldownOptions ??= {}
@@ -1145,12 +1165,7 @@ function applyRariBuildCodeSplitting(config: UserConfig): void {
     }
     if (typeof output.codeSplitting === 'object') {
       output.codeSplitting.groups ??= []
-      const userGroups = output.codeSplitting.groups
-      output.codeSplitting.groups.push({
-        name(moduleId: string) {
-          return vendorChunkNameForModule(moduleId, userGroups)
-        },
-      })
+      ensureRariVendorGroup(output.codeSplitting.groups)
     }
   }
 }
@@ -1849,12 +1864,6 @@ ${clientTransformedCode}`
       // Layout owns <html>/<body>; client entry is virtual:rari-entry-client (no index.html).
       config.appType = 'custom'
       config.define ??= {}
-
-      if (shouldDefineRariServerUrl(command)) {
-        config.define['import.meta.env.RARI_SERVER_URL'] = JSON.stringify(
-          resolveConfiguredRariServerUrl(),
-        )
-      }
 
       const existingCssModules = typeof config.css?.modules === 'object' ? config.css.modules : {}
       config.css = {

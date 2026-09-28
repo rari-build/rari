@@ -1,4 +1,4 @@
-import type { PageProps, Metadata } from 'rari'
+import type { Metadata, PageProps } from 'rari'
 import ServerTime from '@/components/ServerTime'
 import Welcome from '@/components/Welcome'
 

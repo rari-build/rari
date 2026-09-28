@@ -3,7 +3,10 @@ import { monorepoFmt, monorepoLint } from '../../.config/lint/monorepo'
 
 export default defineConfig({
   fmt: monorepoFmt,
-  lint: monorepoLint,
+  lint: {
+    ...monorepoLint,
+    ignorePatterns: [...(monorepoLint.ignorePatterns ?? []), 'templates/**'],
+  },
   pack: {
     entry: ['src/index.ts'],
     minify: true,

@@ -1,14 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { DEFAULT_CLIENT_OUT_DIR, DEFAULT_DIST_ROOT } from '@/shared/utils/dist-paths'
+import { parseJsonRecord } from '@/shared/utils/type-guards'
 
-const VITE_CONFIG_FILES = [
-  'vite.config.ts',
-  'vite.config.mts',
-  'vite.config.js',
-  'vite.config.mjs',
-  'vite.config.cjs',
-  'vite.config.cts',
-] as const
+const VITE_CONFIG_FILES = ['vite.config.ts'] as const
 
 export type ViteAppCommand = 'build' | 'dev' | 'preview' | 'pack'
 
@@ -85,19 +80,26 @@ export function resolveConfiguredBuildOutDir(packageRoot: string): string {
   const configSource = readViteConfigSource(packageRoot)
   const effectiveRoot = resolveEffectiveViteRoot(packageRoot, configSource)
   const configured = configSource != null ? readBuildOutDir(configSource) : null
-  if (configured == null || configured === '') return resolve(effectiveRoot, 'dist')
+  if (configured == null || configured === '') {
+    return resolve(effectiveRoot, DEFAULT_CLIENT_OUT_DIR)
+  }
   return resolvePathAgainst(effectiveRoot, configured)
+}
+
+function distRootFromClientOutDir(clientOutDir: string): string {
+  return basename(clientOutDir) === 'client' ? dirname(clientOutDir) : clientOutDir
 }
 
 export function findImageConfigPath(packageRoot: string): string | null {
   const configuredOutDir = resolveConfiguredBuildOutDir(packageRoot)
-  const configuredPath = join(configuredOutDir, 'server', 'image.json')
-  if (existsSync(configuredPath)) return configuredPath
+  const candidates = [
+    join(distRootFromClientOutDir(configuredOutDir), 'server', 'image.json'),
+    join(configuredOutDir, 'server', 'image.json'),
+    join(packageRoot, DEFAULT_DIST_ROOT, 'server', 'image.json'),
+  ]
 
-  const defaultOutDir = resolve(packageRoot, 'dist')
-  if (configuredOutDir !== defaultOutDir) {
-    const defaultPath = join(defaultOutDir, 'server', 'image.json')
-    if (existsSync(defaultPath)) return defaultPath
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
   }
 
   let names: string[]
@@ -116,6 +118,21 @@ export function findImageConfigPath(packageRoot: string): string | null {
   return null
 }
 
-export function outDirFromImageConfigPath(imageConfigPath: string): string {
-  return dirname(dirname(imageConfigPath))
+export function outDirFromImageConfigPath(imageConfigPath: string, packageRoot: string): string {
+  const serverDir = dirname(imageConfigPath)
+  const distRoot = dirname(serverDir)
+  const configSource = readViteConfigSource(packageRoot)
+  const projectRoot = resolveEffectiveViteRoot(packageRoot, configSource)
+
+  const parsed = parseJsonRecord(readFileSync(imageConfigPath, 'utf8'))
+  const configured = parsed?.outDir
+  if (typeof configured === 'string' && configured !== '') {
+    return isAbsolute(configured) ? configured : resolve(projectRoot, configured)
+  }
+
+  return join(distRoot, 'client')
+}
+
+export function serverDirFromImageConfigPath(imageConfigPath: string): string {
+  return dirname(imageConfigPath)
 }

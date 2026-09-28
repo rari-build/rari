@@ -1,3 +1,4 @@
+import { isNotFoundError } from '@/navigation/not-found'
 import { isRecord, isStaticParamsArray, warnInvalidStaticParams } from '@/shared/utils/type-guards'
 import { evaluateGenerateStaticParams } from './evaluate-static-params'
 
@@ -170,16 +171,31 @@ function processGetDataResult(
   if (result.props) state.props = { ...state.props, ...result.props }
 }
 
+async function applyDataFetchResult(
+  run: () => Promise<DataFetchResult | null | undefined>,
+  state: ServerSidePropsResult,
+): Promise<void> {
+  try {
+    processGetDataResult(await run(), state)
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      state.notFound = true
+      return
+    }
+    throw error
+  }
+}
+
 async function tryGetData(
   module: ComponentModule,
   params: Readonly<{ readonly [key: string]: string }>,
   searchParams: Readonly<{ readonly [key: string]: string }>,
   state: ServerSidePropsResult,
 ): Promise<void> {
-  if (typeof module.getData !== 'function') return
+  const getData = module.getData
+  if (typeof getData !== 'function') return
 
-  const result = await module.getData({ params, searchParams })
-  processGetDataResult(result, state)
+  await applyDataFetchResult(async () => getData({ params, searchParams }), state)
 }
 
 async function tryGetServerSideProps(
@@ -188,10 +204,10 @@ async function tryGetServerSideProps(
   searchParams: Readonly<{ readonly [key: string]: string }>,
   state: ServerSidePropsResult,
 ): Promise<void> {
-  if (typeof module.getServerSideProps !== 'function') return
+  const getServerSideProps = module.getServerSideProps
+  if (typeof getServerSideProps !== 'function') return
 
-  const result = await module.getServerSideProps({ params, searchParams })
-  processGetDataResult(result, state)
+  await applyDataFetchResult(async () => getServerSideProps({ params, searchParams }), state)
 }
 
 async function tryGetStaticProps(
@@ -199,10 +215,10 @@ async function tryGetStaticProps(
   params: Readonly<{ readonly [key: string]: string }>,
   state: ServerSidePropsResult,
 ): Promise<void> {
-  if (typeof module.getStaticProps !== 'function') return
+  const getStaticProps = module.getStaticProps
+  if (typeof getStaticProps !== 'function') return
 
-  const result = await module.getStaticProps({ params })
-  processGetDataResult(result, state)
+  await applyDataFetchResult(async () => getStaticProps({ params }), state)
 }
 // oxlint-enable typescript/prefer-readonly-parameter-types
 

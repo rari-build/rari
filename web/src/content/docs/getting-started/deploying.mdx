@@ -68,7 +68,7 @@ restartPolicyMaxRetries = 3
 Your `package.json` gets these changes:
 
 - `scripts.start` is set to `rari start`
-- `engines.node` is set to `>=24.21.0` (required by rari)
+- `engines.node` is set to `^24.21.0 || >=26.0.0` (required by rari)
 - `rari` is added to `dependencies` if not already present
 
 If you have an existing `start` script, it's backed up to `start:original`.

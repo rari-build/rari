@@ -1,15 +1,12 @@
 import type { PageProps } from 'rari'
+import { notFound } from 'rari'
 import { getBlogPost } from '@/data/blog-posts'
 import { PageTransition } from '../../page-transition'
 
 export default function BlogPostPage({ params }: PageProps<{ readonly slug: string }>) {
   const { slug } = params
-
-  const post = getBlogPost(slug) ?? {
-    title: 'Post Not Found',
-    content: 'The requested blog post could not be found.',
-    date: '',
-  }
+  const post = getBlogPost(slug)
+  if (post == null) notFound()
 
   return (
     <PageTransition>
@@ -23,7 +20,7 @@ export default function BlogPostPage({ params }: PageProps<{ readonly slug: stri
 
         <h1 className="text-4xl mb-2 text-gray-900 font-bold">{post.title}</h1>
 
-        {post.date && (
+        {post.date !== '' && (
           <p className="text-gray-400 text-sm mb-8">
             Published on
             {post.date}
@@ -43,9 +40,15 @@ export default function BlogPostPage({ params }: PageProps<{ readonly slug: stri
 
 export function generateMetadata({ params }: PageProps<{ readonly slug: string }>) {
   const post = getBlogPost(params.slug)
+  if (post == null) {
+    return {
+      title: 'Post Not Found',
+      description: 'Blog post not found',
+    }
+  }
 
   return {
-    title: post != null ? `${post.title} | Blog` : 'Post Not Found',
-    description: post?.content ?? 'Blog post not found',
+    title: `${post.title} | Blog`,
+    description: post.content,
   }
 }

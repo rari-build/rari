@@ -98,7 +98,7 @@ pub async fn build_addon(
         args.push(target_info.target.to_string());
     }
 
-    log(&format!("running: (cd {}) pnpm exec napi {}", manifest_dir.display(), args.join(" ")));
+    log(&format!("running: pnpm exec napi {} --cwd {}", args.join(" "), manifest_dir.display()));
 
     let target_parts: Vec<&str> = target_info.target.split('-').collect();
     let target_arch = target_parts.first().unwrap_or(&"unknown");
@@ -124,7 +124,9 @@ pub async fn build_addon(
     cmd.arg("exec")
         .arg("napi")
         .args(&args)
-        .current_dir(&manifest_dir)
+        .arg("--cwd")
+        .arg(&manifest_dir)
+        .current_dir(project_root)
         .env("CARGO_CFG_TARGET_ARCH", target_arch)
         .env("CARGO_CFG_TARGET_OS", target_os)
         .env("CARGO_CFG_TARGET_ENV", target_env);

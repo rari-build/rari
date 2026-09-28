@@ -1,10 +1,5 @@
 /// <reference types="vite-plus/client" />
 
-interface ImportMetaEnv {
-  readonly RARI_SERVER_URL?: string
-  readonly VITE_RSC_PORT?: string
-}
-
 declare module 'virtual:react-flight-client' {
   export interface Thenable<T> extends Promise<T> {
     readonly status?: 'pending' | 'fulfilled' | 'rejected'

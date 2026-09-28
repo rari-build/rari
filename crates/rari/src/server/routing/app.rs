@@ -34,7 +34,7 @@ use crate::{
             ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
             OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult,
             TwitterMetadata, component_dist_path, create_layout_context, drain_chunked_stream,
-            pathname_from_router_state_header, router_state_from_headers,
+            is_rari_page_not_found, pathname_from_router_state_header, router_state_from_headers,
             shared_layout_paths_for_navigation, sort_flight_protocol,
         },
         r#static::RscHtmlRenderer,
@@ -66,7 +66,10 @@ use crate::{
             metadata::apply_page_metadata, pretty_html::pretty_print_html,
             utils::inject_assets_into_html,
         },
-        routing::{app_icons::inject_app_icons_into_metadata, app_router::AppRouteMatch},
+        routing::{
+            app_icons::inject_app_icons_into_metadata,
+            app_router::{AppRouteMatch, AppRouter, NotFoundEntry},
+        },
     },
     utils::path::path_to_file_url,
 };
@@ -232,6 +235,31 @@ fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
         return false;
     }
     config.loading.enabled && route_match.loading.is_some()
+}
+
+fn mark_route_not_found_if_signaled(
+    err: &RariError,
+    route_match: &mut AppRouteMatch,
+    app_router: &AppRouter,
+) -> bool {
+    if route_match.not_found.is_some() || !is_rari_page_not_found(err) {
+        return false;
+    }
+    if let Some(entry) = resolve_not_found_entry(app_router, route_match) {
+        route_match.not_found = Some(entry);
+        true
+    } else {
+        false
+    }
+}
+
+fn resolve_not_found_entry(
+    app_router: &AppRouter,
+    route_match: &AppRouteMatch,
+) -> Option<NotFoundEntry> {
+    app_router
+        .find_not_found_for_route(&route_match.route)
+        .or_else(|| app_router.find_not_found(&route_match.pathname))
 }
 
 fn spawn_page_metadata(
@@ -444,7 +472,7 @@ pub async fn render_with_fallback(
 
 pub async fn render_rsc_navigation_streaming(
     state: Arc<ServerState>,
-    route_match: AppRouteMatch,
+    mut route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -452,7 +480,6 @@ pub async fn render_rsc_navigation_streaming(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
     );
-    let is_not_found = route_match.not_found.is_some();
 
     let request_context = Arc::new(
         RequestContext::new(route_match.route.path.clone())
@@ -471,14 +498,41 @@ pub async fn render_rsc_navigation_streaming(
     {
         Ok(result) => result,
         Err(e) => {
-            tracing::error!(
-                "Failed to render RSC navigation for streaming '{}': {}",
-                route_match.route.path,
-                e
-            );
-            return Err(error_response::status(&e));
+            if let Some(app_router) = state.app_router.as_ref()
+                && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
+            {
+                match layout_renderer
+                    .render_route_with_streaming(
+                        &route_match,
+                        &context,
+                        Some(Arc::clone(&request_context)),
+                        true,
+                        None,
+                    )
+                    .await
+                {
+                    Ok(result) => result,
+                    Err(retry_err) => {
+                        tracing::error!(
+                            "Failed to render RSC navigation for streaming '{}': {}",
+                            route_match.route.path,
+                            retry_err
+                        );
+                        return Err(error_response::status(&retry_err));
+                    }
+                }
+            } else {
+                tracing::error!(
+                    "Failed to render RSC navigation for streaming '{}': {}",
+                    route_match.route.path,
+                    e
+                );
+                return Err(error_response::status(&e));
+            }
         }
     };
+
+    let is_not_found = route_match.not_found.is_some();
 
     match render_result {
         RenderResult::Chunked {
@@ -807,7 +861,7 @@ fn chunked_stream_error_chunk(message: &str) -> Bytes {
 
 pub async fn render_synchronous(
     state: Arc<ServerState>,
-    route_match: AppRouteMatch,
+    mut route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
@@ -820,80 +874,116 @@ pub async fn render_synchronous(
             .with_http_headers(context.headers.clone()),
     );
 
-    let is_not_found = route_match.not_found.is_some();
-
-    match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context), false, None)
+    let render_result = match layout_renderer
+        .render_route_with_streaming(
+            &route_match,
+            &context,
+            Some(Arc::clone(&request_context)),
+            false,
+            None,
+        )
         .await
     {
-        Ok(render_result) => match render_result {
-            RenderResult::Static(html_content) => {
-                let html_with_assets =
-                    match inject_assets_into_html(&html_content, &state.config).await {
-                        Ok(html) => html,
-                        Err(e) => {
-                            tracing::error!("Failed to inject assets into HTML: {}", e);
-                            html_content
-                        }
-                    };
-
-                let final_html = wrap_html_with_metadata(html_with_assets, &state);
-
-                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-                let cache_control = state.config.get_cache_control_for_route(&context.pathname);
-
-                #[expect(
-                    clippy::expect_used,
-                    reason = "Response::builder() with valid components never fails"
-                )]
-                Ok(Response::builder()
-                    .status(status_code)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .header("x-render-mode", "synchronous")
-                    .header("cache-control", cache_control)
-                    .header("vary", "Accept")
-                    .body(Body::from(final_html))
-                    .expect("Valid HTML response"))
-            }
-            RenderResult::Chunked {
-                content_type: ChunkedContentType::Html,
-                shell,
-                closing,
-                chunks,
-            } => Ok(render_chunked_response(
-                &state,
-                &context,
-                ChunkedContentType::Html,
-                shell,
-                closing,
-                chunks,
-                is_not_found,
-                accept_encoding,
-            )),
-            RenderResult::StaticBinary(bytes) => {
-                let html_content = String::from_utf8_lossy(&bytes).into_owned();
-                let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
-                #[expect(
-                    clippy::expect_used,
-                    reason = "Response::builder() with valid components never fails"
-                )]
-                Ok(Response::builder()
-                    .status(status_code)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .header("vary", "Accept")
-                    .body(Body::from(html_content))
-                    .expect("Valid response"))
-            }
-            RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
-                tracing::error!("RSC chunked render not supported in HTML synchronous mode");
-                Err(error_response::status(&RariError::internal(
-                    "RSC chunked render not supported in HTML synchronous mode",
-                )))
-            }
-        },
+        Ok(result) => result,
         Err(e) => {
-            tracing::error!("Synchronous rendering failed: {}", e);
-            render_fallback_html(&state, is_not_found).await
+            if let Some(app_router) = state.app_router.as_ref()
+                && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
+            {
+                match layout_renderer
+                    .render_route_with_streaming(
+                        &route_match,
+                        &context,
+                        Some(request_context),
+                        false,
+                        None,
+                    )
+                    .await
+                {
+                    Ok(result) => result,
+                    Err(retry_err) => {
+                        tracing::error!(
+                            "Failed to render route '{}': {}",
+                            route_match.route.path,
+                            retry_err
+                        );
+                        if is_rari_page_not_found(&retry_err) {
+                            return render_fallback_html(&state, true).await;
+                        }
+                        return Err(error_response::status(&retry_err));
+                    }
+                }
+            } else {
+                tracing::error!("Failed to render route '{}': {}", route_match.route.path, e);
+                return render_fallback_html(&state, route_match.not_found.is_some()).await;
+            }
+        }
+    };
+
+    let is_not_found = route_match.not_found.is_some();
+
+    match render_result {
+        RenderResult::Static(html_content) => {
+            let html_with_assets = match inject_assets_into_html(&html_content, &state.config).await
+            {
+                Ok(html) => html,
+                Err(e) => {
+                    tracing::error!("Failed to inject assets into HTML: {}", e);
+                    html_content
+                }
+            };
+
+            let final_html = wrap_html_with_metadata(html_with_assets, &state);
+
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            let cache_control = state.config.get_cache_control_for_route(&context.pathname);
+
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
+            Ok(Response::builder()
+                .status(status_code)
+                .header("content-type", "text/html; charset=utf-8")
+                .header("x-render-mode", "synchronous")
+                .header("cache-control", cache_control)
+                .header("vary", "Accept")
+                .body(Body::from(final_html))
+                .expect("Valid HTML response"))
+        }
+        RenderResult::Chunked {
+            content_type: ChunkedContentType::Html,
+            shell,
+            closing,
+            chunks,
+        } => Ok(render_chunked_response(
+            &state,
+            &context,
+            ChunkedContentType::Html,
+            shell,
+            closing,
+            chunks,
+            is_not_found,
+            accept_encoding,
+        )),
+        RenderResult::StaticBinary(bytes) => {
+            let html_content = String::from_utf8_lossy(&bytes).into_owned();
+            let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+            #[expect(
+                clippy::expect_used,
+                reason = "Response::builder() with valid components never fails"
+            )]
+            Ok(Response::builder()
+                .status(status_code)
+                .header("content-type", "text/html; charset=utf-8")
+                .header("vary", "Accept")
+                .body(Body::from(html_content))
+                .expect("Valid response"))
+        }
+        RenderResult::Chunked { content_type: ChunkedContentType::RscFlight, .. } => {
+            tracing::error!("RSC chunked render not supported in HTML synchronous mode");
+            Err(error_response::status(&RariError::internal(
+                "RSC chunked render not supported in HTML synchronous mode",
+            )))
         }
     }
 }
@@ -1084,17 +1174,6 @@ pub async fn handle_app_route(
         let path_without_leading_slash = &path[1..];
 
         if path_without_leading_slash.contains('.') {
-            const BLOCKED_FILES: &[&str] =
-                &["server/manifest.json", "server/routes.json", "server/proxy.json", "server/"];
-
-            for blocked in BLOCKED_FILES {
-                if path_without_leading_slash.starts_with(blocked)
-                    || path_without_leading_slash == *blocked
-                {
-                    return Err(StatusCode::NOT_FOUND);
-                }
-            }
-
             if let Ok(file_path) =
                 validate_safe_path(state.config.public_dir(), path_without_leading_slash).await
                 && let Ok(metadata) = fs::metadata(&file_path).await
@@ -1264,7 +1343,7 @@ pub async fn handle_app_route(
     if route_match.not_found.is_none() && route_match.route.is_dynamic {
         match layout_renderer.check_page_not_found(&route_match, &context).await {
             Ok(true) => {
-                if let Some(not_found_entry) = app_router.find_not_found(&route_match.route.path) {
+                if let Some(not_found_entry) = resolve_not_found_entry(app_router, &route_match) {
                     route_match.not_found = Some(not_found_entry);
                 }
             }
@@ -1327,86 +1406,104 @@ pub async fn handle_app_route(
             let metadata_rx =
                 spawn_page_metadata(state.clone(), route_match.clone(), context.clone());
 
-            match layout_renderer
+            let rsc_result = layout_renderer
                 .render_route_by_mode(&route_match, &context, Some(Arc::clone(&request_context)))
-                .await
-            {
-                Ok(rsc_flight_protocol) => {
-                    context.metadata = metadata_rx.await.ok().flatten();
+                .await;
 
-                    let status_code = if route_match.not_found.is_some() {
-                        StatusCode::NOT_FOUND
+            let rsc_flight_protocol = match rsc_result {
+                Ok(payload) => payload,
+                Err(e) => {
+                    if let Some(app_router) = state.app_router.as_ref()
+                        && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
+                    {
+                        match layout_renderer
+                            .render_route_by_mode(
+                                &route_match,
+                                &context,
+                                Some(Arc::clone(&request_context)),
+                            )
+                            .await
+                        {
+                            Ok(payload) => payload,
+                            Err(retry_err) => {
+                                tracing::error!("Failed to render RSC: {}", retry_err);
+                                return Err(error_response::status(&retry_err));
+                            }
+                        }
                     } else {
-                        StatusCode::OK
+                        tracing::error!("Failed to render RSC: {}", e);
+                        return Err(error_response::status(&e));
+                    }
+                }
+            };
+
+            {
+                context.metadata = metadata_rx.await.ok().flatten();
+
+                let status_code = if route_match.not_found.is_some() {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::OK
+                };
+
+                let router_state_sensitive = context.template_navigation_id.is_some()
+                    || !context.reuse_layout_paths.is_empty();
+
+                let mut response_builder = Response::builder()
+                    .status(status_code)
+                    .header("content-type", "text/x-component")
+                    .header("vary", rsc_vary_header(cookie_header, router_state_sensitive))
+                    .header("x-cache", "MISS");
+
+                let mut cache_headers = HeaderMap::new();
+
+                if let Some(ref metadata) = context.metadata
+                    && let Ok(metadata_json) = serde_json::to_string(metadata)
+                {
+                    let encoded_metadata = urlencoding::encode(&metadata_json);
+                    response_builder =
+                        response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
+                    if let Ok(header_value) = encoded_metadata.as_ref().parse() {
+                        cache_headers.insert("x-rari-metadata", header_value);
+                    }
+                }
+
+                let cache_control = state.config.get_cache_control_for_route(path);
+                let cache_policy =
+                    response::RouteCachePolicy::from_cache_control(cache_control, path);
+
+                let can_cache_rsc = !router_state_sensitive
+                    && should_store_response_cache(&state, &cache_policy).await;
+                if can_cache_rsc {
+                    let response_cache_tags =
+                        merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
+                    if cookie_header.is_some() {
+                        insert_response_cache_vary_header(&mut cache_headers, cookie_header, false);
+                    }
+                    let cached_response = response::CachedResponse {
+                        body: Bytes::from(rsc_flight_protocol.clone()),
+                        headers: cache_headers,
+                        metadata: response::CacheMetadata {
+                            cached_at: Instant::now(),
+                            ttl: cache_policy.ttl,
+                            etag: None,
+                            tags: response_cache_tags,
+                        },
+                        compressed_zstd: None,
+                        compressed_br: None,
+                        compressed_gzip: None,
                     };
 
-                    let router_state_sensitive = context.template_navigation_id.is_some()
-                        || !context.reuse_layout_paths.is_empty();
-
-                    let mut response_builder = Response::builder()
-                        .status(status_code)
-                        .header("content-type", "text/x-component")
-                        .header("vary", rsc_vary_header(cookie_header, router_state_sensitive))
-                        .header("x-cache", "MISS");
-
-                    let mut cache_headers = HeaderMap::new();
-
-                    if let Some(ref metadata) = context.metadata
-                        && let Ok(metadata_json) = serde_json::to_string(metadata)
-                    {
-                        let encoded_metadata = urlencoding::encode(&metadata_json);
-                        response_builder =
-                            response_builder.header("x-rari-metadata", encoded_metadata.as_ref());
-                        if let Ok(header_value) = encoded_metadata.as_ref().parse() {
-                            cache_headers.insert("x-rari-metadata", header_value);
-                        }
-                    }
-
-                    let cache_control = state.config.get_cache_control_for_route(path);
-                    let cache_policy =
-                        response::RouteCachePolicy::from_cache_control(cache_control, path);
-
-                    let can_cache_rsc = !router_state_sensitive
-                        && should_store_response_cache(&state, &cache_policy).await;
-                    if can_cache_rsc {
-                        let response_cache_tags =
-                            merge_response_cache_tags(&state, cache_policy.tags.clone()).await;
-                        if cookie_header.is_some() {
-                            insert_response_cache_vary_header(
-                                &mut cache_headers,
-                                cookie_header,
-                                false,
-                            );
-                        }
-                        let cached_response = response::CachedResponse {
-                            body: Bytes::from(rsc_flight_protocol.clone()),
-                            headers: cache_headers,
-                            metadata: response::CacheMetadata {
-                                cached_at: Instant::now(),
-                                ttl: cache_policy.ttl,
-                                etag: None,
-                                tags: response_cache_tags,
-                            },
-                            compressed_zstd: None,
-                            compressed_br: None,
-                            compressed_gzip: None,
-                        };
-
-                        state.response_cache.set(cache_key, cached_response).await;
-                    }
-
-                    #[expect(
-                        clippy::expect_used,
-                        reason = "Response::builder() with valid components never fails"
-                    )]
-                    Ok(response_builder
-                        .body(Body::from(rsc_flight_protocol))
-                        .expect("Valid RSC response"))
+                    state.response_cache.set(cache_key, cached_response).await;
                 }
-                Err(e) => {
-                    tracing::error!("Failed to render RSC: {}", e);
-                    Err(error_response::status(&e))
-                }
+
+                #[expect(
+                    clippy::expect_used,
+                    reason = "Response::builder() with valid components never fails"
+                )]
+                Ok(response_builder
+                    .body(Body::from(rsc_flight_protocol))
+                    .expect("Valid RSC response"))
             }
         }
         RenderMode::Ssr => {

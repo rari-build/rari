@@ -1,6 +1,6 @@
 import type { ComponentProps, ComponentType } from 'react'
 import type { BlogMetadata } from '@/lib/content/metadata'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { evaluate } from 'rari/mdx'
 import * as runtime from 'react/jsx-runtime'
@@ -25,9 +25,9 @@ interface MdxRendererProps {
   readonly pathname?: string
 }
 
-function findContentFile(filePath: string): string | null {
+async function findContentFile(filePath: string): Promise<string | null> {
   try {
-    return readFileSync(join(getContentRoot(), filePath), 'utf-8')
+    return await readFile(join(await getContentRoot(), filePath), 'utf-8')
   } catch {
     return null
   }
@@ -79,7 +79,7 @@ export default async function MdxRenderer({
   className = '',
   pathname,
 }: MdxRendererProps) {
-  const content = findContentFile(filePath)
+  const content = await findContentFile(filePath)
   if (content == null || content === '') return <NotFoundPage />
 
   let MDXContent: ComponentType

@@ -38,81 +38,13 @@ pub fn pending_component_id(component_id: &str) -> String {
 pub fn build_invalidate_script(component_id: &str) -> String {
     let escaped_component_id = escape_js_string(component_id);
     format!(
-        r#"
-            (function() {{
-                const componentId = "{escaped_component_id}";
-                let deleted = false;
-
-                if (globalThis[componentId]) {{
-                    delete globalThis[componentId];
-                    deleted = true;
+        r#"(function() {{
+                const clear = globalThis['~rari']?.clearHmrComponent;
+                if (typeof clear !== 'function') {{
+                    throw new Error('clearHmrComponent unavailable');
                 }}
-
-                const moduleNamespace = globalThis['~rsc']?.modules?.[componentId];
-                if (moduleNamespace) {{
-                    for (const key in moduleNamespace) {{
-                        if (key !== 'default' && typeof moduleNamespace[key] === 'function' && globalThis[key] === moduleNamespace[key]) {{
-                            delete globalThis[key];
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rsc']?.functions?.[componentId]) {{
-                    delete globalThis['~rsc'].functions[componentId];
-                    deleted = true;
-                }}
-
-                if (globalThis['~rari']?.ssrModules) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key in globalThis['~rari'].ssrModules) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            delete globalThis['~rari'].ssrModules[key];
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rari']?.serverManifest) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key in globalThis['~rari'].serverManifest) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            delete globalThis['~rari'].serverManifest[key];
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rari']?.registeredServerFunctions) {{
-                    const colonPrefix = componentId + ':';
-                    const hashPrefix = componentId + '#';
-                    for (const key of globalThis['~rari'].registeredServerFunctions) {{
-                        if (key === componentId || key.startsWith(colonPrefix) || key.startsWith(hashPrefix)) {{
-                            globalThis['~rari'].registeredServerFunctions.delete(key);
-                            deleted = true;
-                        }}
-                    }}
-                }}
-
-                if (globalThis['~rsc']?.modules?.[componentId]) {{
-                    delete globalThis['~rsc'].modules[componentId];
-                    deleted = true;
-                }}
-
-                if (globalThis.RscModuleManager && globalThis.RscModuleManager.unregister) {{
-                    try {{
-                        globalThis.RscModuleManager.unregister(componentId);
-                        deleted = true;
-                    }} catch (e) {{
-                        console.warn('Failed to unregister from RscModuleManager:', e);
-                    }}
-                }}
-
-                return {{ success: true, deleted: deleted }};
-            }})()
-            "#
+                return clear("{escaped_component_id}");
+            }})()"#
     )
 }
 
@@ -336,5 +268,23 @@ pub async fn load_component_code(
             tracing::error!("{}", error_msg);
             Err(RariError::js_execution(error_msg))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_invalidate_script;
+
+    #[test]
+    fn invalidate_script_invokes_snapshotted_helper() {
+        let script = build_invalidate_script(r#"foo"bar"#);
+        assert!(script.contains("clearHmrComponent"));
+        assert!(script.contains(r#"foo\"bar"#));
+        assert!(script.contains("throw new Error"));
+        assert!(
+            script.len() < 500,
+            "per-HMR invalidate script should stay tiny (got {} bytes)",
+            script.len()
+        );
     }
 }

@@ -134,7 +134,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # === System Integration ===
-hyper-util = { version = "0.1.20", features = ["client-legacy", "tokio"] }
+hyper-util = { version = "0.1.21", features = ["client-legacy", "tokio"] }
 libc = "0.2.189"
 nix = { workspace = true, features = ["term"] }
 rustyline = { workspace = true }
@@ -151,7 +151,7 @@ cow-utils = { workspace = true }
 dashmap = "6.2.1"
 lru = "0.18.5"
 parking_lot = { workspace = true }
-redis = { version = "1.7.0", default-features = false, features = ["tokio-comp"] }
+redis = { version = "1.7.1", default-features = false, features = ["tokio-comp"] }
 redb = "4.3.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }

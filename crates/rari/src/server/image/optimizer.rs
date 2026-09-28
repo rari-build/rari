@@ -127,6 +127,18 @@ impl ImageOptimizer {
         }
     }
 
+    fn dist_root_path(&self) -> PathBuf {
+        let out = self.out_dir_path();
+        if out.file_name().and_then(|name| name.to_str()) == Some("client") {
+            match out.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => out,
+            }
+        } else {
+            out
+        }
+    }
+
     fn default_quality(&self) -> u8 {
         if self.config.quality_allowlist.is_empty()
             || self.config.quality_allowlist.contains(&DEFAULT_IMAGE_QUALITY)
@@ -1203,21 +1215,19 @@ impl ImageOptimizer {
     async fn load_static_image_source_map(
         &self,
     ) -> Result<Option<serde_json::Map<String, serde_json::Value>>, ImageError> {
-        let map_path = match validate_safe_path(
-            &self.out_dir_path(),
-            "server/static-image-sources.json",
-        )
-        .await
-        {
-            Ok(path) => path,
-            Err(RariError::NotFound(_, _)) => return Ok(None),
-            Err(e) => {
-                return Err(ImageError::FetchError(format!(
-                    "Failed to resolve static image source map: {}",
-                    e.message()
-                )));
-            }
-        };
+        let map_path =
+            match validate_safe_path(&self.dist_root_path(), "server/static-image-sources.json")
+                .await
+            {
+                Ok(path) => path,
+                Err(RariError::NotFound(_, _)) => return Ok(None),
+                Err(e) => {
+                    return Err(ImageError::FetchError(format!(
+                        "Failed to resolve static image source map: {}",
+                        e.message()
+                    )));
+                }
+            };
 
         let map_bytes = match Self::read_file_bytes_capped(
             &map_path,
@@ -1742,7 +1752,7 @@ mod tests {
     #[tokio::test]
     async fn fetch_resolves_encoded_dist_asset_without_source_map() {
         let project = test_project("dist-encoded");
-        let assets = project.join("dist").join("assets");
+        let assets = project.join("dist").join("client").join("assets");
         fs::create_dir_all(&assets).expect("assets dir");
 
         let unicode_url = format!("/assets/{}-abc12345.png", urlencoding::encode("写真"));
@@ -1789,7 +1799,7 @@ mod tests {
     #[tokio::test]
     async fn scan_emits_encoded_urls_for_special_filenames() {
         let project = test_project("scan-encode");
-        let assets = project.join("dist").join("assets");
+        let assets = project.join("dist").join("client").join("assets");
         fs::create_dir_all(&assets).expect("assets dir");
         fs::write(assets.join("100%-deadbeef.png"), tiny_png()).expect("write");
         fs::write(assets.join("cool pic-deadbeef.png"), tiny_png()).expect("write");
@@ -1808,7 +1818,7 @@ mod tests {
     #[tokio::test]
     async fn scan_includes_gif_files() {
         let project = test_project("scan-gif");
-        let assets = project.join("dist").join("assets");
+        let assets = project.join("dist").join("client").join("assets");
         fs::create_dir_all(&assets).expect("assets dir");
         fs::write(assets.join("frame.gif"), tiny_png()).expect("write gif");
         fs::write(assets.join("notes.txt"), b"skip").expect("write txt");
@@ -1819,7 +1829,7 @@ mod tests {
         assert!(count > 0, "gif assets should be included in the local scan");
 
         let txt_only = test_project("scan-txt-only");
-        let txt_assets = txt_only.join("dist").join("assets");
+        let txt_assets = txt_only.join("dist").join("client").join("assets");
         fs::create_dir_all(&txt_assets).expect("assets dir");
         fs::write(txt_assets.join("notes.txt"), b"skip").expect("write txt");
         let txt_optimizer = ImageOptimizer::new(assets_config(), &txt_only);
@@ -1852,7 +1862,7 @@ mod tests {
     #[tokio::test]
     async fn scan_prefers_source_map_over_walking_all_assets() {
         let project = test_project("scan-source-map-prefer");
-        let assets = project.join("dist").join("assets");
+        let assets = project.join("dist").join("client").join("assets");
         let server_dir = project.join("dist").join("server");
         fs::create_dir_all(&assets).expect("assets dir");
         fs::create_dir_all(&server_dir).expect("server dir");

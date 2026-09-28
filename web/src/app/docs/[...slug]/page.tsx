@@ -1,8 +1,9 @@
 import type { PageProps } from 'rari'
-import { accessSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { notFound } from 'rari'
 import MdxRenderer from '@/components/mdx/MdxRenderer'
-import { getDocsDir, getDocsFilePath, isValidSlugArray } from '@/lib/content'
+import { contentFileExists, getDocsDir, getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import { extractMetadataWithFallback } from '@/lib/content/metadata'
 import { container } from '@/lib/site/styles'
 
@@ -11,11 +12,10 @@ const DEFAULT_METADATA = {
   description: 'Complete documentation for rari framework.',
 }
 
-export default function DocPage({ params }: PageProps) {
+export default async function DocPage({ params }: PageProps) {
   const slug = params.slug
-
-  if (!isValidSlugArray(slug))
-    return <div className={container.base}>Invalid documentation path.</div>
+  if (!isValidSlugArray(slug)) notFound()
+  if (!(await contentFileExists(await getDocsFilePath(slug)))) notFound()
 
   const slugPath = slug.join('/')
   const pathname = `/docs/${slugPath}`
@@ -27,68 +27,50 @@ export default function DocPage({ params }: PageProps) {
   )
 }
 
-export function getData({ params }: PageProps) {
+export async function generateMetadata({ params }: PageProps) {
   const slug = params.slug
+  if (!isValidSlugArray(slug)) return DEFAULT_METADATA
 
-  if (!isValidSlugArray(slug)) return { notFound: true }
+  const content = await readFile(await getDocsFilePath(slug), 'utf-8').catch(() => null)
+  if (content == null) return DEFAULT_METADATA
 
-  try {
-    accessSync(getDocsFilePath(slug))
-    return { props: {} }
-  } catch {
-    return { notFound: true }
+  const metadata = extractMetadataWithFallback(content)
+  const pageTitle =
+    metadata.title != null && metadata.title !== ''
+      ? `${metadata.title} / rari Docs`
+      : DEFAULT_METADATA.title
+  const pageDescription = metadata.description ?? DEFAULT_METADATA.description
+
+  return {
+    title: pageTitle,
+    description: pageDescription,
+    openGraph: {
+      title: pageTitle,
+      description: pageDescription,
+    },
   }
 }
 
-export function generateMetadata({ params }: PageProps) {
-  const slug = params.slug
-
-  if (!isValidSlugArray(slug)) return DEFAULT_METADATA
-
-  try {
-    const content = readFileSync(getDocsFilePath(slug), 'utf-8')
-    const metadata = extractMetadataWithFallback(content)
-
-    const pageTitle =
-      metadata.title != null && metadata.title !== ''
-        ? `${metadata.title} / rari Docs`
-        : DEFAULT_METADATA.title
-    const pageDescription = metadata.description ?? DEFAULT_METADATA.description
-
-    return {
-      title: pageTitle,
-      description: pageDescription,
-      openGraph: {
-        title: pageTitle,
-        description: pageDescription,
-      },
-    }
-  } catch {}
-
-  return DEFAULT_METADATA
-}
-
-export function generateStaticParams() {
-  const contentDir = getDocsDir()
+export async function generateStaticParams() {
+  const contentDir = await getDocsDir()
   const params: Array<{ slug: string[] }> = []
 
-  function scanDir(dir: string, segments: readonly string[]) {
+  async function scanDir(dir: string, segments: readonly string[]) {
     try {
-      const entries = readdirSync(dir)
+      const entries = await readdir(dir, { withFileTypes: true })
       for (const entry of entries) {
-        const fullPath = join(dir, entry)
-        const stat = statSync(fullPath)
+        const fullPath = join(dir, entry.name)
 
-        if (stat.isDirectory()) {
-          scanDir(fullPath, [...segments, entry])
-        } else if (entry.endsWith('.mdx')) {
-          const name = entry.replace(/\.mdx?$/, '')
+        if (entry.isDirectory()) {
+          await scanDir(fullPath, [...segments, entry.name])
+        } else if (entry.name.endsWith('.mdx')) {
+          const name = entry.name.replace(/\.mdx?$/, '')
           params.push({ slug: [...segments, name] })
         }
       }
     } catch {}
   }
 
-  scanDir(contentDir, [])
+  await scanDir(contentDir, [])
   return params
 }

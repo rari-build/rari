@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
@@ -8,7 +9,19 @@ import { cancel, confirm, intro, isCancel, outro, select, spinner, text } from '
 
 const TEMPLATE_PLACEHOLDER_REGEX = /\{\{PROJECT_NAME\}\}/g
 const PACKAGE_MANAGER_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER\}\}/g
+const INSTALL_COMMAND_PLACEHOLDER_REGEX = /\{\{INSTALL_COMMAND\}\}/g
+const PACKAGE_MANAGER_SPEC_PLACEHOLDER_REGEX = /\{\{PACKAGE_MANAGER_SPEC\}\}/g
+const PACKAGE_MANAGER_FIELD_REGEX = /\n\s*"packageManager": "[^"]*",/
 const PROJECT_NAME_REGEX = /^[@\w/-]+$/
+const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+function readPnpmPackageManager(): string | null {
+  const parsed: unknown = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'))
+  if (typeof parsed !== 'object' || parsed == null || !('packageManager' in parsed)) return null
+  return typeof parsed.packageManager === 'string' ? parsed.packageManager : null
+}
+
+const PNPM_PACKAGE_MANAGER = readPnpmPackageManager()
 
 interface ProjectOptions {
   readonly name: string
@@ -30,6 +43,23 @@ const packageManagers = {
   yarn: 'yarn',
   bun: 'bun',
 } as const
+
+function installCommandFor(packageManager: string): string {
+  switch (packageManager) {
+    case 'yarn':
+      return 'yarn'
+    case 'bun':
+      return 'bun install'
+    case 'npm':
+      return 'npm install'
+    default:
+      return 'pnpm install'
+  }
+}
+
+function packageManagerSpecFor(packageManager: string): string | null {
+  return packageManager === 'pnpm' && PNPM_PACKAGE_MANAGER != null ? PNPM_PACKAGE_MANAGER : null
+}
 
 function requireAnswer<T>(value: T): Exclude<T, symbol> {
   if (isCancel(value)) {
@@ -168,11 +198,15 @@ async function copyTemplate(templatePath: string, projectPath: string, options: 
     'src/components/Welcome.tsx',
     'src/components/ServerTime.tsx',
     'src/components/Rari.tsx',
+    'src/components/SiteNav.tsx',
     'gitignore',
   ]
 
   await mkdir(join(projectPath, 'src', 'app', 'about'), { recursive: true })
   await mkdir(join(projectPath, 'src', 'components'), { recursive: true })
+
+  const installCommand = installCommandFor(options.packageManager)
+  const packageManagerSpec = packageManagerSpecFor(options.packageManager)
 
   for (const file of templateFiles) {
     const sourcePath = join(templatePath, file)
@@ -185,6 +219,14 @@ async function copyTemplate(templatePath: string, projectPath: string, options: 
       content = content
         .replace(TEMPLATE_PLACEHOLDER_REGEX, options.name)
         .replace(PACKAGE_MANAGER_PLACEHOLDER_REGEX, options.packageManager)
+        .replace(INSTALL_COMMAND_PLACEHOLDER_REGEX, installCommand)
+
+      if (file === 'package.json') {
+        content =
+          packageManagerSpec == null
+            ? content.replace(PACKAGE_MANAGER_FIELD_REGEX, '')
+            : content.replace(PACKAGE_MANAGER_SPEC_PLACEHOLDER_REGEX, packageManagerSpec)
+      }
 
       await mkdir(dirname(destPath), { recursive: true })
       await writeFile(destPath, content)

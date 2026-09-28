@@ -23,6 +23,12 @@ import {
 } from '@/shared/regex-constants'
 import { resolveAlias } from '@/shared/utils/alias-resolver'
 import { contentHash } from '@/shared/utils/content-hash'
+import {
+  DEFAULT_DIST_ROOT,
+  resolveAbsoluteOutDir,
+  resolveClientOutDir,
+  resolveDistRootFromClientOutDir,
+} from '@/shared/utils/dist-paths'
 import { resolveWithExtensionsAndIndex } from '@/shared/utils/file-resolver'
 import { normalizeAssetsDir, toPosixPath } from '@/shared/utils/path'
 import { errorMessage, getErrnoCode, isRecord, parseJsonRecord } from '@/shared/utils/type-guards'
@@ -162,6 +168,7 @@ function ssrClientBundleName(filePath: string, projectRoot: string): string {
 
 export interface ServerBuildOptions {
   readonly outDir?: string
+  readonly clientOutDir?: string
   readonly rscDir?: string
   readonly manifestPath?: string
   readonly serverConfigPath?: string
@@ -294,7 +301,7 @@ export class ServerComponentBuilder {
       normalized === this.options.assetsDir ||
       normalized.startsWith(`${this.options.assetsDir}/`)
     ) {
-      return path.join(this.options.outDir, normalized)
+      return path.join(this.options.clientOutDir, normalized)
     }
     return path.join(this.options.outDir, this.options.rscDir, normalized)
   }
@@ -401,7 +408,7 @@ export class ServerComponentBuilder {
   ): Promise<string[]> {
     if (cssModules.length === 0) return []
 
-    const assetsDir = path.join(this.options.outDir, 'assets', 'server')
+    const assetsDir = path.join(this.options.clientOutDir, 'assets', 'server')
     await fs.promises.mkdir(assetsDir, { recursive: true })
 
     const cssContent = `${cssModules.join('\n')}\n`
@@ -476,12 +483,16 @@ export class ServerComponentBuilder {
     this.projectRoot = path.resolve(projectRoot)
     this.moduleAnalysisCache = options.moduleAnalysisCache ?? new ModuleAnalysisCache()
     const rscDir = options.rscDir != null && options.rscDir !== '' ? options.rscDir : 'server'
-    const rawOutDir =
-      options.outDir != null && options.outDir !== ''
-        ? options.outDir
-        : path.join(this.projectRoot, 'dist')
+    const rawDistRoot =
+      options.outDir != null && options.outDir !== '' ? options.outDir : DEFAULT_DIST_ROOT
+    const distRoot = resolveAbsoluteOutDir(this.projectRoot, rawDistRoot)
+    const clientOutDir =
+      options.clientOutDir != null && options.clientOutDir !== ''
+        ? resolveAbsoluteOutDir(this.projectRoot, options.clientOutDir)
+        : path.join(distRoot, 'client')
     this.options = {
-      outDir: path.isAbsolute(rawOutDir) ? rawOutDir : path.resolve(this.projectRoot, rawOutDir),
+      outDir: distRoot,
+      clientOutDir,
       rscDir,
       manifestPath:
         options.manifestPath != null && options.manifestPath !== ''
@@ -1045,7 +1056,7 @@ export class ServerComponentBuilder {
       const normalized = toPosixPath(file.fileName)
       const fullPath =
         normalized === this.options.assetsDir || normalized.startsWith(`${this.options.assetsDir}/`)
-          ? path.join(this.options.outDir, normalized)
+          ? path.join(this.options.clientOutDir, normalized)
           : path.join(ssrOutDir, normalized)
       await fs.promises.mkdir(path.dirname(fullPath), { recursive: true })
       await fs.promises.writeFile(fullPath, file.code)
@@ -1479,7 +1490,8 @@ export function scanDirectory(
 export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugin {
   let builder: ServerComponentBuilder | null = null
   let projectRoot: string
-  let resolvedViteOutDir: string
+  let resolvedClientOutDir: string
+  let resolvedDistRoot: string
   let resolvedAliases: Record<string, string> = {}
   let serverArtifactsEmitted = false
 
@@ -1496,7 +1508,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
       const { generateRobotsFile } = await import('@/router/metadata/robots')
       await generateRobotsFile({
         appDir: path.join(projectRoot, 'src', 'app'),
-        outDir: resolvedViteOutDir,
+        outDir: resolvedClientOutDir,
         aliases: resolvedAliases,
       })
     } catch (error) {
@@ -1507,7 +1519,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
       const { generateSitemapFiles } = await import('@/router/metadata/sitemap')
       await generateSitemapFiles({
         appDir: path.join(projectRoot, 'src', 'app'),
-        outDir: resolvedViteOutDir,
+        outDir: resolvedClientOutDir,
         aliases: resolvedAliases,
       })
     } catch (error) {
@@ -1518,7 +1530,7 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
       const { generateFeedFile } = await import('@/router/metadata/feed')
       await generateFeedFile({
         appDir: path.join(projectRoot, 'src', 'app'),
-        outDir: resolvedViteOutDir,
+        outDir: resolvedClientOutDir,
         aliases: resolvedAliases,
       })
     } catch (error) {
@@ -1526,13 +1538,13 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
     }
 
     try {
-      const routesPath = path.join(resolvedViteOutDir, 'server', 'routes.json')
+      const routesPath = path.join(resolvedDistRoot, 'server', 'routes.json')
       if (fs.existsSync(routesPath)) {
         const icons = parseAppIconsFromManifest(fs.readFileSync(routesPath, 'utf-8'))
         if (icons.length > 0) {
           await copyAppIconsToOutDir({
             appDir: path.join(projectRoot, 'src', 'app'),
-            outDir: resolvedViteOutDir,
+            outDir: resolvedClientOutDir,
             icons,
           })
         }
@@ -1543,20 +1555,25 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
     try {
       const mdxOpts = resolveMdxPluginOptions(projectRoot, options.mdx)
+      const excludedContentRels = [
+        'public/content',
+        toPosixPath(path.relative(projectRoot, path.join(resolvedDistRoot, 'content'))),
+        toPosixPath(path.relative(projectRoot, path.join(resolvedClientOutDir, 'content'))),
+      ].filter(rel => rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel))
       const contentDirs = collectMdxContentDirs(projectRoot, mdxOpts.contentDirs).filter(dir => {
         const rel = toPosixPath(path.relative(projectRoot, dir))
-        if (rel === 'public/content' || rel.startsWith('public/content/')) return false
-        if (rel === 'dist/content' || rel.startsWith('dist/content/')) return false
-        return true
+        return !excludedContentRels.some(
+          excluded => rel === excluded || rel.startsWith(`${excluded}/`),
+        )
       })
       if (contentDirs.length > 0) {
-        copyMdxContentDirsToDest(contentDirs, path.join(resolvedViteOutDir, 'content'))
+        copyMdxContentDirsToDest(contentDirs, path.join(resolvedDistRoot, 'content'))
       }
     } catch (error) {
       console.warn('[rari] Failed to copy MDX content:', error)
     }
 
-    finalizeStaticImageSourceMapBuild(resolvedViteOutDir)
+    finalizeStaticImageSourceMapBuild(resolvedClientOutDir)
   }
 
   return {
@@ -1565,7 +1582,8 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
 
     configResolved(config) {
       projectRoot = config.root
-      resolvedViteOutDir = path.resolve(config.root, config.build.outDir)
+      resolvedClientOutDir = resolveClientOutDir(config.root, config.build.outDir)
+      resolvedDistRoot = resolveDistRootFromClientOutDir(resolvedClientOutDir)
       serverArtifactsEmitted = false
 
       const alias = readViteAliases(config)
@@ -1578,7 +1596,8 @@ export function createServerBuildPlugin(options: ServerBuildOptions = {}): Plugi
         ...options,
         alias,
         assetsDir,
-        outDir: resolvedViteOutDir,
+        outDir: resolvedDistRoot,
+        clientOutDir: resolvedClientOutDir,
         minify: options.minify ?? config.mode === 'production',
       })
     },

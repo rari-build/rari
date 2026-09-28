@@ -359,7 +359,8 @@ ci-prepare-use-cache-addon:
         ;;
     esac
 
-    (cd crates/rari_use_cache && pnpm exec napi build --release --strip --platform)
+    # Crate is outside the workspace; exec napi from the root so @napi-rs/cli resolves.
+    pnpm exec napi build --release --strip --platform --cwd crates/rari_use_cache
 
     mkdir -p "$package_dir"
     shopt -s nullglob

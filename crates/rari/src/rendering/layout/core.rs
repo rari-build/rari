@@ -42,6 +42,11 @@ use crate::{
 
 const LAYOUT_KEY_PREFIX: &str = "layout:";
 
+#[must_use]
+pub fn is_rari_page_not_found(err: &RariError) -> bool {
+    matches!(err, RariError::NotFound(message, _) if message == "RARI_NOT_FOUND")
+}
+
 fn should_use_layout_html_cache(
     context: &LayoutRenderContext,
     request_context: Option<&RequestContext>,
@@ -370,16 +375,26 @@ impl LayoutRenderer {
         let check_script = format!(
             r#"
             (async () => {{
+                const isNotFoundError = (error) =>
+                    error?.digest === 'RARI_NOT_FOUND' || error?.message === 'RARI_NOT_FOUND';
+
                 try {{
                     const module = await import("{page_path}");
 
-                    if (typeof module.getData === 'function') {{
-                        const pageProps = {page_props_json};
-                        const result = await module.getData(pageProps);
-                        return {{ notFound: result?.notFound === true }};
+                    if (typeof module.getData !== 'function') {{
+                        return {{ notFound: false }};
                     }}
 
-                    return {{ notFound: false }};
+                    const pageProps = {page_props_json};
+                    try {{
+                        const result = await module.getData(pageProps);
+                        return {{ notFound: result?.notFound === true }};
+                    }} catch (error) {{
+                        if (isNotFoundError(error)) {{
+                            return {{ notFound: true }};
+                        }}
+                        throw error;
+                    }}
                 }} catch (error) {{
                     console.error('[check_page_not_found] Error:', error);
                     return {{ notFound: false }};
@@ -401,6 +416,42 @@ impl LayoutRenderer {
             result.get("notFound").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
         Ok(not_found)
+    }
+
+    async fn resolve_page_not_found_before_stream(
+        &self,
+        route_match: &AppRouteMatch,
+        context: &LayoutRenderContext,
+        request_context: Option<Arc<RequestContext>>,
+    ) -> Result<(), RariError> {
+        if route_match.not_found.is_some() {
+            return Ok(());
+        }
+
+        let composition_script =
+            Self::build_composition_script(route_match, context, None, false, false)?;
+
+        let runtime = {
+            run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
+                renderer.ensure_rsc_pipeline().await?;
+                Ok(Arc::clone(&renderer.runtime))
+            })
+            .await?
+        };
+
+        if let Some(ctx) = request_context {
+            runtime
+                .with_request_context(ctx, move |rt| async move {
+                    Self::run_composition_on(None, Some(rt), composition_script).await
+                })
+                .await?;
+        } else {
+            let handle = runtime.pick_runtime().await?;
+            let rt = Arc::clone(handle.runtime());
+            Self::run_composition_on(None, Some(rt), composition_script).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn render_route(
@@ -616,6 +667,13 @@ impl LayoutRenderer {
 
         if return_rsc_on_fallback {
             if needs_streaming {
+                self.resolve_page_not_found_before_stream(
+                    route_match,
+                    context,
+                    request_context.clone(),
+                )
+                .await?;
+
                 let (chunk_sender, chunk_receiver) =
                     mpsc::channel::<Result<Vec<u8>, RariError>>(128);
 
@@ -775,6 +833,13 @@ impl LayoutRenderer {
                 Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
 
             if needs_streaming {
+                self.resolve_page_not_found_before_stream(
+                    route_match,
+                    context,
+                    request_context.clone(),
+                )
+                .await?;
+
                 let (chunk_sender, chunk_receiver) =
                     mpsc::channel::<Result<Vec<u8>, RariError>>(128);
 
@@ -1194,10 +1259,19 @@ impl LayoutRenderer {
         let promise_result =
             rt.execute_script("compose_and_render".to_string(), composition_script).await?;
 
+        if promise_result.get("notFound").and_then(Value::as_bool).unwrap_or(false) {
+            return Err(RariError::not_found("RARI_NOT_FOUND"));
+        }
+
         if promise_result.is_object() && promise_result.get("rsc_data").is_some() {
             Ok(promise_result)
         } else {
-            rt.execute_script("get_result".to_string(), JS_GET_RESULT.to_string()).await
+            let result =
+                rt.execute_script("get_result".to_string(), JS_GET_RESULT.to_string()).await?;
+            if result.get("notFound").and_then(Value::as_bool).unwrap_or(false) {
+                return Err(RariError::not_found("RARI_NOT_FOUND"));
+            }
+            Ok(result)
         }
     }
 

@@ -156,6 +156,7 @@ declare global {
       getFunction: (name: string) => ((...args: readonly any[]) => any) | null
       createPromise: (functionName: string, args?: readonly any[]) => Promise<any>
       discoverExports: (code: string) => string[]
+      unregister: (componentId: string) => { success: boolean; deleted: boolean }
       stubs: {
         loader: (componentId: string) => string
         component: (componentName: string) => string
@@ -173,6 +174,7 @@ declare global {
     '__rariGetActiveUseCacheTags'?: () => string[]
     '~rari'?: {
       isDevelopment?: boolean
+      clearHmrComponent?: (componentId: string) => { success: boolean; deleted: boolean }
       apiHandler?: {
         callHandler: (requestData: any, moduleSpecifier: string, methodName: string) => Promise<any>
       }
