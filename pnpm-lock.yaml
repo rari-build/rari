@@ -315,6 +315,10 @@ catalogs:
     '@sentry/react':
       specifier: ^11.0.0
       version: 11.0.0
+  rari:
+    rari:
+      specifier: ^0.17.0
+      version: 0.17.0
   react:
     '@types/react':
       specifier: ^19.3.0
@@ -618,6 +622,9 @@ importers:
       rari-darwin-arm64:
         specifier: 0.17.0
         version: 0.17.0
+      rari-darwin-x64:
+        specifier: 0.17.0
+        version: 0.17.0
       rari-linux-arm64:
         specifier: 0.17.0
         version: 0.17.0
@@ -757,8 +764,8 @@ importers:
         specifier: catalog:analytics
         version: 1.434.15(@types/react@19.3.0)(react@19.3.0)
       rari:
-        specifier: workspace:*
-        version: link:../packages/rari
+        specifier: catalog:rari
+        version: 0.17.0(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(@rari/use-cache@0.17.0(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28))))(oxc-transform-react@0.151.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28))
       react:
         specifier: catalog:react
         version: 19.3.0
@@ -2373,6 +2380,12 @@ packages:
     engines: {node: ^24.21.0 || >=26.0.0}
     cpu: [x64]
     os: [win32]
+
+  '@rari/use-cache@0.17.0':
+    resolution: {integrity: sha512-wAppmXhrxkQtGMcrhB9Av2cYwyi8irBHRw8UKXYC6AsRe91gKHuSg8YViKygPdTinpYDLzlT2+mVGMbZxKgxbQ==}
+    engines: {node: ^24.21.0 || >=26.0.0}
+    peerDependencies:
+      react-server-dom-webpack: ^19.3.0
 
   '@rolldown/binding-android-arm-eabi@1.2.11':
     resolution: {integrity: sha512-A5kXfGKvKWWZE0TtPrfsvT+q4Y5d1QG8gGUzpYjGydM+fARM9MuX90PrXYXe0XbsDVgyxxNzHo6giCj90bsFNw==}
@@ -4892,6 +4905,13 @@ packages:
     os: [darwin]
     hasBin: true
 
+  rari-darwin-x64@0.17.0:
+    resolution: {integrity: sha512-+3+TKplbjepa19vi1/rxvMLXXADuLAA3zmXOLSLSQHlgZsekRllQB1DqalytI/DqS//ICVkk9rxSfypPPhGccA==}
+    engines: {node: ^24.21.0 || >=26.0.0}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
   rari-linux-arm64@0.17.0:
     resolution: {integrity: sha512-Cwr6KyUH12Smk1it9/V8LeN5vXecZM5voepWz33XoEieZalFpoWLbPYMvn3rX2nH0wiusYuIoLopStxPz9fx1g==}
     engines: {node: ^24.21.0 || >=26.0.0}
@@ -4919,6 +4939,24 @@ packages:
     cpu: [x64]
     os: [win32]
     hasBin: true
+
+  rari@0.17.0:
+    resolution: {integrity: sha512-hqnQSF4jyTMHIhjAZxqUseHIA6F7Faf4EUNqypTgYLGPtfD1C240mvYvG+EagzfkSNgKgYSnbITnXUFADD8WCg==}
+    engines: {node: ^24.21.0 || >=26.0.0}
+    hasBin: true
+    peerDependencies:
+      '@mdx-js/mdx': ^3.1.1
+      '@rari/use-cache': ^0.17.0
+      oxc-transform-react: ^0.151.0
+      react: ^19.3.0
+      react-dom: ^19.3.0
+    peerDependenciesMeta:
+      '@mdx-js/mdx':
+        optional: true
+      '@rari/use-cache':
+        optional: true
+      oxc-transform-react:
+        optional: true
 
   react-dom@19.3.0:
     resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
@@ -6729,6 +6767,18 @@ snapshots:
     optional: true
 
   '@rari/use-cache-win32-x64@0.17.0':
+    optional: true
+
+  '@rari/use-cache@0.17.0(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28)))':
+    dependencies:
+      react-server-dom-webpack: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28))
+    optionalDependencies:
+      '@rari/use-cache-darwin-arm64': 0.17.0
+      '@rari/use-cache-darwin-x64': 0.17.0
+      '@rari/use-cache-linux-arm64': 0.17.0
+      '@rari/use-cache-linux-x64': 0.17.0
+      '@rari/use-cache-win32-arm64': 0.17.0
+      '@rari/use-cache-win32-x64': 0.17.0
     optional: true
 
   '@rolldown/binding-android-arm-eabi@1.2.11':
@@ -9654,6 +9704,9 @@ snapshots:
   rari-darwin-arm64@0.17.0:
     optional: true
 
+  rari-darwin-x64@0.17.0:
+    optional: true
+
   rari-linux-arm64@0.17.0:
     optional: true
 
@@ -9665,6 +9718,26 @@ snapshots:
 
   rari-win32-x64@0.17.0:
     optional: true
+
+  rari@0.17.0(@mdx-js/mdx@3.1.1(supports-color@8.1.1))(@rari/use-cache@0.17.0(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28))))(oxc-transform-react@0.151.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28)):
+    dependencies:
+      '@capsizecss/metrics': 4.3.0
+      '@capsizecss/unpack': 4.0.1
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      react-server-dom-webpack: 19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28))
+    optionalDependencies:
+      '@mdx-js/mdx': 3.1.1(supports-color@8.1.1)
+      '@rari/use-cache': 0.17.0(react-server-dom-webpack@19.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(webpack@5.111.1(lightningcss@1.33.0)(postcss@8.5.28)))
+      oxc-transform-react: 0.151.0
+      rari-darwin-arm64: 0.17.0
+      rari-darwin-x64: 0.17.0
+      rari-linux-arm64: 0.17.0
+      rari-linux-x64: 0.17.0
+      rari-win32-arm64: 0.17.0
+      rari-win32-x64: 0.17.0
+    transitivePeerDependencies:
+      - webpack
 
   react-dom@19.3.0(react@19.3.0):
     dependencies:
