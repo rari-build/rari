@@ -3,9 +3,9 @@
 import type { ReactNode } from 'react'
 import type { ResolvedTheme, ThemePreference } from './useTheme'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { THEME_STORAGE_KEY } from './theme-constants'
 import { ThemeContext } from './useTheme'
 
-const THEME_STORAGE_KEY = 'preferred-theme'
 function isThemePreference(value: string): value is ThemePreference {
   return value === 'light' || value === 'dark' || value === 'system'
 }

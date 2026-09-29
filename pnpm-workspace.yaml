@@ -15,7 +15,7 @@ minimumReleaseAgeExclude:
   - rari-linux-x64@0.17.1
   - rari-win32-arm64@0.17.1
   - rari-win32-x64@0.17.1
-  - rari@0.17.1
+  - rari@0.17.2
   - '@voidzero-dev/vite-plus-core@1.0.0'
   - '@voidzero-dev/vite-plus-darwin-arm64@1.0.0'
   - '@voidzero-dev/vite-plus-darwin-x64@1.0.0'
@@ -95,7 +95,7 @@ catalogs:
     '@sentry/react': ^11.1.0
   rari:
     '@rari/use-cache': ^0.17.1
-    rari: ^0.17.1
+    rari: ^0.17.2
   react:
     '@types/react': ^19.3.0
     '@types/react-dom': ^19.3.0

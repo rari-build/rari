@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import { getLatestRariVersion } from '@/lib/github'
 import { siteUrl } from '@/lib/site'
 import { Providers } from '@/providers'
+import { ThemeInitScript } from '@/providers/ThemeInitScript'
 import './globals.css'
 
 async function SidebarWithVersion() {
@@ -17,12 +18,7 @@ export default function Layout({ children, pathname }: LayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script
-          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var stored=localStorage.getItem('preferred-theme');var preference=stored==='light'||stored==='dark'||stored==='system'?stored:'system';var resolved=preference==='system'?window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light':preference;document.documentElement.classList.toggle('light',resolved==='light');document.documentElement.classList.toggle('dark',resolved==='dark')}catch(e){document.documentElement.classList.add('dark')}})()`,
-          }}
-        />
+        <ThemeInitScript />
       </head>
       <body className="min-h-screen bg-canvas text-fg-body">
         <Providers pathname={pathname}>
