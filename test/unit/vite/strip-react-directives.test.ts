@@ -97,4 +97,14 @@ describe('strip-react-directives', () => {
       map: null,
     })
   })
+
+  it('preserves trailing comments after a directive at EOF', async () => {
+    const plugin = createStripReactDirectivesPlugin()
+    const code = `'use client' /* keep me */`
+
+    expect(await callTransform(plugin, code, '/app/Empty.tsx')).toEqual({
+      code: ` /* keep me */`,
+      map: null,
+    })
+  })
 })

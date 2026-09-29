@@ -598,9 +598,26 @@ function findPrimitivePageChildIndex(kids: readonly React.ReactNode[]): number {
 
 function clientPageShellHasPageSlot(element: React.ReactElement): boolean {
   if (isMainElement(element) || elementTreeContainsMain(element)) return true
-  return elementChildren(element).some(
-    child => isReactElement(child) && isPlausibleStringContentHost(child),
-  )
+  return elementChildren(element).some(child => {
+    if (typeof child === 'string' || typeof child === 'number') return true
+    return isReactElement(child) && isPlausibleStringContentHost(child)
+  })
+}
+
+function insertPageBesideChrome(
+  kids: readonly React.ReactNode[],
+  nextPage: React.ReactNode,
+): React.ReactNode[] {
+  let insertAt = kids.length
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    const child = kids[index]
+    if (isReactElement(child) && (child.type === 'footer' || child.type === 'FOOTER')) {
+      insertAt = index
+      continue
+    }
+    break
+  }
+  return [...kids.slice(0, insertAt), nextPage, ...kids.slice(insertAt)]
 }
 
 function replaceMatchedHostChild(
@@ -695,7 +712,7 @@ function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode)
     if (primitiveIndex >= 0) {
       return replacePageChildrenAsUnit(kids, primitiveIndex, kids[primitiveIndex], nextPage)
     }
-    return nextPage
+    return insertPageBesideChrome(kids, nextPage)
   }
 
   const preferred = kids[contentIndex]

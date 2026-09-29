@@ -486,7 +486,7 @@ function advancePastDirectiveTerminator(
     }
     return { stillDirective: false, nextI: j, endDirectivesPhase: true }
   }
-  return { stillDirective: true, nextI: j, endDirectivesPhase: true }
+  return { stillDirective: true, nextI: stringEnd, endDirectivesPhase: true }
 }
 
 function tryConsumeDirectiveString(
