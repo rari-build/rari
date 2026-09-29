@@ -21,9 +21,10 @@ import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
 } from './commit-navigation-payload'
-import { isLayoutReuseMarker, mergeFlightRefresh, unwrapFulfilledFlightNode } from './merge-refresh'
+import { isLayoutReuseMarker, mergeFlightRefresh } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
+import { resolvePreviousDocument } from './resolve-previous-document'
 import { currentRouteLocation, flightRouteCache } from './route-cache'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
@@ -141,18 +142,6 @@ function emitNavigateError(
       },
     }),
   )
-}
-
-function resolvePreviousDocument(
-  previousElement: React.ReactNode | PromiseLike<React.ReactNode> | undefined,
-): React.ReactElement | null {
-  if (previousElement == null) return null
-  if (isFlightThenable<React.ReactNode>(previousElement)) {
-    const resolved = unwrapFulfilledFlightNode(previousElement)
-    if (resolved === previousElement || !isDocumentRoot(resolved)) return null
-    return resolved
-  }
-  return isDocumentRoot(previousElement) ? previousElement : null
 }
 
 function shouldScrollToTopForNavigation(detail: NavigationDetail): boolean {

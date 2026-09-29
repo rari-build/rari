@@ -127,6 +127,7 @@ function childArray(children: React.ReactNode): React.ReactNode[] {
     return [children]
   }
   if (Array.isArray(children)) return flattenReactNodes(children, null)
+  if (isFlightThenable(children)) return [children]
   // eslint-disable-next-line react/no-children-to-array
   return React.Children.toArray(children)
 }
@@ -197,7 +198,7 @@ export function unwrapFulfilledFlightNode(
     const fulfilled = fulfilledThenableValue(current)
     if (fulfilled === undefined) return asOpaqueReactNode(current)
     if (fulfilled == null || fulfilled === false || fulfilled === true) {
-      return asOpaqueReactNode(current)
+      return fulfilled
     }
     current = fulfilled
   }
@@ -230,6 +231,42 @@ function expandFulfilledFlightChildren(kids: readonly React.ReactNode[]): React.
 
 function hostChildren(element: React.ReactElement): React.ReactNode[] {
   return expandFulfilledFlightChildren(elementChildren(element))
+}
+
+function isOpaqueMultiSlot(child: React.ReactNode): boolean {
+  const resolved = unwrapFulfilledFlightNode(child)
+  if (Array.isArray(resolved)) return true
+  return isReactElement(resolved) && isFragmentElement(resolved)
+}
+
+function mergeIntoOpaqueMultiSlot(
+  slot: React.ReactNode,
+  nextPage: React.ReactNode,
+): React.ReactNode {
+  const resolved = unwrapFulfilledFlightNode(slot)
+  if (Array.isArray(resolved)) {
+    const siblingKids: React.ReactNode[] = []
+    for (const entry of resolved) {
+      siblingKids.push(...expandFulfilledFlightChild(asOpaqueReactNode(entry)))
+    }
+    const mergedKids = childArray(mergeSiblingList(siblingKids, nextPage))
+    return React.createElement(
+      React.Fragment,
+      null,
+      ...(mergedKids.length === 0 ? [null] : mergedKids),
+    )
+  }
+  if (isReactElement(resolved) && isFragmentElement(resolved)) {
+    return cloneWithMergedChildren(
+      resolved,
+      elementPropsRecord(resolved),
+      mergeSiblingList(elementChildren(resolved), nextPage),
+    )
+  }
+  if (isReactElement(resolved)) {
+    return mergeIntoHostChild(resolved, nextPage)
+  }
+  return nextPage
 }
 
 function flattenHeadChildren(kids: readonly React.ReactNode[]): React.ReactNode[] {
@@ -462,28 +499,45 @@ function cloneWithMergedChildren(
   )
 }
 
+function findDirectLayoutSlotIndex(kids: readonly React.ReactNode[], path: string): number {
+  for (let index = 0; index < kids.length; index += 1) {
+    const child = kids[index]
+    if (isReactElement(child) && layoutReusePath(child) === path) return index
+    for (const entry of expandFulfilledFlightChild(child)) {
+      if (isReactElement(entry) && layoutReusePath(entry) === path) return index
+    }
+  }
+  return -1
+}
+
+function findNestedLayoutSlot(
+  current: React.ReactElement,
+  path: string,
+): { readonly parent: React.ReactElement; readonly slotIndex: number } | null {
+  const kids = elementChildren(current)
+  for (let index = 0; index < kids.length; index += 1) {
+    const child = kids[index]
+    if (isReactElement(child)) {
+      const nested = findLayoutSlotByPath(child, path)
+      if (nested != null) return nested
+      continue
+    }
+    const resolved = unwrapFulfilledFlightNode(child)
+    if (isReactElement(resolved) && findLayoutSlotByPath(resolved, path) != null) {
+      return { parent: current, slotIndex: index }
+    }
+  }
+  return null
+}
+
 function findLayoutSlotByPath(
   current: React.ReactElement,
   path: string,
 ): { readonly parent: React.ReactElement; readonly slotIndex: number } | null {
-  const kids = hostChildren(current)
-
-  for (let index = 0; index < kids.length; index += 1) {
-    const child = kids[index]
-    if (!isReactElement(child)) continue
-    if (layoutReusePath(child) === path) {
-      return { parent: current, slotIndex: index }
-    }
-  }
-
-  for (let index = 0; index < kids.length; index += 1) {
-    const child = kids[index]
-    if (!isReactElement(child)) continue
-    const nested = findLayoutSlotByPath(child, path)
-    if (nested != null) return nested
-  }
-
-  return null
+  const kids = elementChildren(current)
+  const directIndex = findDirectLayoutSlotIndex(kids, path)
+  if (directIndex >= 0) return { parent: current, slotIndex: directIndex }
+  return findNestedLayoutSlot(current, path)
 }
 
 function elementTreeContainsMain(element: React.ReactElement): boolean {
@@ -722,6 +776,71 @@ function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): numbe
   return findLastMatchingChildIndex(kids, isFallbackContentHost)
 }
 
+function expandedSlotContainsMain(slot: React.ReactNode): boolean {
+  return expandFulfilledFlightChild(slot).some(entry => {
+    const resolved = resolvedElementChild(entry)
+    return (
+      resolved != null &&
+      (isMainElement(resolved) ||
+        isNestedMainContentHost(resolved) ||
+        elementTreeContainsMain(resolved))
+    )
+  })
+}
+
+function findFirstOriginalIndexBySingleMatch(
+  kids: readonly React.ReactNode[],
+  match: (child: React.ReactElement) => boolean,
+): number {
+  for (let index = 0; index < kids.length; index += 1) {
+    const expanded = expandFulfilledFlightChild(kids[index])
+    if (expanded.length !== 1) continue
+    const resolved = resolvedElementChild(expanded[0])
+    if (resolved != null && match(resolved)) return index
+  }
+  return -1
+}
+
+function findOriginalIndexBySingleMatch(
+  kids: readonly React.ReactNode[],
+  match: (child: React.ReactElement) => boolean,
+): number {
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    const expanded = expandFulfilledFlightChild(kids[index])
+    if (expanded.length !== 1) continue
+    const resolved = resolvedElementChild(expanded[0])
+    if (resolved != null && match(resolved)) return index
+  }
+  return -1
+}
+
+function findOriginalOpaqueMultiContentIndex(kids: readonly React.ReactNode[]): number {
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    if (!isOpaqueMultiSlot(kids[index])) continue
+    if (findPreferredContentChildIndex(expandFulfilledFlightChild(kids[index])) >= 0) {
+      return index
+    }
+  }
+  return -1
+}
+
+function findPreferredOriginalChildIndex(kids: readonly React.ReactNode[]): number {
+  const mainIndex = findFirstOriginalIndexBySingleMatch(kids, isMainElement)
+  if (mainIndex >= 0) return mainIndex
+
+  for (let index = 0; index < kids.length; index += 1) {
+    if (expandedSlotContainsMain(kids[index])) return index
+  }
+
+  const stringHostIndex = findOriginalIndexBySingleMatch(kids, isPlausibleStringContentHost)
+  if (stringHostIndex >= 0) return stringHostIndex
+
+  const fallbackIndex = findOriginalIndexBySingleMatch(kids, isFallbackContentHost)
+  if (fallbackIndex >= 0) return fallbackIndex
+
+  return findOriginalOpaqueMultiContentIndex(kids)
+}
+
 function findPrimitivePageChildIndex(kids: readonly React.ReactNode[]): number {
   for (let index = kids.length - 1; index >= 0; index -= 1) {
     const child = kids[index]
@@ -832,8 +951,10 @@ function replacePageChildrenAsUnit(
   return nextKids
 }
 
-function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
-  const kids = hostChildren(host)
+function mergeSiblingList(
+  kids: readonly React.ReactNode[],
+  nextPage: React.ReactNode,
+): React.ReactNode {
   if (kids.length === 1 && isReactElement(kids[0])) {
     return mergeFlightRefresh(kids[0], nextPage)
   }
@@ -865,6 +986,58 @@ function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode)
   return replacePageChildrenAsUnit(kids, contentIndex, preferred, nextPage)
 }
 
+function mergeSingleOriginalChild(
+  child: React.ReactNode,
+  nextPage: React.ReactNode,
+): React.ReactNode | null {
+  if (isReactElement(child)) return mergeFlightRefresh(child, nextPage)
+  if (isOpaqueMultiSlot(child)) return mergeIntoOpaqueMultiSlot(child, nextPage)
+  const resolved = unwrapFulfilledFlightNode(child)
+  if (resolved == null || resolved === false || resolved === true) return nextPage
+  if (isReactElement(resolved)) return mergeFlightRefresh(resolved, nextPage)
+  return null
+}
+
+function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
+  const kids = elementChildren(host)
+  if (kids.length === 1) {
+    const merged = mergeSingleOriginalChild(kids[0], nextPage)
+    if (merged != null) return merged
+  }
+  if (kids.length === 0 || hostChildren(host).length === 0) return nextPage
+
+  if (isReactElement(nextPage)) {
+    const matched = replaceMatchedHostChild(kids, nextPage)
+    if (matched != null) return matched
+  }
+
+  const contentIndex = findPreferredOriginalChildIndex(kids)
+  if (contentIndex < 0) {
+    const primitiveIndex = findPrimitivePageChildIndex(kids)
+    if (primitiveIndex >= 0) {
+      return replacePageChildrenAsUnit(kids, primitiveIndex, kids[primitiveIndex], nextPage)
+    }
+    return insertPageBesideChrome(kids, nextPage)
+  }
+
+  const preferred = kids[contentIndex]
+  if (isOpaqueMultiSlot(preferred)) {
+    const nextKids = [...kids]
+    nextKids[contentIndex] = mergeIntoOpaqueMultiSlot(preferred, nextPage)
+    return nextKids
+  }
+
+  const resolvedPreferred = unwrapFulfilledFlightNode(preferred)
+  if (
+    isReactElement(resolvedPreferred) &&
+    (isMainElement(resolvedPreferred) || elementTreeContainsMain(resolvedPreferred))
+  ) {
+    return descendIntoPreferredContent(kids, contentIndex, preferred, resolvedPreferred, nextPage)
+  }
+
+  return replacePageChildrenAsUnit(kids, contentIndex, preferred, nextPage)
+}
+
 function spliceAtLayoutPath(
   current: React.ReactElement,
   nextPage: React.ReactNode,
@@ -874,16 +1047,27 @@ function spliceAtLayoutPath(
   if (slot == null) return null
 
   const parentProps = elementPropsRecord(slot.parent)
-  const kids = hostChildren(slot.parent)
+  const kids = elementChildren(slot.parent)
   const nextKids = [...kids]
   const existing = kids[slot.slotIndex]
-  nextKids[slot.slotIndex] = isReactElement(existing)
-    ? cloneWithMergedChildren(
-        existing,
-        elementPropsRecord(existing),
-        mergeIntoHostChild(existing, nextPage),
-      )
-    : nextPage
+  if (isOpaqueMultiSlot(existing)) {
+    nextKids[slot.slotIndex] = mergeIntoOpaqueMultiSlot(existing, nextPage)
+  } else if (isReactElement(existing)) {
+    nextKids[slot.slotIndex] = cloneWithMergedChildren(
+      existing,
+      elementPropsRecord(existing),
+      mergeIntoHostChild(existing, nextPage),
+    )
+  } else {
+    const resolved = unwrapFulfilledFlightNode(existing)
+    nextKids[slot.slotIndex] = isReactElement(resolved)
+      ? cloneWithMergedChildren(
+          resolved,
+          elementPropsRecord(resolved),
+          mergeIntoHostChild(resolved, nextPage),
+        )
+      : nextPage
+  }
   return replaceElementInTree(
     current,
     slot.parent,
@@ -906,13 +1090,69 @@ function replaceChildAt(
   return cloneWithMergedChildren(current, props, nextKids)
 }
 
+function spliceOpaqueOrNestedMainChild(
+  current: React.ReactElement,
+  props: {
+    readonly children?: React.ReactNode
+    readonly [key: string]: unknown
+  },
+  kids: readonly React.ReactNode[],
+  nextPage: React.ReactNode,
+  layoutPath: string | undefined,
+): React.ReactElement | null {
+  for (let index = 0; index < kids.length; index += 1) {
+    const child = kids[index]
+    if (isOpaqueMultiSlot(child)) {
+      if (!expandedSlotContainsMain(child)) continue
+      return replaceChildAt(current, props, kids, index, mergeIntoOpaqueMultiSlot(child, nextPage))
+    }
+    const resolvedChild = unwrapFulfilledFlightNode(child)
+    if (!isReactElement(resolvedChild) || !elementTreeContainsMain(resolvedChild)) continue
+    return replaceChildAt(
+      current,
+      props,
+      kids,
+      index,
+      spliceLayoutReuseChildren(resolvedChild, nextPage, layoutPath),
+    )
+  }
+  return null
+}
+
+function spliceEmptyContentSlot(
+  current: React.ReactElement,
+  props: {
+    readonly children?: React.ReactNode
+    readonly [key: string]: unknown
+  },
+  kids: readonly React.ReactNode[],
+  nextPage: React.ReactNode,
+): React.ReactElement | null {
+  for (let index = 0; index < kids.length; index += 1) {
+    const child = kids[index]
+    if (!isReactElement(child) || !isEmptyContentSlot(child)) continue
+    return replaceChildAt(
+      current,
+      props,
+      kids,
+      index,
+      cloneWithMergedChildren(
+        child,
+        elementPropsRecord(child),
+        mergeIntoHostChild(child, nextPage),
+      ),
+    )
+  }
+  return null
+}
+
 function spliceIntoContentHost(
   current: React.ReactElement,
   nextPage: React.ReactNode,
   layoutPath: string | undefined,
 ): React.ReactNode {
   const props = elementPropsRecord(current)
-  const kids = hostChildren(current)
+  const kids = elementChildren(current)
 
   if (current.type === 'main' || current.type === 'MAIN') {
     return cloneWithMergedChildren(current, props, mergeIntoHostChild(current, nextPage))
@@ -924,6 +1164,10 @@ function spliceIntoContentHost(
       props,
       spliceLayoutReuseChildren(kids[0], nextPage, layoutPath),
     )
+  }
+
+  if (kids.length === 1 && isOpaqueMultiSlot(kids[0])) {
+    return cloneWithMergedChildren(current, props, mergeIntoOpaqueMultiSlot(kids[0], nextPage))
   }
 
   const mainIndex = kids.findIndex(child => {
@@ -943,29 +1187,11 @@ function spliceIntoContentHost(
     )
   }
 
-  for (let index = 0; index < kids.length; index += 1) {
-    const child = kids[index]
-    const resolvedChild = unwrapFulfilledFlightNode(child)
-    if (!isReactElement(resolvedChild) || !elementTreeContainsMain(resolvedChild)) continue
-    const spliced = spliceLayoutReuseChildren(resolvedChild, nextPage, layoutPath)
-    return replaceChildAt(current, props, kids, index, spliced)
-  }
+  const nested = spliceOpaqueOrNestedMainChild(current, props, kids, nextPage, layoutPath)
+  if (nested != null) return nested
 
-  for (let index = 0; index < kids.length; index += 1) {
-    const child = kids[index]
-    if (!isReactElement(child) || !isEmptyContentSlot(child)) continue
-    return replaceChildAt(
-      current,
-      props,
-      kids,
-      index,
-      cloneWithMergedChildren(
-        child,
-        elementPropsRecord(child),
-        mergeIntoHostChild(child, nextPage),
-      ),
-    )
-  }
+  const emptySlot = spliceEmptyContentSlot(current, props, kids, nextPage)
+  if (emptySlot != null) return emptySlot
 
   return cloneWithMergedChildren(current, props, mergeIntoHostChild(current, nextPage))
 }
@@ -1002,7 +1228,7 @@ function replaceElementInTree(
   if (root === target) return replacement
 
   const props = elementPropsRecord(root)
-  const kids = hostChildren(root)
+  const kids = elementChildren(root)
   const nextKids: React.ReactNode[] = []
   let changed = false
   for (const child of kids) {
@@ -1118,7 +1344,7 @@ function mergeMatchingClientShell(
 ): React.ReactNode {
   if (treeContainsReuseMarker(refresh)) return mergeSameTypeElements(current, refresh)
 
-  const currentKids = hostChildren(current)
+  const currentKids = elementChildren(current)
   const refreshKids = elementChildren(refresh)
 
   if (
