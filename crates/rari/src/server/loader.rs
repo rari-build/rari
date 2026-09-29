@@ -14,7 +14,7 @@ use crate::{
         config::Config,
         core::utils::component::{
             extract_component_id, has_use_client_directive, has_use_server_directive,
-            wrap_server_action_module,
+            is_server_action_module, wrap_server_action_module,
         },
     },
     utils::path::path_to_file_url,
@@ -69,7 +69,10 @@ impl ComponentLoader {
                 .await
                 .map_err(|_e| RariError::io("Failed to read component file".to_string()))?;
 
-            let is_server_action = has_use_server_directive(&component_code);
+            let is_server_action = component_info
+                .get("isServerAction")
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| is_server_action_module(&component_code));
 
             if let Some(specifier) = module_specifier {
                 if let Err(e) =
@@ -439,7 +442,7 @@ impl ComponentLoader {
                         RariError::io(format!("Failed to read component file: {e}"))
                     })?;
 
-                    if has_use_server_directive(&component_code) {
+                    if is_server_action_module(&component_code) {
                         if !server_actions_only {
                             continue;
                         }
