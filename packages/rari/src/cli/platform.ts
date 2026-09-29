@@ -27,74 +27,28 @@ function getPlatformInfo(): PlatformInfo {
   const platform = process.platform
   const arch = process.arch
 
-  let normalizedPlatform: string
-  switch (platform) {
-    case 'darwin':
-      normalizedPlatform = 'darwin'
-      break
-    case 'linux':
-      normalizedPlatform = 'linux'
-      break
-    case 'win32':
-      normalizedPlatform = 'win32'
-      break
-    case 'aix':
-    case 'android':
-    case 'cygwin':
-    case 'freebsd':
-    case 'haiku':
-    case 'openbsd':
-    case 'sunos':
-    case 'netbsd':
-      throw new Error(`Unsupported platform: ${platform}. rari supports Linux, macOS, and Windows.`)
-    default: {
-      const _exhaustive: never = platform
-      throw new Error(
-        `Unsupported platform: ${String(_exhaustive)}. rari supports Linux, macOS, and Windows.`,
-      )
-    }
+  if (platform !== 'darwin' && platform !== 'linux' && platform !== 'win32') {
+    throw new Error(`Unsupported platform: ${platform}. rari supports Linux, macOS, and Windows.`)
   }
 
-  let normalizedArch: string
-  switch (arch) {
-    case 'x64':
-      normalizedArch = 'x64'
-      break
-    case 'arm64':
-      normalizedArch = 'arm64'
-      break
-    case 'arm':
-    case 'ia32':
-    case 'loong64':
-    case 'mips':
-    case 'mipsel':
-    case 'ppc64':
-    case 'riscv64':
-    case 's390x':
-      throw new Error(`Unsupported architecture: ${arch}. rari supports x64 and ARM64.`)
-    default: {
-      const _exhaustive: never = arch
-      throw new Error(
-        `Unsupported architecture: ${String(_exhaustive)}. rari supports x64 and ARM64.`,
-      )
-    }
+  if (arch !== 'x64' && arch !== 'arm64') {
+    throw new Error(`Unsupported architecture: ${arch}. rari supports x64 and ARM64.`)
   }
 
-  const platformKey = `${normalizedPlatform}-${normalizedArch}`
+  const platformKey = `${platform}-${arch}`
   if (!isSupportedPlatformKey(platformKey)) {
     throw new Error(
-      `Unsupported platform combination: ${normalizedPlatform}-${normalizedArch}. ` +
+      `Unsupported platform combination: ${platform}-${arch}. ` +
         `Supported platforms: ${Object.keys(SUPPORTED_PLATFORMS).join(', ')}`,
     )
   }
 
   const packageName = SUPPORTED_PLATFORMS[platformKey]
-
-  const binaryName = normalizedPlatform === 'win32' ? 'rari.exe' : 'rari'
+  const binaryName = platform === 'win32' ? 'rari.exe' : 'rari'
 
   return {
-    platform: normalizedPlatform,
-    arch: normalizedArch,
+    platform,
+    arch,
     packageName,
     binaryName,
   }
