@@ -179,18 +179,57 @@ function asOpaqueReactNode(value: unknown): React.ReactNode {
   return value as React.ReactNode
 }
 
+function fulfilledThenableValue(value: unknown): unknown {
+  if (!isRecord(value)) return undefined
+  if (value.status === 'fulfilled') return value.value
+  if (isRecord(value._payload) && value._payload.status === 'fulfilled') return value._payload.value
+  return undefined
+}
+
 export function unwrapFulfilledFlightNode(
   node: React.ReactNode | PromiseLike<React.ReactNode>,
 ): React.ReactNode {
   let current: unknown = node
   for (let depth = 0; depth < 10; depth += 1) {
-    if (!isFlightThenable(current)) return asOpaqueReactNode(current)
-    if (!isRecord(current) || current.status !== 'fulfilled') return asOpaqueReactNode(current)
-    const value: unknown = current.value
-    if (value == null || value === false || value === true) return asOpaqueReactNode(current)
-    current = value
+    if (!isFlightThenable(current) && (!isRecord(current) || !isRecord(current._payload))) {
+      return asOpaqueReactNode(current)
+    }
+    const fulfilled = fulfilledThenableValue(current)
+    if (fulfilled === undefined) return asOpaqueReactNode(current)
+    if (fulfilled == null || fulfilled === false || fulfilled === true) {
+      return asOpaqueReactNode(current)
+    }
+    current = fulfilled
   }
   return asOpaqueReactNode(current)
+}
+
+function expandFulfilledFlightChild(child: React.ReactNode): React.ReactNode[] {
+  const resolved = unwrapFulfilledFlightNode(child)
+  if (Array.isArray(resolved)) {
+    const out: React.ReactNode[] = []
+    for (const entry of resolved) {
+      out.push(...expandFulfilledFlightChild(asOpaqueReactNode(entry)))
+    }
+    return out
+  }
+  if (isReactElement(resolved) && isFragmentElement(resolved)) {
+    return expandFulfilledFlightChildren(elementChildren(resolved))
+  }
+  if (resolved == null || resolved === false || resolved === true) return []
+  return [resolved]
+}
+
+function expandFulfilledFlightChildren(kids: readonly React.ReactNode[]): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  for (const child of kids) {
+    out.push(...expandFulfilledFlightChild(child))
+  }
+  return out
+}
+
+function hostChildren(element: React.ReactElement): React.ReactNode[] {
+  return expandFulfilledFlightChildren(elementChildren(element))
 }
 
 function flattenHeadChildren(kids: readonly React.ReactNode[]): React.ReactNode[] {
@@ -427,7 +466,7 @@ function findLayoutSlotByPath(
   current: React.ReactElement,
   path: string,
 ): { readonly parent: React.ReactElement; readonly slotIndex: number } | null {
-  const kids = elementChildren(current)
+  const kids = hostChildren(current)
 
   for (let index = 0; index < kids.length; index += 1) {
     const child = kids[index]
@@ -448,16 +487,10 @@ function findLayoutSlotByPath(
 }
 
 function elementTreeContainsMain(element: React.ReactElement): boolean {
-  if (element.type === 'main' || element.type === 'MAIN') return true
-  if (isSuspenseElement(element)) {
-    return elementChildren(element).some(child => {
-      const resolved = unwrapFulfilledFlightNode(child)
-      return isReactElement(resolved) && elementTreeContainsMain(resolved)
-    })
-  }
-  return elementChildren(element).some(child => {
-    const resolved = unwrapFulfilledFlightNode(child)
-    return isReactElement(resolved) && elementTreeContainsMain(resolved)
+  if (isMainElement(element)) return true
+  return hostChildren(element).some(child => {
+    const resolved = resolvedElementChild(child)
+    return resolved != null && elementTreeContainsMain(resolved)
   })
 }
 
@@ -529,7 +562,7 @@ const NON_CONTENT_HOST_ELEMENTS = new Set([
 function isEmptyContentSlot(element: React.ReactElement): boolean {
   if (typeof element.type !== 'string') return false
   if (NON_CONTENT_HOST_ELEMENTS.has(element.type)) return false
-  return elementChildren(element).length === 0
+  return hostChildren(element).length === 0
 }
 
 function elementsMatchForMerge(current: React.ReactElement, refresh: React.ReactElement): boolean {
@@ -585,6 +618,10 @@ function isChromeSibling(element: React.ReactElement): boolean {
 }
 
 function isTrailingChromeSibling(element: React.ReactElement): boolean {
+  if (isSuspenseElement(element)) {
+    const kids = hostChildren(element)
+    return kids.length === 1 && isReactElement(kids[0]) && isTrailingChromeSibling(kids[0])
+  }
   if (isClientChromeElement(element)) {
     const name = clientChromeName(element)
     return name != null && TRAILING_CHROME_NAME.test(name)
@@ -624,11 +661,12 @@ function isFallbackContentHost(element: React.ReactElement): boolean {
 }
 
 function hostHasLayoutChrome(host: React.ReactElement): boolean {
-  const kids = elementChildren(host)
+  const kids = hostChildren(host)
   if (kids.some(child => isReactElement(child) && isChromeSibling(child))) return true
-  return kids.some(
-    child => isReactElement(child) && (isMainElement(child) || elementTreeContainsMain(child)),
-  )
+  return kids.some(child => {
+    const resolved = resolvedElementChild(child)
+    return resolved != null && (isMainElement(resolved) || elementTreeContainsMain(resolved))
+  })
 }
 
 function isCompetingContentSibling(
@@ -696,9 +734,10 @@ function findPrimitivePageChildIndex(kids: readonly React.ReactNode[]): number {
 
 function clientPageShellHasPageSlot(element: React.ReactElement): boolean {
   if (isMainElement(element) || elementTreeContainsMain(element)) return true
-  return elementChildren(element).some(
-    child => isReactElement(child) && isPlausibleStringContentHost(child),
-  )
+  return hostChildren(element).some(child => {
+    const resolved = resolvedElementChild(child)
+    return resolved != null && isPlausibleStringContentHost(resolved)
+  })
 }
 
 function insertPageBesideChrome(
@@ -794,7 +833,7 @@ function replacePageChildrenAsUnit(
 }
 
 function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
-  const kids = elementChildren(host)
+  const kids = hostChildren(host)
   if (kids.length === 1 && isReactElement(kids[0])) {
     return mergeFlightRefresh(kids[0], nextPage)
   }
@@ -835,7 +874,7 @@ function spliceAtLayoutPath(
   if (slot == null) return null
 
   const parentProps = elementPropsRecord(slot.parent)
-  const kids = elementChildren(slot.parent)
+  const kids = hostChildren(slot.parent)
   const nextKids = [...kids]
   const existing = kids[slot.slotIndex]
   nextKids[slot.slotIndex] = isReactElement(existing)
@@ -873,7 +912,7 @@ function spliceIntoContentHost(
   layoutPath: string | undefined,
 ): React.ReactNode {
   const props = elementPropsRecord(current)
-  const kids = elementChildren(current)
+  const kids = hostChildren(current)
 
   if (current.type === 'main' || current.type === 'MAIN') {
     return cloneWithMergedChildren(current, props, mergeIntoHostChild(current, nextPage))
@@ -887,16 +926,20 @@ function spliceIntoContentHost(
     )
   }
 
-  const mainIndex = kids.findIndex(
-    child => isReactElement(child) && (child.type === 'main' || child.type === 'MAIN'),
-  )
+  const mainIndex = kids.findIndex(child => {
+    const resolved = resolvedElementChild(child)
+    return resolved != null && isMainElement(resolved)
+  })
   if (mainIndex >= 0) {
+    const preferred = kids[mainIndex]
+    const resolvedPreferred = unwrapFulfilledFlightNode(preferred)
+    const target = isReactElement(resolvedPreferred) ? resolvedPreferred : preferred
     return replaceChildAt(
       current,
       props,
       kids,
       mainIndex,
-      spliceLayoutReuseChildren(kids[mainIndex], nextPage, layoutPath),
+      spliceLayoutReuseChildren(target, nextPage, layoutPath),
     )
   }
 
@@ -959,7 +1002,7 @@ function replaceElementInTree(
   if (root === target) return replacement
 
   const props = elementPropsRecord(root)
-  const kids = elementChildren(root)
+  const kids = hostChildren(root)
   const nextKids: React.ReactNode[] = []
   let changed = false
   for (const child of kids) {
@@ -1075,7 +1118,7 @@ function mergeMatchingClientShell(
 ): React.ReactNode {
   if (treeContainsReuseMarker(refresh)) return mergeSameTypeElements(current, refresh)
 
-  const currentKids = elementChildren(current)
+  const currentKids = hostChildren(current)
   const refreshKids = elementChildren(refresh)
 
   if (
