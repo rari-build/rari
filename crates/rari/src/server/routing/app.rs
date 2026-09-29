@@ -1477,6 +1477,7 @@ pub async fn handle_app_route(
                     response::RouteCachePolicy::from_cache_control(cache_control, path);
 
                 let can_cache_rsc = !router_state_sensitive
+                    && route_match.not_found.is_none()
                     && should_store_response_cache(&state, &cache_policy).await;
                 if can_cache_rsc {
                     let response_cache_tags =
@@ -1618,8 +1619,7 @@ pub async fn handle_app_route(
                 )
                 .await?;
 
-                if (response.status() == StatusCode::OK
-                    || response.status() == StatusCode::NOT_FOUND)
+                if response.status() == StatusCode::OK
                     && let Some(render_mode) = response.headers().get("x-render-mode")
                     && render_mode == "static"
                 {
@@ -1807,6 +1807,9 @@ pub async fn handle_app_route(
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
             let for_response_cache = should_store_response_cache(&state, &cache_policy).await;
+            if route_match.not_found.is_some() {
+                for_response_cache = false;
+            }
 
             let (final_html, etag) = match render_result {
                 RenderResult::Static(html_content) => {

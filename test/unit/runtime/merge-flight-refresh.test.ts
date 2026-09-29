@@ -319,6 +319,32 @@ describe('mergeFlightRefresh', () => {
     expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
   })
 
+  it('prefers a string content host over a trailing client chrome sibling', () => {
+    const footer = clientRef('src/components/Footer.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement('div', { className: 'content' }, 'home'),
+      React.createElement(footer, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    const content = expectElement(kids[1])
+    expect(content.type).toBe('div')
+    expect(content.props.className).toBe('content')
+    expect(content.props.children).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
+  })
+
   it('prefers nested main over preceding void or empty siblings', () => {
     const current = React.createElement(
       'body',

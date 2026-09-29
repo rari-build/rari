@@ -126,8 +126,11 @@ test.describe('Error Handling', () => {
     })
 
     test('should render not-found UI when a page calls notFound()', async ({ page, request }) => {
-      const response = await request.get(`/not-found-trigger`)
-      expect(response.status()).toBe(404)
+      const first = await request.get(`/not-found-trigger`)
+      expect(first.status()).toBe(404)
+
+      const second = await request.get(`/not-found-trigger`)
+      expect(second.status()).toBe(404)
 
       await page.goto(`/not-found-trigger`)
       await expect(page.locator('[data-testid="not-found-page"]')).toBeVisible()
