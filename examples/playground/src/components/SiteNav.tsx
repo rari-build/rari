@@ -1,5 +1,3 @@
-'use client'
-
 const LINKS = [
   { href: '/', label: 'Home' },
   { href: '/about', label: 'About' },
