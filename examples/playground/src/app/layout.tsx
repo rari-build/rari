@@ -1,5 +1,5 @@
 import type { LayoutProps, Metadata } from 'rari'
-import { SiteNav } from './site-nav'
+import { SiteNav } from '../components/SiteNav'
 import './globals.css'
 
 export default function Layout({ children }: LayoutProps) {
