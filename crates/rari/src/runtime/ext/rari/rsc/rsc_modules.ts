@@ -57,6 +57,12 @@ interface RegisterResult {
     store.ssrModules![hashId] = module
   }
 
+  function isRegisterableExport(value: unknown): boolean {
+    if (typeof value === 'function') return true
+    if (value == null || typeof value !== 'object') return false
+    return Reflect.has(value, '$$typeof')
+  }
+
   function lookupModuleExport(
     moduleNs: Readonly<RscModule>,
     fnName: string,
@@ -185,7 +191,7 @@ interface RegisterResult {
 
     let exportCount = 0
     for (const key in module) {
-      if (typeof module[key] === 'function') {
+      if (isRegisterableExport(module[key])) {
         registerManifestExport(moduleKey, module, key)
         exportCount++
       }

@@ -511,6 +511,19 @@ function isFallbackContentHost(element: React.ReactElement): boolean {
   return isClientComponentElement(element) || isFragmentElement(element)
 }
 
+function isCompetingContentSibling(
+  child: React.ReactElement,
+  preferred: React.ReactElement,
+): boolean {
+  if (isPlausibleStringContentHost(preferred)) {
+    return isPlausibleStringContentHost(child)
+  }
+  if (isFallbackContentHost(preferred)) {
+    return isFallbackContentHost(child)
+  }
+  return false
+}
+
 function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): number {
   const mainIndex = kids.findIndex(child => isReactElement(child) && isMainElement(child))
   if (mainIndex >= 0) return mainIndex
@@ -534,6 +547,63 @@ function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): numbe
   return -1
 }
 
+function replaceMatchedHostChild(
+  kids: readonly React.ReactNode[],
+  nextPage: React.ReactElement,
+): React.ReactNode[] | null {
+  const matchIndex = kids.findIndex(
+    child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
+  )
+  if (matchIndex < 0) return null
+  const nextKids = [...kids]
+  nextKids[matchIndex] = mergeFlightRefresh(kids[matchIndex], nextPage)
+  return nextKids
+}
+
+function descendIntoPreferredContent(
+  kids: readonly React.ReactNode[],
+  contentIndex: number,
+  preferred: React.ReactElement,
+  nextPage: React.ReactNode,
+): React.ReactNode[] {
+  const nextKids = [...kids]
+  nextKids[contentIndex] = cloneWithMergedChildren(
+    preferred,
+    elementPropsRecord(preferred),
+    mergeIntoHostChild(preferred, nextPage),
+  )
+  return nextKids
+}
+
+function replacePageChildrenAsUnit(
+  kids: readonly React.ReactNode[],
+  contentIndex: number,
+  preferred: React.ReactNode,
+  nextPage: React.ReactNode,
+): React.ReactNode[] {
+  const nextKids: React.ReactNode[] = []
+  for (let index = 0; index < kids.length; index += 1) {
+    const child = kids[index]
+    if (index === contentIndex) {
+      nextKids.push(
+        isReactElement(preferred)
+          ? cloneWithMergedChildren(preferred, elementPropsRecord(preferred), nextPage)
+          : nextPage,
+      )
+      continue
+    }
+    if (
+      isReactElement(preferred) &&
+      isReactElement(child) &&
+      isCompetingContentSibling(child, preferred)
+    ) {
+      continue
+    }
+    nextKids.push(child)
+  }
+  return nextKids
+}
+
 function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
   const kids = elementChildren(host)
   if (kids.length === 1 && isReactElement(kids[0])) {
@@ -542,29 +612,22 @@ function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode)
   if (kids.length === 0) return nextPage
 
   if (isReactElement(nextPage)) {
-    const matchIndex = kids.findIndex(
-      child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
-    )
-    if (matchIndex >= 0) {
-      const nextKids = [...kids]
-      nextKids[matchIndex] = mergeFlightRefresh(kids[matchIndex], nextPage)
-      return nextKids
-    }
+    const matched = replaceMatchedHostChild(kids, nextPage)
+    if (matched != null) return matched
   }
 
   const contentIndex = findPreferredContentChildIndex(kids)
   if (contentIndex < 0) return nextPage
 
-  const nextKids = [...kids]
-  const existing = kids[contentIndex]
-  nextKids[contentIndex] = isReactElement(existing)
-    ? cloneWithMergedChildren(
-        existing,
-        elementPropsRecord(existing),
-        mergeIntoHostChild(existing, nextPage),
-      )
-    : nextPage
-  return nextKids
+  const preferred = kids[contentIndex]
+  if (
+    isReactElement(preferred) &&
+    (isMainElement(preferred) || elementTreeContainsMain(preferred))
+  ) {
+    return descendIntoPreferredContent(kids, contentIndex, preferred, nextPage)
+  }
+
+  return replacePageChildrenAsUnit(kids, contentIndex, preferred, nextPage)
 }
 
 function spliceAtLayoutPath(

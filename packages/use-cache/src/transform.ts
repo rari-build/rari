@@ -1,22 +1,8 @@
 import type { NativeAddon } from './native'
-import nativeAddon, { transformUseCache } from './native'
+import { requireNativeAddon } from './native'
 
 const USE_CACHE_FUNCTION_REGEX = /['"]use\s+cache(?::\s*[\w-]+)?['"]/
 const DIRECTIVE_PROLOGUE_REGEX = /^['"][^'"]+['"];?\s*$/
-
-let addon: NativeAddon | null = null
-let addonLoadAttempted = false
-
-function getAddon(): NativeAddon | null {
-  if (addonLoadAttempted) return addon
-
-  addonLoadAttempted = true
-  addon = nativeAddon
-
-  if (!addon) console.warn('[use-cache] Native addon not available, transforms will be skipped')
-
-  return addon
-}
 
 function extractPrologueLines(code: string) {
   const lines = code.split('\n')
@@ -46,11 +32,10 @@ export function transformUseCacheModule(
 ): string | null {
   if (!USE_CACHE_FUNCTION_REGEX.test(code)) return null
 
-  const native = getAddon()
-  if (!native) return null
+  const native: NativeAddon = requireNativeAddon()
 
   try {
-    const result = transformUseCache(code, {
+    const result = native.transformUseCache(code, {
       filename: id,
       hashSalt: options.hashSalt ?? 'rari-use-cache-v1',
       cacheKinds: options.cacheKinds ?? ['default'],

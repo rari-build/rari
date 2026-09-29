@@ -1,4 +1,9 @@
-export { detectUseCache, transformUseCache } from './native'
+export {
+  detectUseCache,
+  isNativeAddonAvailable,
+  requireNativeAddon,
+  transformUseCache,
+} from './native'
 export type { NativeAddon, TransformOptions, TransformResult } from './native'
 
 export { transformUseCacheModule } from './transform'

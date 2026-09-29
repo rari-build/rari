@@ -272,6 +272,60 @@ describe('mergeFlightRefresh', () => {
     expect(content.props.children).toBe('about')
   })
 
+  it('replaces all competing page children as a unit on layout-path miss', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement('div', { className: 'page-a' }, 'old-a'),
+      React.createElement('div', { className: 'page-b' }, 'old-b'),
+      React.createElement('footer', null, 'footer'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    const content = expectElement(kids[1])
+    expect(content.type).toBe('div')
+    expect(content.props.className).toBe('page-b')
+    expect(content.props.children).toBe('about')
+    expect(expectElement(kids[2]).type).toBe('footer')
+  })
+
+  it('replaces all children inside the preferred content host on layout-path miss', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement(
+        'div',
+        { className: 'content' },
+        React.createElement('section', null, 'old-a'),
+        React.createElement('section', null, 'old-b'),
+      ),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(2)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    const content = expectElement(kids[1])
+    expect(content.type).toBe('div')
+    expect(content.props.className).toBe('content')
+    expect(content.props.children).toBe('about')
+  })
+
   it('preserves client Providers chrome around main on document-reuse soft-nav', () => {
     const providers = clientRef('src/providers.tsx')
     const navbar = clientRef('src/components/Navbar.tsx')

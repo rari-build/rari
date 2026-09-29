@@ -535,6 +535,7 @@ export class ServerComponentBuilder {
   }
 
   private isClientComponent(filePath: string, source?: string): boolean {
+    if (isErrorBoundaryWrapperPath(filePath)) return true
     try {
       return this.moduleAnalysisCache.get(filePath, source).directives.hasUseClient
     } catch {

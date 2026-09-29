@@ -41,8 +41,15 @@ export function Real() {}
     ])
   })
 
-  it('ignores bare export * re-exports', () => {
-    expect(collectExportNames(`export * from './mod'\n`)).toEqual([])
+  it('collects createContext const exports', () => {
+    expect(
+      collectExportNames(`
+'use client'
+import { createContext } from 'react'
+export const DemoUserContext = createContext(null)
+export function DemoUserLabel() {}
+`),
+    ).toEqual(['DemoUserContext', 'DemoUserLabel'])
   })
 })
 
@@ -65,6 +72,9 @@ describe('component global wrappers', () => {
 
     expect(code).toContain('Component["Card"]')
     expect(code).toContain('globalThis[\'~clientComponents\']?.["components/ui"]')
+    expect(code).toContain("typeof Component === 'function'")
+    expect(code).toContain("'$$typeof' in Component")
+    expect(code).toContain('React.createElement(Component, props)')
   })
 
   it('builds a namespace wrapper', () => {
