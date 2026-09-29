@@ -1,3 +1,15 @@
+## [@rari/use-cache@0.17.1] - 2026-09-29
+
+### 🐛 Bug Fixes
+
+- strip RSC directives and harden Context, use-cache, and soft-nav merge by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update optional dependencies for @rari/use-cache to version 0.17.1
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.17.0...@rari/use-cache@0.17.1
 ## [@rari/use-cache@0.17.0] - 2026-09-28
 
 ### 🚀 Features
