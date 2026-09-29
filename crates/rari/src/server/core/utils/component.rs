@@ -172,7 +172,7 @@ pub fn has_use_server_directive(code: &str) -> bool {
 }
 
 pub fn is_server_action_module(code: &str) -> bool {
-    has_use_server_directive(code) || code.contains("registerServerReference")
+    has_use_server_directive(code) || code.contains("registerServerReference(")
 }
 
 pub fn has_top_level_use_client_directive(code: &str) -> bool {
@@ -359,5 +359,11 @@ registerServerReference(addTodo, "actions", "addTodo");
         ));
         assert!(is_server_action_module("'use server'\nexport async function addTodo() {}"));
         assert!(!is_server_action_module("export default function Page() { return null }"));
+        assert!(
+            !is_server_action_module(
+                r#"export default function Page() { return "registerServerReference" }"#,
+            ),
+            "string-literal mentions must not mark a normal component as a server action"
+        );
     }
 }
