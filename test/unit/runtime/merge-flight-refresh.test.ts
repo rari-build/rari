@@ -321,12 +321,42 @@ describe('mergeFlightRefresh', () => {
     expect(kids[1].props.children).toBe('about')
   })
 
-  it('keeps a Providers shell when its only page content is primitive text', () => {
+  it('replaces an unmatched ClientPage that only has primitive text children', () => {
+    const clientPage = clientRef('src/app/page.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('header', null, 'site'),
+      React.createElement(clientPage, { key: 'page' }, 'home'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        'rari-layout-reuse',
+        { 'data-rari-layout-path': '/missing' },
+        React.createElement(clientRef('src/app/about.tsx'), { key: 'about' }, 'about'),
+      ),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(kids[0].type).toBe('header')
+    expect(clientReferenceId(kids[1].type)).toBe('src/app/about.tsx')
+    expect(kids[1].props.children).toBe('about')
+  })
+
+  it('keeps a Providers shell when it wraps a content host', () => {
     const providers = clientRef('src/providers.tsx')
     const current = React.createElement(
       'body',
       null,
-      React.createElement(providers, { key: 'providers' }, 'home'),
+      React.createElement(
+        providers,
+        { key: 'providers' },
+        React.createElement('div', null, 'home'),
+      ),
     )
     const refresh = React.createElement(
       'body',
@@ -337,7 +367,9 @@ describe('mergeFlightRefresh', () => {
     const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
     const shell = expectElement(childList(mergedBody)[0])
     expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
-    expect(shell.props.children).toBe('about')
+    const slot = expectElement(shell.props.children)
+    expect(slot.type).toBe('div')
+    expect(slot.props.children).toBe('about')
   })
 
   it('inserts nextPage beside chrome when no prior page node exists', () => {
