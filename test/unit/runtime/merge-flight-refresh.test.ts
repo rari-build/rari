@@ -1441,6 +1441,42 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(childList(expectElement(kids[2]))[0]).type).toBe('footer')
   })
 
+  it('soft-navs when body children are one fulfilled thenable of [nav, main, Suspense(footer)]', () => {
+    const current = React.createElement(
+      'html',
+      { lang: 'en' },
+      React.createElement('head', null),
+      React.createElement(
+        'body',
+        { className: 'bg-gray-950' },
+        fulfilledFlightNode([
+          React.createElement('nav', { key: 'nav' }, 'navbar'),
+          React.createElement('main', { key: 'main' }, 'home'),
+          React.createElement(
+            React.Suspense,
+            { key: 'footer', fallback: null },
+            React.createElement('footer', null, 'footer'),
+          ),
+        ]),
+      ),
+    )
+    const refresh = React.createElement(
+      'rari-layout-reuse',
+      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
+      'posts',
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const body = expectElement(childList(merged)[1])
+    const kids = childList(body)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('posts')
+    expect(expectElement(kids[2]).type).toBe(React.Suspense)
+    expect(expectElement(childList(expectElement(kids[2]))[0]).type).toBe('footer')
+  })
+
   it('soft-navs ryanskinner.com workaround shape (Providers div + client Navbar)', () => {
     const providers = clientRef('src/providers.tsx')
     const navbar = clientRef('src/components/ui/Navbar.tsx')
