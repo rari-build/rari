@@ -3,6 +3,8 @@ import {
   getReactElementProps,
   hasClientReferenceId,
   isClientReferenceType,
+  isFlightThenable,
+  isRecord,
 } from '@/shared/utils/type-guards'
 
 export const LAYOUT_REUSE_ELEMENT = 'rari-layout-reuse'
@@ -166,6 +168,29 @@ function isResourceHeadLink(element: React.ReactElement): boolean {
 
 function isFragmentElement(element: React.ReactElement): boolean {
   return element.type === React.Fragment
+}
+
+function isSuspenseElement(element: React.ReactElement): boolean {
+  return element.type === React.Suspense
+}
+
+function asOpaqueReactNode(value: unknown): React.ReactNode {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return value as React.ReactNode
+}
+
+export function unwrapFulfilledFlightNode(
+  node: React.ReactNode | PromiseLike<React.ReactNode>,
+): React.ReactNode {
+  let current: unknown = node
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (!isFlightThenable(current)) return asOpaqueReactNode(current)
+    if (!isRecord(current) || current.status !== 'fulfilled') return asOpaqueReactNode(current)
+    const value: unknown = current.value
+    if (value == null || value === false || value === true) return asOpaqueReactNode(current)
+    current = value
+  }
+  return asOpaqueReactNode(current)
 }
 
 function flattenHeadChildren(kids: readonly React.ReactNode[]): React.ReactNode[] {
@@ -424,9 +449,16 @@ function findLayoutSlotByPath(
 
 function elementTreeContainsMain(element: React.ReactElement): boolean {
   if (element.type === 'main' || element.type === 'MAIN') return true
-  return elementChildren(element).some(
-    child => isReactElement(child) && elementTreeContainsMain(child),
-  )
+  if (isSuspenseElement(element)) {
+    return elementChildren(element).some(child => {
+      const resolved = unwrapFulfilledFlightNode(child)
+      return isReactElement(resolved) && elementTreeContainsMain(resolved)
+    })
+  }
+  return elementChildren(element).some(child => {
+    const resolved = unwrapFulfilledFlightNode(child)
+    return isReactElement(resolved) && elementTreeContainsMain(resolved)
+  })
 }
 
 const VOID_HTML_ELEMENTS = new Set([
@@ -520,6 +552,47 @@ function isChromeSiblingElement(element: React.ReactElement): boolean {
   )
 }
 
+const CLIENT_CHROME_NAME =
+  /^(?:app|page|site|main|mobile|top)?(?:footer|header|navbar|navigation|sidebar|sidenav|topbar|aside|nav)$/
+
+const TRAILING_CHROME_NAME = /^(?:app|page|site|main|mobile|top)?footer$/
+
+function normalizeChromeBasename(base: string): string {
+  return base.replace(/[^a-z0-9]+/gi, '').toLowerCase()
+}
+
+function clientReferenceBasename(element: React.ReactElement): string | undefined {
+  if (!hasClientReferenceId(element.type)) return undefined
+  const id = element.type.$$id
+  const modulePath = id.split('#')[0] ?? id
+  const file = modulePath.split('/').pop() ?? modulePath
+  return file.replace(/\.(?:tsx|jsx|ts|js)$/i, '')
+}
+
+function clientChromeName(element: React.ReactElement): string | undefined {
+  const base = clientReferenceBasename(element)
+  return base != null ? normalizeChromeBasename(base) : undefined
+}
+
+function isClientChromeElement(element: React.ReactElement): boolean {
+  if (!isClientComponentElement(element)) return false
+  const name = clientChromeName(element)
+  return name != null && CLIENT_CHROME_NAME.test(name)
+}
+
+function isChromeSibling(element: React.ReactElement): boolean {
+  return isChromeSiblingElement(element) || isClientChromeElement(element)
+}
+
+function isTrailingChromeSibling(element: React.ReactElement): boolean {
+  if (isClientChromeElement(element)) {
+    const name = clientChromeName(element)
+    return name != null && TRAILING_CHROME_NAME.test(name)
+  }
+  const type = element.type
+  return type === 'footer' || type === 'FOOTER'
+}
+
 function isMainElement(element: React.ReactElement): boolean {
   return element.type === 'main' || element.type === 'MAIN'
 }
@@ -546,7 +619,16 @@ function isPlausibleStringContentHost(element: React.ReactElement): boolean {
 }
 
 function isFallbackContentHost(element: React.ReactElement): boolean {
+  if (isClientChromeElement(element)) return false
   return isClientComponentElement(element) || isFragmentElement(element)
+}
+
+function hostHasLayoutChrome(host: React.ReactElement): boolean {
+  const kids = elementChildren(host)
+  if (kids.some(child => isReactElement(child) && isChromeSibling(child))) return true
+  return kids.some(
+    child => isReactElement(child) && (isMainElement(child) || elementTreeContainsMain(child)),
+  )
 }
 
 function isCompetingContentSibling(
@@ -563,27 +645,43 @@ function isCompetingContentSibling(
   return false
 }
 
+function resolvedElementChild(child: React.ReactNode): React.ReactElement | null {
+  const resolved = unwrapFulfilledFlightNode(child)
+  return isReactElement(resolved) ? resolved : null
+}
+
+function isNestedMainContentHost(child: React.ReactElement): boolean {
+  if (isSuspenseElement(child)) return elementTreeContainsMain(child)
+  return isPlausibleStringContentHost(child) && elementTreeContainsMain(child)
+}
+
+function findLastMatchingChildIndex(
+  kids: readonly React.ReactNode[],
+  match: (child: React.ReactElement) => boolean,
+): number {
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    const child = resolvedElementChild(kids[index])
+    if (child != null && match(child)) return index
+  }
+  return -1
+}
+
 function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): number {
-  const mainIndex = kids.findIndex(child => isReactElement(child) && isMainElement(child))
+  const mainIndex = kids.findIndex(child => {
+    const resolved = resolvedElementChild(child)
+    return resolved != null && isMainElement(resolved)
+  })
   if (mainIndex >= 0) return mainIndex
 
   for (let index = 0; index < kids.length; index += 1) {
-    const child = kids[index]
-    if (!isReactElement(child) || !isPlausibleStringContentHost(child)) continue
-    if (elementTreeContainsMain(child)) return index
+    const child = resolvedElementChild(kids[index])
+    if (child != null && isNestedMainContentHost(child)) return index
   }
 
-  for (let index = kids.length - 1; index >= 0; index -= 1) {
-    const child = kids[index]
-    if (isReactElement(child) && isPlausibleStringContentHost(child)) return index
-  }
+  const stringHostIndex = findLastMatchingChildIndex(kids, isPlausibleStringContentHost)
+  if (stringHostIndex >= 0) return stringHostIndex
 
-  for (let index = kids.length - 1; index >= 0; index -= 1) {
-    const child = kids[index]
-    if (isReactElement(child) && isFallbackContentHost(child)) return index
-  }
-
-  return -1
+  return findLastMatchingChildIndex(kids, isFallbackContentHost)
 }
 
 function findPrimitivePageChildIndex(kids: readonly React.ReactNode[]): number {
@@ -610,7 +708,7 @@ function insertPageBesideChrome(
   let insertAt = kids.length
   for (let index = kids.length - 1; index >= 0; index -= 1) {
     const child = kids[index]
-    if (isReactElement(child) && (child.type === 'footer' || child.type === 'FOOTER')) {
+    if (isReactElement(child) && isTrailingChromeSibling(child)) {
       insertAt = index
       continue
     }
@@ -636,10 +734,11 @@ function replaceMatchedHostChild(
   if (contentIndex < 0) return null
 
   const preferred = kids[contentIndex]
-  if (!isReactElement(preferred)) return null
+  const resolvedPreferred = unwrapFulfilledFlightNode(preferred)
+  if (!isReactElement(resolvedPreferred)) return null
 
-  if (isMainElement(preferred) || elementTreeContainsMain(preferred)) {
-    return descendIntoPreferredContent(kids, contentIndex, preferred, nextPage)
+  if (isMainElement(resolvedPreferred) || elementTreeContainsMain(resolvedPreferred)) {
+    return descendIntoPreferredContent(kids, contentIndex, preferred, resolvedPreferred, nextPage)
   }
 
   return null
@@ -648,15 +747,16 @@ function replaceMatchedHostChild(
 function descendIntoPreferredContent(
   kids: readonly React.ReactNode[],
   contentIndex: number,
-  preferred: React.ReactElement,
+  preferred: React.ReactNode,
+  resolvedPreferred: React.ReactElement,
   nextPage: React.ReactNode,
 ): React.ReactNode[] {
   const nextKids = [...kids]
-  nextKids[contentIndex] = cloneWithMergedChildren(
-    preferred,
-    elementPropsRecord(preferred),
-    mergeIntoHostChild(preferred, nextPage),
-  )
+  const mergedChild = mergeIntoHostChild(resolvedPreferred, nextPage)
+  nextKids[contentIndex] =
+    isReactElement(preferred) && preferred === resolvedPreferred
+      ? cloneWithMergedChildren(preferred, elementPropsRecord(preferred), mergedChild)
+      : mergedChild
   return nextKids
 }
 
@@ -715,11 +815,12 @@ function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode)
   }
 
   const preferred = kids[contentIndex]
+  const resolvedPreferred = unwrapFulfilledFlightNode(preferred)
   if (
-    isReactElement(preferred) &&
-    (isMainElement(preferred) || elementTreeContainsMain(preferred))
+    isReactElement(resolvedPreferred) &&
+    (isMainElement(resolvedPreferred) || elementTreeContainsMain(resolvedPreferred))
   ) {
-    return descendIntoPreferredContent(kids, contentIndex, preferred, nextPage)
+    return descendIntoPreferredContent(kids, contentIndex, preferred, resolvedPreferred, nextPage)
   }
 
   return replacePageChildrenAsUnit(kids, contentIndex, preferred, nextPage)
@@ -801,14 +902,10 @@ function spliceIntoContentHost(
 
   for (let index = 0; index < kids.length; index += 1) {
     const child = kids[index]
-    if (!isReactElement(child) || !elementTreeContainsMain(child)) continue
-    return replaceChildAt(
-      current,
-      props,
-      kids,
-      index,
-      spliceLayoutReuseChildren(child, nextPage, layoutPath),
-    )
+    const resolvedChild = unwrapFulfilledFlightNode(child)
+    if (!isReactElement(resolvedChild) || !elementTreeContainsMain(resolvedChild)) continue
+    const spliced = spliceLayoutReuseChildren(resolvedChild, nextPage, layoutPath)
+    return replaceChildAt(current, props, kids, index, spliced)
   }
 
   for (let index = 0; index < kids.length; index += 1) {
@@ -972,6 +1069,31 @@ function mergeSameTypeElements(
   return cloneWithMergedChildren(refresh, refreshProps, mergedChildren)
 }
 
+function mergeMatchingClientShell(
+  current: React.ReactElement,
+  refresh: React.ReactElement,
+): React.ReactNode {
+  if (treeContainsReuseMarker(refresh)) return mergeSameTypeElements(current, refresh)
+
+  const currentKids = elementChildren(current)
+  const refreshKids = elementChildren(refresh)
+
+  if (
+    currentKids.length !== refreshKids.length &&
+    hostHasLayoutChrome(current) &&
+    refreshKids.length > 0
+  ) {
+    const refreshProps = elementPropsRecord(refresh)
+    return cloneWithMergedChildren(
+      refresh,
+      refreshProps,
+      mergeIntoHostChild(current, collapseNodeList(refreshKids)),
+    )
+  }
+
+  return mergeSameTypeElements(current, refresh)
+}
+
 export function mergeFlightRefresh(
   current: React.ReactNode,
   refresh: React.ReactNode,
@@ -1000,8 +1122,7 @@ export function mergeFlightRefresh(
   if (isHeadElement(current) || isHeadElement(refresh)) return refresh
 
   if (matchingClientShell(current, refresh)) {
-    if (treeContainsReuseMarker(refresh)) return mergeSameTypeElements(current, refresh)
-    return refresh
+    return mergeMatchingClientShell(current, refresh)
   }
 
   if (current.type !== refresh.type) return refresh

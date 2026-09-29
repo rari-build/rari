@@ -21,7 +21,7 @@ import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
 } from './commit-navigation-payload'
-import { isLayoutReuseMarker, mergeFlightRefresh } from './merge-refresh'
+import { isLayoutReuseMarker, mergeFlightRefresh, unwrapFulfilledFlightNode } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
 import { currentRouteLocation, flightRouteCache } from './route-cache'
@@ -146,14 +146,13 @@ function emitNavigateError(
 function resolvePreviousDocument(
   previousElement: React.ReactNode | PromiseLike<React.ReactNode> | undefined,
 ): React.ReactElement | null {
-  if (
-    previousElement != null &&
-    !isFlightThenable<React.ReactNode>(previousElement) &&
-    isDocumentRoot(previousElement)
-  ) {
-    return previousElement
+  if (previousElement == null) return null
+  if (isFlightThenable<React.ReactNode>(previousElement)) {
+    const resolved = unwrapFulfilledFlightNode(previousElement)
+    if (resolved === previousElement || !isDocumentRoot(resolved)) return null
+    return resolved
   }
-  return null
+  return isDocumentRoot(previousElement) ? previousElement : null
 }
 
 function shouldScrollToTopForNavigation(detail: NavigationDetail): boolean {
