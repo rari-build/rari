@@ -1,3 +1,11 @@
+## [create-rari-app@0.5.30] - 2026-09-29
+
+### ⚙️ Miscellaneous Tasks
+
+- bump rari package version to 0.17.1
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.29...create-rari-app@0.5.30
 ## [create-rari-app@0.5.29] - 2026-09-29
 
 ### 🚀 Features
