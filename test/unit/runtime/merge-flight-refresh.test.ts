@@ -1,6 +1,7 @@
 import { mergeFlightRefresh } from '@rari/runtime/flight/merge-refresh'
 import * as React from 'react'
 import { describe, expect, it } from 'vite-plus/test'
+import { fulfilledFlightNode } from '../../helpers/flight-thenable'
 import { castMock } from '../../helpers/mock-cast'
 
 const CLIENT_REFERENCE = Symbol.for('react.client.reference')
@@ -1134,5 +1135,350 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(childList(main)[0]).type).toBe('article')
     expect(expectElement(childList(main)[0]).props.children).toBe('new')
     expect(kids[1].props.role).toBe('status')
+  })
+
+  it('splices into main hidden behind a fulfilled Flight thenable sibling (soft-nav browser shape)', () => {
+    const footer = clientRef('src/components/Footer.tsx')
+    const resolvedMain = React.createElement('main', null, 'home')
+
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      fulfilledFlightNode(resolvedMain),
+      React.createElement(footer, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    const main = expectElement(kids[1])
+    expect(main.type).toBe('main')
+    expect(main.props.children).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
+  })
+
+  it('splices into main wrapped by Suspense with a thenable child', () => {
+    const footer = clientRef('src/components/Footer.tsx')
+    const resolvedMain = React.createElement('main', null, 'home')
+
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement(React.Suspense, { fallback: null }, fulfilledFlightNode(resolvedMain)),
+      React.createElement(footer, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
+    const boundary = expectElement(kids[1])
+    expect(boundary.type).toBe(React.Suspense)
+    const main = expectElement(childList(boundary)[0])
+    expect(main.type).toBe('main')
+    expect(main.props.children).toBe('about')
+  })
+
+  it('does not treat keyless chrome div as a match for a keyless page div', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement('div', { className: 'shell' }, React.createElement('main', null, 'home')),
+      React.createElement('footer', null, 'footer'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[2]).type).toBe('footer')
+    const shell = expectElement(kids[1])
+    expect(shell.props.className).toBe('shell')
+    const main = expectElement(childList(shell)[0])
+    expect(main.type).toBe('main')
+    expect(main.props.children).toBe('about')
+  })
+
+  it('preserves web-like Providers→wrapper→main tree on document reuse', () => {
+    const providers = clientRef('src/providers.tsx')
+    const current = React.createElement(
+      'html',
+      { lang: 'en' },
+      React.createElement('head', null, React.createElement('title', null, 'Home')),
+      React.createElement(
+        'body',
+        null,
+        React.createElement(
+          providers,
+          { key: 'providers' },
+          React.createElement(
+            'div',
+            { className: 'shell' },
+            React.createElement('nav', null, 'nav'),
+            React.createElement('main', null, 'home'),
+            React.createElement('footer', null, 'footer'),
+          ),
+        ),
+      ),
+    )
+    const refresh = React.createElement(
+      'rari-layout-reuse',
+      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
+      'about',
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const [, body] = childList(merged).map(child => expectElement(child))
+    const shell = expectElement(childList(expectElement(childList(body)[0]))[0])
+    expect(shell.props.className).toBe('shell')
+    const kids = childList(shell)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('about')
+    expect(expectElement(kids[2]).type).toBe('footer')
+  })
+
+  it('inserts beside client Footer when layout has only chrome siblings', () => {
+    const footer = clientRef('src/components/Footer.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement(footer, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(kids[1]).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
+  })
+
+  it('treats kebab-case Next-style chrome basenames as trailing chrome', () => {
+    const mainNav = clientRef('src/components/main-nav.tsx')
+    const appFooter = clientRef('src/components/app-footer.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(mainNav, { key: 'nav' }),
+      React.createElement(appFooter, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/main-nav.tsx')
+    expect(kids[1]).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/app-footer.tsx')
+  })
+
+  it('does not treat UI primitive *Header/*Footer modules as layout chrome', () => {
+    const cardHeader = clientRef('src/components/ui/card-header.tsx')
+    const dialogFooter = clientRef('src/components/ui/dialog-footer.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(cardHeader, { key: 'header' }),
+      React.createElement('main', null, 'home'),
+      React.createElement(dialogFooter, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/ui/card-header.tsx')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe(
+      'src/components/ui/dialog-footer.tsx',
+    )
+  })
+
+  it('does not treat client Footer as the preferred content host', () => {
+    const footer = clientRef('src/components/Footer.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement('main', null, 'home'),
+      React.createElement(footer, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
+  })
+
+  it('preserves chrome when a matching Providers shell soft-navs with only page children', () => {
+    const providers = clientRef('src/providers.tsx')
+    const navbar = clientRef('src/components/Navbar.tsx')
+    const footer = clientRef('src/components/Footer.tsx')
+    const current = React.createElement(
+      providers,
+      { key: 'providers' },
+      React.createElement(navbar, { key: 'nav' }),
+      React.createElement('main', null, 'home'),
+      React.createElement(footer, { key: 'footer' }),
+    )
+    const refresh = React.createElement(
+      clientRef('src/providers.tsx'),
+      { key: 'providers' },
+      'about',
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    expect(clientReferenceId(merged.type)).toBe('src/providers.tsx')
+    expect(merged.type).not.toBe(providers)
+    const kids = childList(merged)
+    expect(kids).toHaveLength(3)
+    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/Navbar.tsx')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
+  })
+
+  it('merges matching client shells pairwise so ViewTransitions still adopt refresh identity', () => {
+    const layoutType = clientRef('src/app/layout.tsx')
+    const current = React.createElement(
+      layoutType,
+      { key: '/' },
+      React.createElement('nav', null, 'nav'),
+      React.createElement('main', null, 'stale'),
+    )
+    const refresh = React.createElement(
+      clientRef('src/app/layout.tsx'),
+      { key: '/' },
+      React.createElement('nav', null, 'nav'),
+      React.createElement('main', null, 'fresh'),
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    expect(clientReferenceId(merged.type)).toBe('src/app/layout.tsx')
+    expect(merged.type).not.toBe(layoutType)
+    const kids = childList(merged)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('fresh')
+  })
+
+  it('soft-navs ryanskinner.com layout without Providers/client-Navbar workarounds', () => {
+    const current = React.createElement(
+      'html',
+      { lang: 'en' },
+      React.createElement('head', null),
+      React.createElement(
+        'body',
+        { className: 'bg-gray-950' },
+        React.createElement('nav', null, 'navbar'),
+        fulfilledFlightNode(React.createElement('main', null, 'home')),
+        React.createElement(
+          React.Suspense,
+          { fallback: null },
+          React.createElement('footer', null, 'footer'),
+        ),
+      ),
+    )
+    const refresh = React.createElement(
+      'rari-layout-reuse',
+      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
+      'posts',
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const body = expectElement(childList(merged)[1])
+    const kids = childList(body)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('posts')
+    expect(expectElement(kids[2]).type).toBe(React.Suspense)
+    expect(expectElement(childList(expectElement(kids[2]))[0]).type).toBe('footer')
+  })
+
+  it('soft-navs ryanskinner.com workaround shape (Providers div + client Navbar)', () => {
+    const providers = clientRef('src/providers.tsx')
+    const navbar = clientRef('src/components/ui/Navbar.tsx')
+    const current = React.createElement(
+      'html',
+      { lang: 'en' },
+      React.createElement('head', null),
+      React.createElement(
+        'body',
+        null,
+        React.createElement(
+          providers,
+          { key: 'providers' },
+          React.createElement(navbar, { key: 'nav' }),
+          fulfilledFlightNode(React.createElement('main', null, 'home')),
+          React.createElement(
+            React.Suspense,
+            { fallback: null },
+            React.createElement('footer', null, 'footer'),
+          ),
+        ),
+      ),
+    )
+    const refresh = React.createElement(
+      'rari-layout-reuse',
+      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
+      'posts',
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const body = expectElement(childList(merged)[1])
+    const shell = expectElement(childList(body)[0])
+    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
+    const kids = childList(shell)
+    expect(kids).toHaveLength(3)
+    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/ui/Navbar.tsx')
+    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props.children).toBe('posts')
+    expect(expectElement(kids[2]).type).toBe(React.Suspense)
   })
 })
