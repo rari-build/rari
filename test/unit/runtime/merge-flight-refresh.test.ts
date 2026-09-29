@@ -321,6 +321,46 @@ describe('mergeFlightRefresh', () => {
     expect(kids[1].props.children).toBe('about')
   })
 
+  it('keeps a Providers shell when its only page content is primitive text', () => {
+    const providers = clientRef('src/providers.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(providers, { key: 'providers' }, 'home'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const shell = expectElement(childList(mergedBody)[0])
+    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
+    expect(shell.props.children).toBe('about')
+  })
+
+  it('inserts nextPage beside chrome when no prior page node exists', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('header', null, 'site'),
+      React.createElement('footer', null, 'foot'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('header')
+    expect(kids[1]).toBe('about')
+    expect(expectElement(kids[2]).type).toBe('footer')
+  })
+
   it('replaces all competing page children as a unit on layout-path miss', () => {
     const current = React.createElement(
       'body',
