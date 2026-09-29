@@ -1,4 +1,4 @@
-import { mergeFlightRefresh } from '@rari/runtime/flight/merge-refresh'
+import { mergeFlightRefresh, unwrapFulfilledFlightNode } from '@rari/runtime/flight/merge-refresh'
 import * as React from 'react'
 import { describe, expect, it } from 'vite-plus/test'
 import { fulfilledFlightNode } from '../../helpers/flight-thenable'
@@ -60,6 +60,37 @@ function childList(node: React.ReactElement<{ children?: React.ReactNode }>): Re
 }
 
 describe('mergeFlightRefresh', () => {
+  it('unwraps fulfilled Flight thenables that resolve to null/boolean holes', () => {
+    expect(unwrapFulfilledFlightNode(fulfilledFlightNode(null))).toBeNull()
+    expect(unwrapFulfilledFlightNode(fulfilledFlightNode(false))).toBe(false)
+    expect(unwrapFulfilledFlightNode(fulfilledFlightNode(true))).toBe(true)
+  })
+
+  it('treats a fulfilled null thenable sibling as an empty content hole, not a visible child', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('nav', null, 'nav'),
+      React.createElement('div', { className: 'slot' }, fulfilledFlightNode(null)),
+      React.createElement('footer', null, 'footer'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    const slot = expectElement(kids[1])
+    expect(slot.type).toBe('div')
+    expect(slot.props.className).toBe('slot')
+    expect(slot.props.children).toBe('about')
+    expect(expectElement(kids[2]).type).toBe('footer')
+  })
+
   it('uses the refresh tree when there is no current payload', () => {
     const refresh = React.createElement('div', { 'data-testid': 'page' }, 'fresh')
 
@@ -1469,12 +1500,47 @@ describe('mergeFlightRefresh', () => {
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     const body = expectElement(childList(merged)[1])
     const kids = childList(body)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('posts')
-    expect(expectElement(kids[2]).type).toBe(React.Suspense)
-    expect(expectElement(childList(expectElement(kids[2]))[0]).type).toBe('footer')
+    expect(kids).toHaveLength(1)
+    const slot = expectElement(kids[0])
+    expect(slot.type).toBe(React.Fragment)
+    const slotKids = childList(slot)
+    expect(slotKids).toHaveLength(3)
+    expect(expectElement(slotKids[0]).type).toBe('nav')
+    expect(expectElement(slotKids[1]).type).toBe('main')
+    expect(expectElement(slotKids[1]).props.children).toBe('posts')
+    expect(expectElement(slotKids[2]).type).toBe(React.Suspense)
+    expect(expectElement(childList(expectElement(slotKids[2]))[0]).type).toBe('footer')
+  })
+
+  it('preserves a Fragment chrome slot while replacing main inside it', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement('nav', null, 'nav'),
+        React.createElement('main', null, 'home'),
+        React.createElement('footer', null, 'footer'),
+      ),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(1)
+    const slot = expectElement(kids[0])
+    expect(slot.type).toBe(React.Fragment)
+    const slotKids = childList(slot)
+    expect(slotKids).toHaveLength(3)
+    expect(expectElement(slotKids[0]).type).toBe('nav')
+    expect(expectElement(slotKids[1]).type).toBe('main')
+    expect(expectElement(slotKids[1]).props.children).toBe('about')
+    expect(expectElement(slotKids[2]).type).toBe('footer')
   })
 
   it('soft-navs ryanskinner.com workaround shape (Providers div + client Navbar)', () => {
