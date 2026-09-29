@@ -1,3 +1,38 @@
+## [rari@0.17.0] - 2026-09-29
+
+### 🚀 Features
+
+- soft-nav layout reuse with document-preserving flight merges by @skiniks
+- add to linting configuration and update pnpm workspace by @skiniks
+- add environment variable type generation for Vite by @skiniks
+
+### 🚜 Refactor
+
+- streamline action argument validation and enhance API handler structure by @skiniks
+- enhance error handling in Flight protocol parsing and improve merge logic for client shells by @skiniks
+- improve error handling in Flight protocol and enhance merging logic for nested reuse markers by @skiniks
+- update linting configurations and sorting rules for JSON files by @skiniks
+- enhance merging logic in Flight protocol to preserve siblings and improve variable collection in Vite transforms by @skiniks
+- introduce helper function for member property access and enhance inline server action transformation tests by @skiniks
+- remove deprecated rari by @skiniks
+- improve HTML element type checking and enhance whitespace handling in inline server action transformations by @skiniks
+- remove unused environment type generation and clean up tsconfig includes by @skiniks
+- enhance block comment handling in inline server action transformations and improve package manager selection logic by @skiniks
+- improve block comment handling in inline server action transformations and add test for named exports preservation by @skiniks
+- implement image prewarming and blur placeholder generation in image optimizer by @skiniks
+- improve escape sequence handling in string literals and add tests for invalid hex/unicode escapes by @skiniks
+- enhance image optimizer with blur placeholder request handling and improve prewarm key management by @skiniks
+- improve child node flattening logic in merge-refresh and enhance image blur handling by @skiniks
+- enhance flattening logic for nested React nodes and ensure distinct key scoping by @skiniks
+- add adaptServerTransformSourceMap function and improve key scoping for nested React elements by @skiniks
+- simplify metadata handling in route composer and enhance source map processing in Vite by @skiniks
+- improve route composer validation and enhance source map URL handling in Vite by @skiniks
+- enhance error handling in script execution and improve source map URL resolution logic by @skiniks
+- streamline image prewarm logic by extracting unique source URLs and enhancing blur handling by @skiniks
+- optimize image prewarm logic by consolidating URL handling and enhancing blur placeholder integration by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.16.0...rari@0.17.0
 ## [rari@0.16.0] - 2026-09-23
 
 ## Highlights

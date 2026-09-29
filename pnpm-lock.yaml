@@ -616,23 +616,20 @@ importers:
         version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
     optionalDependencies:
       rari-darwin-arm64:
-        specifier: 0.16.0
-        version: 0.16.0
-      rari-darwin-x64:
-        specifier: 0.16.0
-        version: 0.16.0
+        specifier: 0.17.0
+        version: 0.17.0
       rari-linux-arm64:
-        specifier: 0.16.0
-        version: 0.16.0
+        specifier: 0.17.0
+        version: 0.17.0
       rari-linux-x64:
-        specifier: 0.16.0
-        version: 0.16.0
+        specifier: 0.17.0
+        version: 0.17.0
       rari-win32-arm64:
-        specifier: 0.16.0
-        version: 0.16.0
+        specifier: 0.17.0
+        version: 0.17.0
       rari-win32-x64:
-        specifier: 0.16.0
-        version: 0.16.0
+        specifier: 0.17.0
+        version: 0.17.0
 
   packages/use-cache:
     dependencies:
@@ -4888,44 +4885,37 @@ packages:
   query-selector-shadow-dom@1.0.1:
     resolution: {integrity: sha512-lT5yCqEBgfoMYpf3F2xQRK7zEr1rhIIZuceDK6+xRkJQ4NMbHTwXqk4NkwDwQMNqXgG9r9fyHnzwNVs6zV5KRw==}
 
-  rari-darwin-arm64@0.16.0:
-    resolution: {integrity: sha512-3HaXPGSUnvXLraKafDxTMdwklmhQNhm+ehwgsKG/2U9aKLWMfiS1zav3VrVenLzMjG3ft2qRT+Hmf8FtfVqlfg==}
-    engines: {node: '>=24.21.0'}
+  rari-darwin-arm64@0.17.0:
+    resolution: {integrity: sha512-LPUH1qXEIyZKBEDnRRXav2uC3I0DlKh6f+uv6xmoIuqYB218pt2Pz1Cqz6oPZA6aCpZPrHdQk3XN8UNQB5GR2Q==}
+    engines: {node: ^24.21.0 || >=26.0.0}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  rari-darwin-x64@0.16.0:
-    resolution: {integrity: sha512-/3KWFySieeDFNxLY3wX0pJORymrdWDFUpAM+l2RzVwosuz7c7c23SxOasxggtEjJOtwH0sUcd1YraRCjelOWWQ==}
-    engines: {node: '>=24.21.0'}
-    cpu: [x64]
-    os: [darwin]
-    hasBin: true
-
-  rari-linux-arm64@0.16.0:
-    resolution: {integrity: sha512-SdyvJymfFIZ4elKsd877F0Kno62uSnD+r5/LYY/MYF+6pNfSNqFv20ZJv7kPvecHjMQC+qUNi+425BczGTR7BQ==}
-    engines: {node: '>=24.21.0'}
+  rari-linux-arm64@0.17.0:
+    resolution: {integrity: sha512-Cwr6KyUH12Smk1it9/V8LeN5vXecZM5voepWz33XoEieZalFpoWLbPYMvn3rX2nH0wiusYuIoLopStxPz9fx1g==}
+    engines: {node: ^24.21.0 || >=26.0.0}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  rari-linux-x64@0.16.0:
-    resolution: {integrity: sha512-zGRfugA9XKUC67PDBbTOUYKbi4t8KZPQc2JF41fFBlGqYK/1gByj3ZwWLbydHkfAxqgJDLkr+vYqpuobV4hWmg==}
-    engines: {node: '>=24.21.0'}
+  rari-linux-x64@0.17.0:
+    resolution: {integrity: sha512-Zva7vflwZfhwd+brkaTKK75eLsIofBTzISWsZ4IA5uSvpYHRIGSd0CvxsXcwpjbV7++LUp72/vDGqxm+IMNCaQ==}
+    engines: {node: ^24.21.0 || >=26.0.0}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  rari-win32-arm64@0.16.0:
-    resolution: {integrity: sha512-9Y3Q3IMzahUdKV42ud/HYpeEe61kJtsx+RPiaXmMw8G75J4GUqJZ62rVt4uNk33QzsNgzr0Y+anosrIdg1/VCw==}
-    engines: {node: '>=24.21.0'}
+  rari-win32-arm64@0.17.0:
+    resolution: {integrity: sha512-+IbxEgaQqEfvhV2cClxc7A0Phz15GjcoBty2ZCnP76Rb7wMN7zbppPIFIIdcwhcJL9sxr8q2TGTAkQlfW4KROw==}
+    engines: {node: ^24.21.0 || >=26.0.0}
     cpu: [arm64]
     os: [win32]
     hasBin: true
 
-  rari-win32-x64@0.16.0:
-    resolution: {integrity: sha512-23ef2g/nlvUtG9FlXbYzbk9G/7T0sAAkCkui0VEPemSawi6C5GUS4eWJWpwYxvhoulSlj715HU8Gvnre8a54MA==}
-    engines: {node: '>=24.21.0'}
+  rari-win32-x64@0.17.0:
+    resolution: {integrity: sha512-ALJfv219J97q4kMp9MiEIknYl5R7dNXfvMkwToX959i1tSpg4sF42SSbaUk4uAvJVcW0O+uAP9VewDvYNl3Mdw==}
+    engines: {node: ^24.21.0 || >=26.0.0}
     cpu: [x64]
     os: [win32]
     hasBin: true
@@ -9661,22 +9651,19 @@ snapshots:
 
   query-selector-shadow-dom@1.0.1: {}
 
-  rari-darwin-arm64@0.16.0:
+  rari-darwin-arm64@0.17.0:
     optional: true
 
-  rari-darwin-x64@0.16.0:
+  rari-linux-arm64@0.17.0:
     optional: true
 
-  rari-linux-arm64@0.16.0:
+  rari-linux-x64@0.17.0:
     optional: true
 
-  rari-linux-x64@0.16.0:
+  rari-win32-arm64@0.17.0:
     optional: true
 
-  rari-win32-arm64@0.16.0:
-    optional: true
-
-  rari-win32-x64@0.16.0:
+  rari-win32-x64@0.17.0:
     optional: true
 
   react-dom@19.3.0(react@19.3.0):
