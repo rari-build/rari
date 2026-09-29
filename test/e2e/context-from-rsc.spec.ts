@@ -13,6 +13,8 @@ test.describe('Context from Server Components', () => {
   test('hydrated page keeps the context value', async ({ page }) => {
     await page.goto('/context-from-rsc')
     await waitForRariRuntime(page)
-    await expect(page.getByTestId('context-user-label')).toHaveText('Signed in as Ada (admin)')
+    const label = page.getByTestId('context-user-label')
+    await expect(label).toHaveAttribute('data-hydrated', 'true')
+    await expect(label).toHaveText('Signed in as Ada (admin)')
   })
 })

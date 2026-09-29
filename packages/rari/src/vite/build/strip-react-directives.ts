@@ -2,10 +2,8 @@ import type { Plugin } from 'vite-plus'
 import {
   hasTopLevelUseClientDirective,
   hasTopLevelUseServerDirective,
+  stripTopLevelDirective,
 } from '../analysis/directives'
-
-const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
-const USE_SERVER_DIRECTIVE_REGEX = /^['"]use server['"];?\s*$/gm
 
 export function createStripReactDirectivesPlugin(): Plugin {
   return {
@@ -17,12 +15,12 @@ export function createStripReactDirectivesPlugin(): Plugin {
       let changed = false
 
       if (hasTopLevelUseClientDirective(code)) {
-        next = next.replace(USE_CLIENT_DIRECTIVE_REGEX, '')
+        next = stripTopLevelDirective(next, 'use client')
         changed = true
       }
 
       if (hasTopLevelUseServerDirective(code)) {
-        next = next.replace(USE_SERVER_DIRECTIVE_REGEX, '')
+        next = stripTopLevelDirective(next, 'use server')
         changed = true
       }
 

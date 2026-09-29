@@ -51,6 +51,7 @@ import {
   hasDefaultExport,
   rewriteExportDefaultAsBinding,
   scanImportStatements,
+  stripTopLevelDirective,
 } from './analysis/directives'
 import {
   collectClientComponentPaths,
@@ -151,7 +152,6 @@ const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/
 const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
-const USE_SERVER_DIRECTIVE_REGEX = /^['"]use server['"];?\s*$/gm
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 
 function matchesAliasImport(source: string, aliases: Readonly<Record<string, string>>): boolean {
@@ -348,6 +348,26 @@ async function loadRuntimeFile(filename: string): Promise<string> {
 
 const RARI_DIST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const RARI_PACKAGE_ROOT = path.dirname(RARI_DIST_DIR)
+
+function resolveErrorBoundarySourcePath(): string | null {
+  const devSource = path.join(
+    RARI_PACKAGE_ROOT,
+    'src',
+    'runtime',
+    'boundaries',
+    'error-boundary-wrapper.tsx',
+  )
+  if (fs.existsSync(devSource)) return path.resolve(devSource)
+
+  try {
+    const publishedPath = fileURLToPath(import.meta.resolve('rari/runtime/ErrorBoundaryWrapper'))
+    if (fs.existsSync(publishedPath)) return path.resolve(publishedPath)
+  } catch {}
+
+  return null
+}
+
+const ERROR_BOUNDARY_SOURCE_PATH = resolveErrorBoundarySourcePath()
 
 function resolveRuntimeDistFile(filename: string): string | null {
   const possiblePaths = [
@@ -1399,7 +1419,7 @@ if (import.meta.hot) {
 
     const exportedNames = parseExportedNames(newCode, analysis)
     if (exportedNames.length === 0 && inlineTransformed == null) {
-      return newCode.replace(USE_SERVER_DIRECTIVE_REGEX, '')
+      return stripTopLevelDirective(newCode, 'use server')
     }
 
     const idJson = JSON.stringify(moduleId)
@@ -1419,7 +1439,7 @@ if (import.meta.hot) {
       }
     }
 
-    newCode = newCode.replace(USE_SERVER_DIRECTIVE_REGEX, '')
+    newCode = stripTopLevelDirective(newCode, 'use server')
     return appendHmrAcceptStub(newCode)
   }
 
@@ -1554,10 +1574,14 @@ if (import.meta.hot) {
       filePath.includes('virtual:client-router') ||
       filePath.includes('virtual:app-router-provider') ||
       filePath.includes('virtual:error-boundary-wrapper') ||
-      filePath.includes('ErrorBoundaryWrapper') ||
-      filePath.includes('/boundaries/error-boundary-wrapper') ||
       filePath.includes('/navigation/client-router') ||
       filePath.includes('/flight/app-router-provider')
+    ) {
+      return true
+    }
+    if (
+      ERROR_BOUNDARY_SOURCE_PATH != null &&
+      path.resolve(filePath) === ERROR_BOUNDARY_SOURCE_PATH
     ) {
       return true
     }

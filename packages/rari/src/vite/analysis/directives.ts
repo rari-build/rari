@@ -1154,6 +1154,92 @@ export function hasTopLevelUseClientDirective(source: string): boolean {
   return analyzeModuleSource(source).topLevelUseClient
 }
 
+function readPrologueDirective(
+  source: string,
+  start: number,
+  len: number,
+): {
+  readonly kind: 'use client' | 'use server'
+  readonly stringEnd: number
+  readonly term: ReturnType<typeof advancePastDirectiveTerminator>
+} | null {
+  const ch = source.charCodeAt(start)
+  if (ch !== CH_SINGLE_QUOTE && ch !== CH_DOUBLE_QUOTE) return null
+
+  const stringStart = start + 1
+  const stringEnd = skipString(source, start, len, ch)
+  if (stringEnd <= stringStart) return null
+
+  const contentLen = stringEnd - 1 - stringStart
+  const isUseClient = contentLen === 10 && regionEquals(source, stringStart, 'use client')
+  const isUseServer = contentLen === 10 && regionEquals(source, stringStart, 'use server')
+  if (!isUseClient && !isUseServer) return null
+
+  return {
+    kind: isUseClient ? 'use client' : 'use server',
+    stringEnd,
+    term: advancePastDirectiveTerminator(source, stringEnd, len),
+  }
+}
+
+function endOfDirectiveStatement(source: string, stringEnd: number, len: number): number {
+  let end = stringEnd
+  let j = stringEnd
+  while (j < len) {
+    const jch = source.charCodeAt(j)
+    if (jch === CH_SEMICOLON) {
+      end = j + 1
+      break
+    }
+    if (isWhitespaceCode(jch) && !isLineTerminatorCode(jch)) {
+      j++
+      continue
+    }
+    break
+  }
+  while (end < len && isLineTerminatorCode(source.charCodeAt(end))) {
+    end++
+  }
+  return end
+}
+
+function updateDirectivesPhase(
+  term: ReturnType<typeof advancePastDirectiveTerminator>,
+  directivesPhase: boolean,
+): boolean {
+  if (!term.stillDirective && term.endDirectivesPhase) return false
+  if (!term.stillDirective) return false
+  return directivesPhase
+}
+
+export function stripTopLevelDirective(source: string, kind: 'use client' | 'use server'): string {
+  let i = 0
+  const len = source.length
+  let directivesPhase = true
+
+  while (i < len && directivesPhase) {
+    const triviaStart = i
+    i = skipTrivia(source, i, len)
+    if (i >= len) break
+
+    const directive = readPrologueDirective(source, i, len)
+    if (directive == null) break
+
+    directivesPhase = updateDirectivesPhase(directive.term, directivesPhase)
+
+    if (directive.kind === kind) {
+      const end = directive.term.stillDirective
+        ? directive.term.nextI
+        : endOfDirectiveStatement(source, directive.stringEnd, len)
+      return source.slice(0, triviaStart) + source.slice(end)
+    }
+
+    i = directive.term.nextI
+  }
+
+  return source
+}
+
 export function hasDefaultExport(source: string): boolean {
   return analyzeModuleSource(source).hasDefaultExport
 }

@@ -26,12 +26,39 @@ const ${bindingName} = (props) => {
   if (typeof Component === 'function') {
     return Component(props);
   }
-  if (typeof Component === 'object' && Component != null && '$$typeof' in Component) {
+  if (typeof Component === 'symbol') {
+    const key = Symbol.keyFor(Component);
+    if (
+      key == null ||
+      !key.startsWith('react.') ||
+      key === 'react.element' ||
+      key === 'react.transitional.element' ||
+      key === 'react.portal'
+    ) {
+      throw new Error('Component ${registryKey}#${exportName} is not a component type symbol');
+    }
     const React = globalThis.React;
     if (React == null || typeof React.createElement !== 'function') {
       throw new Error('Component ${registryKey}#${exportName} needs React.createElement');
     }
     return React.createElement(Component, props);
+  }
+  if (typeof Component === 'object' && Component != null) {
+    const type = Component.$$typeof;
+    if (
+      type === Symbol.for('react.element') ||
+      type === Symbol.for('react.transitional.element') ||
+      type === Symbol.for('react.portal')
+    ) {
+      throw new Error('Component ${registryKey}#${exportName} is a React element, not a component type');
+    }
+    if ('$$typeof' in Component || Component['~isClientComponent'] === true) {
+      const React = globalThis.React;
+      if (React == null || typeof React.createElement !== 'function') {
+        throw new Error('Component ${registryKey}#${exportName} needs React.createElement');
+      }
+      return React.createElement(Component, props);
+    }
   }
 
   throw new Error('Component ${registryKey}#${exportName} is not a component, got: ' + typeof Component);

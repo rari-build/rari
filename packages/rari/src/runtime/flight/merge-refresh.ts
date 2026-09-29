@@ -364,7 +364,7 @@ function mergeChildLists(
 
   if (currentList.length === 0) return unwrapLayoutReuseMarkers(refreshChildren)
 
-  if (refreshList.length === 0) return currentChildren
+  if (refreshList.length === 0) return unwrapLayoutReuseMarkers(refreshChildren)
 
   if (refreshList.some(child => isReactElement(child) && isLayoutReuseMarker(child))) {
     return mergeChildListsWithReuseMarkers(currentList, refreshList)
@@ -524,11 +524,24 @@ function isMainElement(element: React.ReactElement): boolean {
   return element.type === 'main' || element.type === 'MAIN'
 }
 
+function isPersistentUiSibling(element: React.ReactElement): boolean {
+  const role = elementPropsRecord(element).role
+  if (typeof role !== 'string' || role === '') return false
+  const normalized = role.toLowerCase()
+  return (
+    normalized === 'status' ||
+    normalized === 'alert' ||
+    normalized === 'alertdialog' ||
+    normalized === 'log'
+  )
+}
+
 function isPlausibleStringContentHost(element: React.ReactElement): boolean {
   return (
     typeof element.type === 'string' &&
     !NON_CONTENT_HOST_ELEMENTS.has(element.type) &&
-    !isChromeSiblingElement(element)
+    !isChromeSiblingElement(element) &&
+    !isPersistentUiSibling(element)
   )
 }
 
@@ -540,6 +553,7 @@ function isCompetingContentSibling(
   child: React.ReactElement,
   preferred: React.ReactElement,
 ): boolean {
+  if (isPersistentUiSibling(child)) return false
   if (isPlausibleStringContentHost(preferred)) {
     return isPlausibleStringContentHost(child)
   }
@@ -576,6 +590,19 @@ function replaceMatchedHostChild(
   kids: readonly React.ReactNode[],
   nextPage: React.ReactElement,
 ): React.ReactNode[] | null {
+  const contentIndex = findPreferredContentChildIndex(kids)
+  if (contentIndex >= 0) {
+    const preferred = kids[contentIndex]
+    if (!isReactElement(preferred)) return null
+    const nextKids = [...kids]
+    nextKids[contentIndex] = mergeFlightRefresh(preferred, nextPage)
+    return nextKids
+  }
+
+  if (typeof nextPage.type === 'string' && (nextPage.key ?? null) === null) {
+    return null
+  }
+
   const matchIndex = kids.findIndex(
     child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
   )

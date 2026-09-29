@@ -111,11 +111,19 @@ function resolveErrorBoundarySourcePath(): string | null {
 
 function isErrorBoundaryWrapperPath(filePath: string): boolean {
   const normalized = toPosixPath(filePath)
-  return (
-    normalized.includes('ErrorBoundaryWrapper') ||
-    normalized.includes('/boundaries/error-boundary-wrapper') ||
-    normalized.endsWith('/error-boundary-wrapper.tsx')
-  )
+  if (
+    normalized === 'virtual:error-boundary-wrapper.tsx' ||
+    normalized.includes('virtual:error-boundary-wrapper')
+  ) {
+    return true
+  }
+
+  const resolved = resolveErrorBoundarySourcePath()
+  if (resolved != null && path.resolve(filePath) === path.resolve(resolved)) {
+    return true
+  }
+
+  return normalized.endsWith('/runtime/boundaries/error-boundary-wrapper.tsx')
 }
 
 interface ServerComponentManifest {
