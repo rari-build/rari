@@ -2,19 +2,19 @@ catalogMode: prefer
 
 minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
-  - '@rari/use-cache-darwin-arm64@0.17.0 || 0.17.1'
-  - '@rari/use-cache-darwin-x64@0.17.0 || 0.17.1'
-  - '@rari/use-cache-linux-arm64@0.17.0 || 0.17.1'
-  - '@rari/use-cache-linux-x64@0.17.0 || 0.17.1'
-  - '@rari/use-cache-win32-arm64@0.17.0 || 0.17.1'
-  - '@rari/use-cache-win32-x64@0.17.0 || 0.17.1'
-  - '@rari/use-cache@0.17.0'
-  - rari-darwin-arm64@0.17.0
-  - rari-darwin-x64@0.17.0
-  - rari-linux-arm64@0.17.0
-  - rari-linux-x64@0.17.0
-  - rari-win32-arm64@0.17.0
-  - rari-win32-x64@0.17.0
+  - '@rari/use-cache-darwin-arm64@0.17.1'
+  - '@rari/use-cache-darwin-x64@0.17.1'
+  - '@rari/use-cache-linux-arm64@0.17.1'
+  - '@rari/use-cache-linux-x64@0.17.1'
+  - '@rari/use-cache-win32-arm64@0.17.1'
+  - '@rari/use-cache-win32-x64@0.17.1'
+  - '@rari/use-cache@0.17.1'
+  - rari-darwin-arm64@0.17.0 || 0.17.1
+  - rari-darwin-x64@0.17.0 || 0.17.1
+  - rari-linux-arm64@0.17.0 || 0.17.1
+  - rari-linux-x64@0.17.0 || 0.17.1
+  - rari-win32-arm64@0.17.0 || 0.17.1
+  - rari-win32-x64@0.17.0 || 0.17.1
   - rari@0.17.0
   - '@voidzero-dev/vite-plus-core@1.0.0'
   - '@voidzero-dev/vite-plus-darwin-arm64@1.0.0'
