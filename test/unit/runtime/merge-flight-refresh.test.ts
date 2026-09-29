@@ -644,9 +644,10 @@ describe('mergeFlightRefresh', () => {
     const headKids = childList(head).map(child => expectElement(child))
 
     expect(headKids.find(child => child.type === 'title')?.props.children).toBe('Home')
-    expect(
-      headKids.find(child => child.type === 'meta' && child.props.name === 'description')?.props.content,
-    ).toBe('Home page')
+    const description = headKids.find(
+      child => child.type === 'meta' && child.props.name === 'description',
+    )
+    expect(description?.props.content).toBe('Home page')
     expect(
       headKids.find(child => child.type === 'meta' && child.props.charSet != null),
     ).toBeTruthy()
@@ -976,5 +977,43 @@ describe('mergeFlightRefresh', () => {
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     expect(childList(merged)).toEqual([])
+  })
+
+  it('descends into a nested-main host instead of replacing an unlike client shell', () => {
+    const providers = clientRef('src/providers.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        providers,
+        { key: 'providers' },
+        React.createElement('main', null, React.createElement('article', null, 'old')),
+      ),
+      React.createElement('div', { role: 'status' }, 'toast'),
+    )
+    const refresh = React.createElement('article', null, 'new')
+
+    const mergedBody = expectElement(
+      mergeFlightRefresh(
+        current,
+        React.createElement(
+          'body',
+          null,
+          React.createElement(
+            'rari-layout-reuse',
+            { 'data-rari-layout-path': '/missing' },
+            refresh,
+          ),
+        ),
+      ),
+    )
+    const kids = childList(mergedBody).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(clientReferenceId(kids[0].type)).toBe('src/providers.tsx')
+    const main = expectElement(childList(kids[0])[0])
+    expect(main.type).toBe('main')
+    expect(expectElement(childList(main)[0]).type).toBe('article')
+    expect(expectElement(childList(main)[0]).props.children).toBe('new')
+    expect(kids[1].props.role).toBe('status')
   })
 })

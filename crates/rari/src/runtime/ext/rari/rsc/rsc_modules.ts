@@ -70,10 +70,13 @@ interface RegisterResult {
     const key = Symbol.keyFor(value)
     return (
       key != null &&
-      key.startsWith('react.') &&
-      key !== 'react.element' &&
-      key !== 'react.transitional.element' &&
-      key !== 'react.portal'
+      (key === 'react.fragment' ||
+        key === 'react.profiler' ||
+        key === 'react.strict_mode' ||
+        key === 'react.suspense' ||
+        key === 'react.suspense_list' ||
+        key === 'react.activity' ||
+        key === 'react.view_transition')
     )
   }
 

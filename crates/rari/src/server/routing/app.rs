@@ -1403,8 +1403,6 @@ pub async fn handle_app_route(
                     if let Some(app_router) = state.app_router.as_ref()
                         && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
                     {
-                        context.metadata =
-                            collect_page_metadata(&state, &route_match, &context).await;
                         match layout_renderer
                             .render_route_by_mode(
                                 &route_match,

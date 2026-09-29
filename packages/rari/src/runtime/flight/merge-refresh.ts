@@ -590,26 +590,26 @@ function replaceMatchedHostChild(
   kids: readonly React.ReactNode[],
   nextPage: React.ReactElement,
 ): React.ReactNode[] | null {
-  const contentIndex = findPreferredContentChildIndex(kids)
-  if (contentIndex >= 0) {
-    const preferred = kids[contentIndex]
-    if (!isReactElement(preferred)) return null
+  const exactIndex = kids.findIndex(
+    child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
+  )
+  if (exactIndex >= 0) {
     const nextKids = [...kids]
-    nextKids[contentIndex] = mergeFlightRefresh(preferred, nextPage)
+    nextKids[exactIndex] = mergeFlightRefresh(kids[exactIndex], nextPage)
     return nextKids
   }
 
-  if (typeof nextPage.type === 'string' && (nextPage.key ?? null) === null) {
-    return null
+  const contentIndex = findPreferredContentChildIndex(kids)
+  if (contentIndex < 0) return null
+
+  const preferred = kids[contentIndex]
+  if (!isReactElement(preferred)) return null
+
+  if (isMainElement(preferred) || elementTreeContainsMain(preferred)) {
+    return descendIntoPreferredContent(kids, contentIndex, preferred, nextPage)
   }
 
-  const matchIndex = kids.findIndex(
-    child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
-  )
-  if (matchIndex < 0) return null
-  const nextKids = [...kids]
-  nextKids[matchIndex] = mergeFlightRefresh(kids[matchIndex], nextPage)
-  return nextKids
+  return null
 }
 
 function descendIntoPreferredContent(

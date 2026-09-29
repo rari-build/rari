@@ -77,6 +77,8 @@ describe('component global wrappers', () => {
     expect(code).toContain("'$$typeof' in Component")
     expect(code).toContain('React.createElement(Component, props)')
     expect(code).toContain("Symbol.for('react.element')")
+    expect(code).toContain("key !== 'react.fragment'")
+    expect(code).not.toContain("key.startsWith('react.')")
   })
 
   it('builds a namespace wrapper', () => {
