@@ -598,10 +598,9 @@ function findPrimitivePageChildIndex(kids: readonly React.ReactNode[]): number {
 
 function clientPageShellHasPageSlot(element: React.ReactElement): boolean {
   if (isMainElement(element) || elementTreeContainsMain(element)) return true
-  return elementChildren(element).some(child => {
-    if (typeof child === 'string' || typeof child === 'number') return true
-    return isReactElement(child) && isPlausibleStringContentHost(child)
-  })
+  return elementChildren(element).some(
+    child => isReactElement(child) && isPlausibleStringContentHost(child),
+  )
 }
 
 function insertPageBesideChrome(
