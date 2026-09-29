@@ -176,19 +176,19 @@ export interface SearchParams {
   readonly [key: string]: string | readonly string[] | undefined
 }
 
-export type PageProps<
+export interface PageProps<
   TParams extends RouteParams = RouteParams,
   TSearchParams extends SearchParams = SearchParams,
-> = Readonly<{
-  params: TParams
-  searchParams: TSearchParams
-}>
+> {
+  readonly params: TParams
+  readonly searchParams: TSearchParams
+}
 
-export type LayoutProps<TParams extends RouteParams = RouteParams> = Readonly<{
-  children: ReactNode
-  params?: TParams
-  pathname?: string
-}>
+export interface LayoutProps<TParams extends RouteParams = RouteParams> {
+  readonly children: ReactNode
+  readonly params?: TParams
+  readonly pathname?: string
+}
 
 export interface ErrorProps {
   readonly error: Error
