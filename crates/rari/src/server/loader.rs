@@ -72,7 +72,7 @@ impl ComponentLoader {
             let is_server_action = component_info
                 .get("isServerAction")
                 .and_then(serde_json::Value::as_bool)
-                .unwrap_or_else(|| is_server_action_module(&component_code));
+                .unwrap_or(false);
 
             if let Some(specifier) = module_specifier {
                 if let Err(e) =

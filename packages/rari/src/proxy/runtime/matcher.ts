@@ -13,10 +13,6 @@ interface CompiledProxyPattern {
 
 const compiledPatterns = new Map<string, CompiledProxyPattern>()
 
-export function clearCompiledProxyPatterns(): void {
-  compiledPatterns.clear()
-}
-
 function encodePathnameReserved(value: string): string {
   return value.replace(PATHNAME_RESERVED_RE, char => encodeURIComponent(char))
 }

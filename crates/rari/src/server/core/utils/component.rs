@@ -172,7 +172,7 @@ pub fn has_use_server_directive(code: &str) -> bool {
 }
 
 pub fn is_server_action_module(code: &str) -> bool {
-    has_use_server_directive(code) || code.contains("registerServerReference(")
+    code.contains("registerServerReference(")
 }
 
 pub fn has_top_level_use_client_directive(code: &str) -> bool {
@@ -357,7 +357,10 @@ export async function addTodo() {}
 registerServerReference(addTodo, "actions", "addTodo");
 "#
         ));
-        assert!(is_server_action_module("'use server'\nexport async function addTodo() {}"));
+        assert!(
+            !is_server_action_module("'use server'\nexport async function addTodo() {}"),
+            "directive alone is for source scanning via has_use_server_directive, not dist detection"
+        );
         assert!(!is_server_action_module("export default function Page() { return null }"));
         assert!(
             !is_server_action_module(

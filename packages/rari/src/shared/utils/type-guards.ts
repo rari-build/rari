@@ -1,5 +1,4 @@
 import type { ComponentType, ReactElement, ReactNode } from 'react'
-import type { ProxyModule } from '@/proxy/http/types'
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -73,20 +72,6 @@ export function readViteBinFromPackageRecord(
   if (typeof deps.vite === 'string') return 'vite'
 
   return null
-}
-
-export function isProxyModule(module: unknown): module is ProxyModule {
-  if (!isRecord(module)) return false
-
-  const proxy = module.proxy
-  const defaultExport = module.default
-  const hasProxy = isFunction(proxy) || isFunction(defaultExport)
-
-  if (!hasProxy) return false
-
-  if (module.config !== undefined && !isRecord(module.config)) return false
-
-  return true
 }
 
 export function getCustomEventDetail<T>(
