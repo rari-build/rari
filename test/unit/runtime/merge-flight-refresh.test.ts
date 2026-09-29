@@ -1543,6 +1543,48 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(slotKids[2]).type).toBe('footer')
   })
 
+  it('splices a nested layout path inside thenable-wrapped chrome without picking the wrong slot', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      fulfilledFlightNode(
+        React.createElement(
+          'div',
+          { className: 'shell' },
+          React.createElement('nav', null, 'nav'),
+          React.createElement(
+            'div',
+            { 'data-rari-layout-path': '/sidebar', 'className': 'side' },
+            'side',
+          ),
+          React.createElement(
+            'div',
+            { 'data-rari-layout-path': '/blog', 'className': 'blog' },
+            'post-a',
+          ),
+          React.createElement('footer', null, 'footer'),
+        ),
+      ),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/sidebar' }, 'side-b'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const shell = expectElement(childList(mergedBody)[0])
+    expect(shell.props.className).toBe('shell')
+    const kids = childList(shell)
+    expect(kids).toHaveLength(4)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).props.className).toBe('side')
+    expect(expectElement(kids[1]).props.children).toBe('side-b')
+    expect(expectElement(kids[2]).props.className).toBe('blog')
+    expect(expectElement(kids[2]).props.children).toBe('post-a')
+    expect(expectElement(kids[3]).type).toBe('footer')
+  })
+
   it('soft-navs ryanskinner.com workaround shape (Providers div + client Navbar)', () => {
     const providers = clientRef('src/providers.tsx')
     const navbar = clientRef('src/components/ui/Navbar.tsx')

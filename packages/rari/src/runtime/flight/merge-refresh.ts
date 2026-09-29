@@ -1038,6 +1038,30 @@ function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode)
   return replacePageChildrenAsUnit(kids, contentIndex, preferred, nextPage)
 }
 
+function spliceOpaqueLayoutSlot(
+  slot: React.ReactNode,
+  nextPage: React.ReactNode,
+  layoutPath: string,
+): React.ReactNode {
+  const resolved = unwrapFulfilledFlightNode(slot)
+  if (Array.isArray(resolved)) {
+    const siblingKids: React.ReactNode[] = []
+    for (const entry of resolved) {
+      siblingKids.push(...expandFulfilledFlightChild(asOpaqueReactNode(entry)))
+    }
+    const fragment = React.createElement(
+      React.Fragment,
+      null,
+      ...(siblingKids.length === 0 ? [null] : siblingKids),
+    )
+    return spliceLayoutReuseChildren(fragment, nextPage, layoutPath)
+  }
+  if (isReactElement(resolved)) {
+    return spliceLayoutReuseChildren(resolved, nextPage, layoutPath)
+  }
+  return nextPage
+}
+
 function spliceAtLayoutPath(
   current: React.ReactElement,
   nextPage: React.ReactNode,
@@ -1050,8 +1074,8 @@ function spliceAtLayoutPath(
   const kids = elementChildren(slot.parent)
   const nextKids = [...kids]
   const existing = kids[slot.slotIndex]
-  if (isOpaqueMultiSlot(existing)) {
-    nextKids[slot.slotIndex] = mergeIntoOpaqueMultiSlot(existing, nextPage)
+  if (isOpaqueMultiSlot(existing) || (!isReactElement(existing) && isFlightThenable(existing))) {
+    nextKids[slot.slotIndex] = spliceOpaqueLayoutSlot(existing, nextPage, layoutPath)
   } else if (isReactElement(existing)) {
     nextKids[slot.slotIndex] = cloneWithMergedChildren(
       existing,
@@ -1059,14 +1083,7 @@ function spliceAtLayoutPath(
       mergeIntoHostChild(existing, nextPage),
     )
   } else {
-    const resolved = unwrapFulfilledFlightNode(existing)
-    nextKids[slot.slotIndex] = isReactElement(resolved)
-      ? cloneWithMergedChildren(
-          resolved,
-          elementPropsRecord(resolved),
-          mergeIntoHostChild(resolved, nextPage),
-        )
-      : nextPage
+    nextKids[slot.slotIndex] = nextPage
   }
   return replaceElementInTree(
     current,
