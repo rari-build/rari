@@ -523,8 +523,12 @@ function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): numbe
 
   for (let index = kids.length - 1; index >= 0; index -= 1) {
     const child = kids[index]
-    if (!isReactElement(child)) continue
-    if (isPlausibleStringContentHost(child) || isFallbackContentHost(child)) return index
+    if (isReactElement(child) && isPlausibleStringContentHost(child)) return index
+  }
+
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    const child = kids[index]
+    if (isReactElement(child) && isFallbackContentHost(child)) return index
   }
 
   return -1
