@@ -57,9 +57,32 @@ interface RegisterResult {
     store.ssrModules![hashId] = module
   }
 
+  function isReactElementMarker(value: object): boolean {
+    const type: unknown = Reflect.get(value, '$$typeof')
+    return (
+      type === Symbol.for('react.element') ||
+      type === Symbol.for('react.transitional.element') ||
+      type === Symbol.for('react.portal')
+    )
+  }
+
+  function isBareReactTypeSymbol(value: symbol): boolean {
+    const key = Symbol.keyFor(value)
+    return (
+      key != null &&
+      key.startsWith('react.') &&
+      key !== 'react.element' &&
+      key !== 'react.transitional.element' &&
+      key !== 'react.portal'
+    )
+  }
+
   function isRegisterableExport(value: unknown): boolean {
     if (typeof value === 'function') return true
+    if (typeof value === 'symbol') return isBareReactTypeSymbol(value)
     if (value == null || typeof value !== 'object') return false
+    if (isReactElementMarker(value)) return false
+    if (Reflect.get(value, '~isClientComponent') === true) return true
     return Reflect.has(value, '$$typeof')
   }
 

@@ -31,6 +31,38 @@ if (typeof g['~clientComponentNames'] === 'undefined') g['~clientComponentNames'
 if (typeof g['~clientComponentPaths'] === 'undefined') g['~clientComponentPaths'] = {}
 
 const REACT_CLIENT_REFERENCE = Symbol.for('react.client.reference')
+const REACT_ELEMENT_TYPE = Symbol.for('react.element')
+const REACT_TRANSITIONAL_ELEMENT_TYPE = Symbol.for('react.transitional.element')
+const REACT_PORTAL_TYPE = Symbol.for('react.portal')
+
+function isReactElementMarker(value: object): boolean {
+  const type: unknown = Reflect.get(value, '$$typeof')
+  return (
+    type === REACT_ELEMENT_TYPE ||
+    type === REACT_TRANSITIONAL_ELEMENT_TYPE ||
+    type === REACT_PORTAL_TYPE
+  )
+}
+
+function isBareReactTypeSymbol(value: symbol): boolean {
+  const key = Symbol.keyFor(value)
+  return (
+    key != null &&
+    key.startsWith('react.') &&
+    key !== 'react.element' &&
+    key !== 'react.transitional.element' &&
+    key !== 'react.portal'
+  )
+}
+
+function isRegisterableClientExport(value: unknown): boolean {
+  if (typeof value === 'function') return true
+  if (typeof value === 'symbol') return isBareReactTypeSymbol(value)
+  if (value == null || typeof value !== 'object') return false
+  if (isReactElementMarker(value)) return false
+  if (Reflect.get(value, '~isClientComponent') === true) return true
+  return Reflect.has(value, '$$typeof')
+}
 
 function getComponentDisplayName(componentType: unknown): string | undefined {
   if (typeof componentType !== 'function') return undefined
@@ -204,12 +236,6 @@ function clearClientComponents(): void {
   g['~clientComponents'] = {}
   g['~clientComponentNames'] = {}
   g['~clientComponentPaths'] = {}
-}
-
-function isRegisterableClientExport(value: unknown): boolean {
-  if (typeof value === 'function') return true
-  if (value == null || typeof value !== 'object') return false
-  return Reflect.has(value, '$$typeof')
 }
 
 function registerClientComponentFromModule(componentPath: string, moduleExports: unknown): void {

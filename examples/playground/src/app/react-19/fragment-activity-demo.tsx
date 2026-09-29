@@ -26,14 +26,17 @@ export function FragmentRefsDemo() {
 
     const observer = new IntersectionObserver(
       entries => {
-        const next = entries
-          .filter(entry => entry.isIntersecting)
-          .map(entry => {
-            if (!(entry.target instanceof HTMLElement)) return null
-            return entry.target.dataset.cardId ?? null
-          })
-          .filter((id): id is string => id != null && id !== '')
-        setVisibleIds(next)
+        setVisibleIds(prev => {
+          const next = new Set(prev)
+          for (const entry of entries) {
+            if (!(entry.target instanceof HTMLElement)) continue
+            const id = entry.target.dataset.cardId
+            if (id == null || id === '') continue
+            if (entry.isIntersecting) next.add(id)
+            else next.delete(id)
+          }
+          return CARDS.map(card => card.id).filter(id => next.has(id))
+        })
       },
       { threshold: 0.6 },
     )
@@ -96,9 +99,37 @@ export function FragmentRefsDemo() {
   )
 }
 
+function ActivityPanel() {
+  const [count, setCount] = useState(0)
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 text-gray-800 hover:bg-gray-50"
+        onClick={() => {
+          setCount(current => current + 1)
+        }}
+      >
+        Increment
+      </button>
+      <div
+        className="rounded-lg border border-indigo-200 bg-indigo-50 p-4"
+        data-testid="activity-panel"
+      >
+        <p className="text-sm text-indigo-900">
+          Counter stays alive while hidden:{' '}
+          <span className="font-semibold" data-testid="activity-count">
+            {count}
+          </span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function ActivityDemo() {
   const [showPanel, setShowPanel] = useState(true)
-  const [count, setCount] = useState(0)
 
   return (
     <div className="space-y-4">
@@ -107,43 +138,21 @@ export function ActivityDemo() {
         <code>ViewTransition</code> for enter/exit.
       </p>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="px-3 py-1.5 text-sm font-medium rounded-md bg-gray-900 text-white hover:bg-gray-800"
-          onClick={() => {
-            startTransition(() => {
-              setShowPanel(current => !current)
-            })
-          }}
-        >
-          {showPanel ? 'Hide panel' : 'Show panel'}
-        </button>
-        <button
-          type="button"
-          className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 text-gray-800 hover:bg-gray-50"
-          onClick={() => {
-            setCount(current => current + 1)
-          }}
-          disabled={!showPanel}
-        >
-          Increment
-        </button>
-      </div>
+      <button
+        type="button"
+        className="px-3 py-1.5 text-sm font-medium rounded-md bg-gray-900 text-white hover:bg-gray-800"
+        onClick={() => {
+          startTransition(() => {
+            setShowPanel(current => !current)
+          })
+        }}
+      >
+        {showPanel ? 'Hide panel' : 'Show panel'}
+      </button>
 
       <Activity mode={showPanel ? 'visible' : 'hidden'}>
         <ViewTransition enter="auto" exit="auto" default="none">
-          <div
-            className="rounded-lg border border-indigo-200 bg-indigo-50 p-4"
-            data-testid="activity-panel"
-          >
-            <p className="text-sm text-indigo-900">
-              Counter stays alive while hidden:{' '}
-              <span className="font-semibold" data-testid="activity-count">
-                {count}
-              </span>
-            </p>
-          </div>
+          <ActivityPanel />
         </ViewTransition>
       </Activity>
     </div>

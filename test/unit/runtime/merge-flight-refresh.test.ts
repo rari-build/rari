@@ -21,6 +21,7 @@ function expectElement(node: React.ReactNode): React.ReactElement<{
   'name'?: string
   'content'?: string
   'charSet'?: string
+  'role'?: string
   'data-theme'?: string
 }> {
   if (
@@ -32,6 +33,7 @@ function expectElement(node: React.ReactNode): React.ReactElement<{
       'name'?: string
       'content'?: string
       'charSet'?: string
+      'role'?: string
       'data-theme'?: string
     }>(node)
   )
@@ -944,5 +946,35 @@ describe('mergeFlightRefresh', () => {
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     expect(childList(merged)).toEqual(['prefix', 'about'])
+  })
+
+  it('preserves role=status toast when replacing page content on layout-path miss', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('div', { role: 'status' }, 'saved'),
+      React.createElement('article', null, 'old page'),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'new page'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(kids[0].props.role).toBe('status')
+    expect(kids[0].props.children).toBe('saved')
+    expect(kids[1].type).toBe('article')
+    expect(kids[1].props.children).toBe('new page')
+  })
+
+  it('replaces matched page content with empty children instead of retaining stale kids', () => {
+    const current = React.createElement('main', null, React.createElement('p', null, 'old'))
+    const refresh = React.createElement('main', null)
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    expect(childList(merged)).toEqual([])
   })
 })

@@ -29,7 +29,7 @@ describe('strip-react-directives', () => {
         '/app/Button.tsx',
       ),
     ).toEqual({
-      code: `\nexport function Button() { return null }\n`,
+      code: `export function Button() { return null }\n`,
       map: null,
     })
 
@@ -40,7 +40,7 @@ describe('strip-react-directives', () => {
         '/app/actions.ts',
       ),
     ).toEqual({
-      code: `\nexport async function save() { return 1 }\n`,
+      code: `export async function save() { return 1 }\n`,
       map: null,
     })
   })
@@ -48,5 +48,15 @@ describe('strip-react-directives', () => {
   it('leaves modules without directives unchanged', async () => {
     const plugin = createStripReactDirectivesPlugin()
     expect(await callTransform(plugin, 'export const x = 1\n', '/app/util.ts')).toBeNull()
+  })
+
+  it('does not strip directive text inside template literals', async () => {
+    const plugin = createStripReactDirectivesPlugin()
+    const code = `'use client'\nexport const hint = \`\n'use client'\n\`\n`
+
+    expect(await callTransform(plugin, code, '/app/Hint.tsx')).toEqual({
+      code: `export const hint = \`\n'use client'\n\`\n`,
+      map: null,
+    })
   })
 })
