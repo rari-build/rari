@@ -1160,7 +1160,6 @@ function readPrologueDirective(
   len: number,
 ): {
   readonly kind: 'use client' | 'use server'
-  readonly stringEnd: number
   readonly term: ReturnType<typeof advancePastDirectiveTerminator>
 } | null {
   const ch = source.charCodeAt(start)
@@ -1177,30 +1176,8 @@ function readPrologueDirective(
 
   return {
     kind: isUseClient ? 'use client' : 'use server',
-    stringEnd,
     term: advancePastDirectiveTerminator(source, stringEnd, len),
   }
-}
-
-function endOfDirectiveStatement(source: string, stringEnd: number, len: number): number {
-  let end = stringEnd
-  let j = stringEnd
-  while (j < len) {
-    const jch = source.charCodeAt(j)
-    if (jch === CH_SEMICOLON) {
-      end = j + 1
-      break
-    }
-    if (isWhitespaceCode(jch) && !isLineTerminatorCode(jch)) {
-      j++
-      continue
-    }
-    break
-  }
-  while (end < len && isLineTerminatorCode(source.charCodeAt(end))) {
-    end++
-  }
-  return end
 }
 
 function updateDirectivesPhase(
@@ -1218,7 +1195,6 @@ export function stripTopLevelDirective(source: string, kind: 'use client' | 'use
   let directivesPhase = true
 
   while (i < len && directivesPhase) {
-    const triviaStart = i
     i = skipTrivia(source, i, len)
     if (i >= len) break
 
@@ -1227,12 +1203,11 @@ export function stripTopLevelDirective(source: string, kind: 'use client' | 'use
 
     directivesPhase = updateDirectivesPhase(directive.term, directivesPhase)
 
-    if (directive.kind === kind) {
-      const end = directive.term.stillDirective
-        ? directive.term.nextI
-        : endOfDirectiveStatement(source, directive.stringEnd, len)
-      return source.slice(0, triviaStart) + source.slice(end)
+    if (directive.kind === kind && directive.term.stillDirective) {
+      return source.slice(0, i) + source.slice(directive.term.nextI)
     }
+
+    if (!directive.term.stillDirective) break
 
     i = directive.term.nextI
   }

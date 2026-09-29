@@ -35,6 +35,16 @@ const REACT_ELEMENT_TYPE = Symbol.for('react.element')
 const REACT_TRANSITIONAL_ELEMENT_TYPE = Symbol.for('react.transitional.element')
 const REACT_PORTAL_TYPE = Symbol.for('react.portal')
 
+const BARE_REACT_COMPONENT_TYPE_KEYS = new Set([
+  'react.fragment',
+  'react.profiler',
+  'react.strict_mode',
+  'react.suspense',
+  'react.suspense_list',
+  'react.activity',
+  'react.view_transition',
+])
+
 function isReactElementMarker(value: object): boolean {
   const type: unknown = Reflect.get(value, '$$typeof')
   return (
@@ -46,13 +56,7 @@ function isReactElementMarker(value: object): boolean {
 
 function isBareReactTypeSymbol(value: symbol): boolean {
   const key = Symbol.keyFor(value)
-  return (
-    key != null &&
-    key.startsWith('react.') &&
-    key !== 'react.element' &&
-    key !== 'react.transitional.element' &&
-    key !== 'react.portal'
-  )
+  return key != null && BARE_REACT_COMPONENT_TYPE_KEYS.has(key)
 }
 
 function isRegisterableClientExport(value: unknown): boolean {

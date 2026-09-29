@@ -29,11 +29,13 @@ const ${bindingName} = (props) => {
   if (typeof Component === 'symbol') {
     const key = Symbol.keyFor(Component);
     if (
-      key == null ||
-      !key.startsWith('react.') ||
-      key === 'react.element' ||
-      key === 'react.transitional.element' ||
-      key === 'react.portal'
+      key !== 'react.fragment' &&
+      key !== 'react.profiler' &&
+      key !== 'react.strict_mode' &&
+      key !== 'react.suspense' &&
+      key !== 'react.suspense_list' &&
+      key !== 'react.activity' &&
+      key !== 'react.view_transition'
     ) {
       throw new Error('Component ${registryKey}#${exportName} is not a component type symbol');
     }

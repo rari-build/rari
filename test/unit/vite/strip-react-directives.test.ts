@@ -59,4 +59,30 @@ describe('strip-react-directives', () => {
       map: null,
     })
   })
+
+  it('preserves preceding comments when stripping the directive', async () => {
+    const plugin = createStripReactDirectivesPlugin()
+    const code = `/** @jsxImportSource react */\n'use client'\nexport function Button() { return null }\n`
+
+    expect(await callTransform(plugin, code, '/app/Button.tsx')).toEqual({
+      code: `/** @jsxImportSource react */\nexport function Button() { return null }\n`,
+      map: null,
+    })
+  })
+
+  it('does not strip directive-looking strings in expressions', async () => {
+    const plugin = createStripReactDirectivesPlugin()
+    const code = `'use client'\nexport const flag = 'use client' + suffix\n`
+
+    expect(await callTransform(plugin, code, '/app/flag.ts')).toEqual({
+      code: `export const flag = 'use client' + suffix\n`,
+      map: null,
+    })
+  })
+
+  it('leaves expression-only use client strings alone when not a directive', async () => {
+    const plugin = createStripReactDirectivesPlugin()
+    const code = `export const flag = 'use client' + suffix\n`
+    expect(await callTransform(plugin, code, '/app/flag.ts')).toBeNull()
+  })
 })
