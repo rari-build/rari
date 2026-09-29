@@ -1,3 +1,32 @@
+## [rari@0.17.1] - 2026-09-29
+
+### 🐛 Bug Fixes
+
+- soft-nav chrome, notFound HTML shell, and Image blur stuck state by @skiniks
+- improve not-found handling and response caching logic by @skiniks
+- strip RSC directives and harden Context, use-cache, and soft-nav merge by @skiniks
+
+### 🚜 Refactor
+
+- streamline metadata handling and improve document head merging by @skiniks
+- enhance React component registration and improve directive handling by @skiniks
+- enhance React component type handling and improve merge logic by @skiniks
+- improve page metadata collection and enhance React component merging logic by @skiniks
+- enhance merging logic for React components and improve directive handling by @skiniks
+- simplify platform and architecture validation logic by @skiniks
+- improve client page handling in merge logic by @skiniks
+- enhance server action detection and improve component loading logic by @skiniks
+- improve server action detection logic in component loader and enhance test coverage by @skiniks
+- remove unused proxy executor and module utilities, streamline server action detection logic by @skiniks
+- update Google Fonts integration by replacing generated file with JSON and modifying related scripts by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari package version to 0.17.1 in Cargo.toml and Cargo.lock by @skiniks
+- update dependencies
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.0...rari@0.17.1
 ## [rari@0.17.0] - 2026-09-29
 
 ### 🚀 Features
