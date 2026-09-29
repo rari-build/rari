@@ -274,6 +274,53 @@ describe('mergeFlightRefresh', () => {
     expect(content.props.children).toBe('about')
   })
 
+  it('replaces a primitive page node while preserving header chrome', () => {
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('header', null, 'site'),
+      'home',
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody)
+    expect(kids).toHaveLength(2)
+    expect(expectElement(kids[0]).type).toBe('header')
+    expect(expectElement(kids[0]).props.children).toBe('site')
+    expect(kids[1]).toBe('about')
+  })
+
+  it('replaces a childless ClientPage shell with the refreshed page', () => {
+    const clientPage = clientRef('src/app/page.tsx')
+    const current = React.createElement(
+      'body',
+      null,
+      React.createElement('header', null, 'site'),
+      React.createElement(clientPage, { key: 'page' }),
+    )
+    const refresh = React.createElement(
+      'body',
+      null,
+      React.createElement(
+        'rari-layout-reuse',
+        { 'data-rari-layout-path': '/missing' },
+        React.createElement(clientRef('src/app/about.tsx'), { key: 'about' }, 'about'),
+      ),
+    )
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const kids = childList(mergedBody).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(kids[0].type).toBe('header')
+    expect(clientReferenceId(kids[1].type)).toBe('src/app/about.tsx')
+    expect(kids[1].props.children).toBe('about')
+  })
+
   it('replaces all competing page children as a unit on layout-path miss', () => {
     const current = React.createElement(
       'body',

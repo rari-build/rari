@@ -285,7 +285,12 @@ pub(crate) async fn collect_page_metadata(
         }
     }
 
-    let page_file_path = component_dist_path(&base_path, &route_match.route.file_path);
+    let page_source_path = route_match
+        .not_found
+        .as_ref()
+        .map(|entry| entry.file_path.as_str())
+        .unwrap_or(route_match.route.file_path.as_str());
+    let page_file_path = component_dist_path(&base_path, page_source_path);
 
     if !fs::try_exists(&page_file_path).await.unwrap_or(false) {
         return None;
@@ -457,7 +462,7 @@ pub async fn render_with_fallback(
 pub async fn render_rsc_navigation_streaming(
     state: Arc<ServerState>,
     mut route_match: AppRouteMatch,
-    context: LayoutRenderContext,
+    mut context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
@@ -485,6 +490,7 @@ pub async fn render_rsc_navigation_streaming(
             if let Some(app_router) = state.app_router.as_ref()
                 && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
             {
+                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
                 match layout_renderer
                     .render_route_with_streaming(
                         &route_match,
@@ -846,7 +852,7 @@ fn chunked_stream_error_chunk(message: &str) -> Bytes {
 pub async fn render_synchronous(
     state: Arc<ServerState>,
     mut route_match: AppRouteMatch,
-    context: LayoutRenderContext,
+    mut context: LayoutRenderContext,
     accept_encoding: Option<&str>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
@@ -873,6 +879,7 @@ pub async fn render_synchronous(
             if let Some(app_router) = state.app_router.as_ref()
                 && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
             {
+                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
                 match layout_renderer
                     .render_route_with_streaming(
                         &route_match,
@@ -1403,6 +1410,8 @@ pub async fn handle_app_route(
                     if let Some(app_router) = state.app_router.as_ref()
                         && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
                     {
+                        context.metadata =
+                            collect_page_metadata(&state, &route_match, &context).await;
                         match layout_renderer
                             .render_route_by_mode(
                                 &route_match,
@@ -1746,6 +1755,8 @@ pub async fn handle_app_route(
                     if let Some(app_router) = state.app_router.as_ref()
                         && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
                     {
+                        context.metadata =
+                            collect_page_metadata(&state, &route_match, &context).await;
                         match layout_renderer
                             .render_route_with_streaming(
                                 &route_match,
