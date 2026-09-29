@@ -85,4 +85,16 @@ describe('strip-react-directives', () => {
     const code = `export const flag = 'use client' + suffix\n`
     expect(await callTransform(plugin, code, '/app/flag.ts')).toBeNull()
   })
+
+  it('strips a standalone directive at EOF without trailing newline', async () => {
+    const plugin = createStripReactDirectivesPlugin()
+    expect(await callTransform(plugin, `'use client'`, '/app/Empty.tsx')).toEqual({
+      code: '',
+      map: null,
+    })
+    expect(await callTransform(plugin, `'use server'`, '/app/action.ts')).toEqual({
+      code: '',
+      map: null,
+    })
+  })
 })

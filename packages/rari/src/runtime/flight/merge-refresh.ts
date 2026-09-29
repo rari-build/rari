@@ -586,6 +586,23 @@ function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): numbe
   return -1
 }
 
+function findPrimitivePageChildIndex(kids: readonly React.ReactNode[]): number {
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    const child = kids[index]
+    if (child == null || child === false || child === true) continue
+    if (isReactElement(child)) continue
+    if (typeof child === 'string' || typeof child === 'number') return index
+  }
+  return -1
+}
+
+function clientPageShellHasPageSlot(element: React.ReactElement): boolean {
+  if (isMainElement(element) || elementTreeContainsMain(element)) return true
+  return elementChildren(element).some(
+    child => isReactElement(child) && isPlausibleStringContentHost(child),
+  )
+}
+
 function replaceMatchedHostChild(
   kids: readonly React.ReactNode[],
   nextPage: React.ReactElement,
@@ -633,12 +650,16 @@ function replacePageChildrenAsUnit(
   preferred: React.ReactNode,
   nextPage: React.ReactNode,
 ): React.ReactNode[] {
+  const keepPreferredShell =
+    isReactElement(preferred) &&
+    (!isFallbackContentHost(preferred) || clientPageShellHasPageSlot(preferred))
+
   const nextKids: React.ReactNode[] = []
   for (let index = 0; index < kids.length; index += 1) {
     const child = kids[index]
     if (index === contentIndex) {
       nextKids.push(
-        isReactElement(preferred)
+        keepPreferredShell
           ? cloneWithMergedChildren(preferred, elementPropsRecord(preferred), nextPage)
           : nextPage,
       )
@@ -669,7 +690,13 @@ function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode)
   }
 
   const contentIndex = findPreferredContentChildIndex(kids)
-  if (contentIndex < 0) return nextPage
+  if (contentIndex < 0) {
+    const primitiveIndex = findPrimitivePageChildIndex(kids)
+    if (primitiveIndex >= 0) {
+      return replacePageChildrenAsUnit(kids, primitiveIndex, kids[primitiveIndex], nextPage)
+    }
+    return nextPage
+  }
 
   const preferred = kids[contentIndex]
   if (

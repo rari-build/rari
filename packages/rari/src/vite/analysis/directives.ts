@@ -486,7 +486,7 @@ function advancePastDirectiveTerminator(
     }
     return { stillDirective: false, nextI: j, endDirectivesPhase: true }
   }
-  return { stillDirective: false, nextI: j, endDirectivesPhase: j >= len }
+  return { stillDirective: true, nextI: j, endDirectivesPhase: true }
 }
 
 function tryConsumeDirectiveString(
