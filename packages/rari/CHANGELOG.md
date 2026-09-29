@@ -1,3 +1,20 @@
+## [rari@0.17.2] - 2026-09-29
+
+### 🚀 Features
+
+- improve handling of fulfilled flight nodes and enhance child element processing by @skiniks
+- add resolvePreviousDocument function and refactor flight node handling by @skiniks
+
+### 🐛 Bug Fixes
+
+- enhance flight node handling in the runtime by @skiniks
+
+### 🚜 Refactor
+
+- update PageProps and LayoutProps to interfaces, enhance mergeFlightRefresh handling for nested layout paths by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.1...rari@0.17.2
 ## [rari@0.17.1] - 2026-09-29
 
 ### 🐛 Bug Fixes
