@@ -137,6 +137,7 @@ interface ServerComponentManifest {
       moduleSpecifier: string
       dependencies: string[]
       hasNodeImports: boolean
+      isServerAction?: boolean
       css?: readonly string[]
     }
   >
@@ -871,6 +872,7 @@ export class ServerComponentBuilder {
         moduleSpecifier: pathToFileURL(path.resolve(this.projectRoot, fullBundlePath)).href,
         dependencies: [...(component?.dependencies ?? [])],
         hasNodeImports: component?.hasNodeImports ?? false,
+        isServerAction: this.serverActions.has(filePath),
         css,
       }
     }
@@ -1363,6 +1365,7 @@ export class ServerComponentBuilder {
         moduleSpecifier,
         dependencies: this.extractDependencies(code, filePath),
         hasNodeImports: this.hasNodeImports(code, filePath),
+        isServerAction: this.isServerAction(code, filePath),
         css,
       }
     } else {
@@ -1374,6 +1377,7 @@ export class ServerComponentBuilder {
         moduleSpecifier,
         dependencies: [...componentData.dependencies],
         hasNodeImports: componentData.hasNodeImports,
+        isServerAction: this.serverActions.has(filePath),
         css,
       }
     }

@@ -171,6 +171,10 @@ pub fn has_use_server_directive(code: &str) -> bool {
     scan_directives(code).present.use_server
 }
 
+pub fn is_server_action_module(code: &str) -> bool {
+    has_use_server_directive(code) || code.contains("registerServerReference")
+}
+
 pub fn has_top_level_use_client_directive(code: &str) -> bool {
     scan_directives(code).top_level.use_client
 }
@@ -343,5 +347,17 @@ mod tests {
                 case.id
             );
         }
+    }
+
+    #[test]
+    fn detects_server_action_modules_via_register_server_reference() {
+        assert!(is_server_action_module(
+            r#"import {registerServerReference} from "react-server-dom-rari/server";
+export async function addTodo() {}
+registerServerReference(addTodo, "actions", "addTodo");
+"#
+        ));
+        assert!(is_server_action_module("'use server'\nexport async function addTodo() {}"));
+        assert!(!is_server_action_module("export default function Page() { return null }"));
     }
 }
