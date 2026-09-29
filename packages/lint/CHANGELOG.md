@@ -1,3 +1,27 @@
+## [@rari/lint@0.1.4] - 2026-09-29
+
+### 🚀 Features
+
+- add static image imports with hashed assets and optimizer resolution by @skiniks
+- add to linting configuration and update pnpm workspace by @skiniks
+
+### 🐛 Bug Fixes
+
+- update rari package linting rules to include ErrorProps in allowed types by @skiniks
+
+### 🚜 Refactor
+
+- standardize linting catalog references and update package dependencies by @skiniks
+- streamline action argument validation and enhance API handler structure by @skiniks
+- update linting configurations and sorting rules for JSON files by @skiniks
+- update linting configurations and enhance MDX component handling by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update Node.js version requirements across documentation and configuration files to >=24.21.0 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/lint@0.1.3...@rari/lint@0.1.4
 ## [@rari/lint@0.1.3] - 2026-08-31
 
 ### 🚜 Refactor
