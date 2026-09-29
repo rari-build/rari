@@ -1,7 +1,7 @@
 'use client'
 
 import type { ImageFormat } from './constants'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   BLUR_PLACEHOLDER_QUALITY,
   BLUR_PLACEHOLDER_WIDTH,
@@ -227,6 +227,10 @@ function blurPendingStyle(imgBlurDataURL: string): React.CSSProperties {
   }
 }
 
+function isImageDecoded(img: Readonly<{ complete: boolean; naturalWidth: number }>): boolean {
+  return img.complete && img.naturalWidth > 0
+}
+
 function buildImageStyle(options: {
   readonly style: React.CSSProperties | undefined
   readonly fill: boolean
@@ -403,8 +407,9 @@ export function Image({
   const handleLoad = useCallback(
     (event: React.SyntheticEvent<HTMLImageElement>) => {
       const img = event.currentTarget
+      const loadedSrc = img.currentSrc !== '' ? img.currentSrc : img.src
 
-      if (img.src && img.complete) {
+      if (loadedSrc !== '' && img.complete) {
         if (placeholder === 'blur') setBlurComplete(true)
 
         if (onLoadRef.current) onLoadRef.current(event)
@@ -422,6 +427,12 @@ export function Image({
     },
     [placeholder, onError],
   )
+
+  useLayoutEffect(() => {
+    if (placeholder !== 'blur') return
+    const img = imgRef.current
+    if (img != null && isImageDecoded(img)) setBlurComplete(true)
+  }, [placeholder, finalSrc])
 
   useEffect(() => {
     if (!shouldPreload) return undefined

@@ -481,20 +481,85 @@ function elementsMatchForMerge(current: React.ReactElement, refresh: React.React
   return (current.key ?? null) === (refresh.key ?? null)
 }
 
+function isChromeSiblingElement(element: React.ReactElement): boolean {
+  const type = element.type
+  return (
+    type === 'nav' ||
+    type === 'NAV' ||
+    type === 'header' ||
+    type === 'HEADER' ||
+    type === 'footer' ||
+    type === 'FOOTER' ||
+    type === 'aside' ||
+    type === 'ASIDE'
+  )
+}
+
+function isMainElement(element: React.ReactElement): boolean {
+  return element.type === 'main' || element.type === 'MAIN'
+}
+
+function isPlausibleStringContentHost(element: React.ReactElement): boolean {
+  return (
+    typeof element.type === 'string' &&
+    !NON_CONTENT_HOST_ELEMENTS.has(element.type) &&
+    !isChromeSiblingElement(element)
+  )
+}
+
+function isFallbackContentHost(element: React.ReactElement): boolean {
+  return isClientComponentElement(element) || isFragmentElement(element)
+}
+
+function findPreferredContentChildIndex(kids: readonly React.ReactNode[]): number {
+  const mainIndex = kids.findIndex(child => isReactElement(child) && isMainElement(child))
+  if (mainIndex >= 0) return mainIndex
+
+  for (let index = 0; index < kids.length; index += 1) {
+    const child = kids[index]
+    if (!isReactElement(child) || !isPlausibleStringContentHost(child)) continue
+    if (elementTreeContainsMain(child)) return index
+  }
+
+  for (let index = kids.length - 1; index >= 0; index -= 1) {
+    const child = kids[index]
+    if (!isReactElement(child)) continue
+    if (isPlausibleStringContentHost(child) || isFallbackContentHost(child)) return index
+  }
+
+  return -1
+}
+
 function mergeIntoHostChild(host: React.ReactElement, nextPage: React.ReactNode): React.ReactNode {
   const kids = elementChildren(host)
   if (kids.length === 1 && isReactElement(kids[0])) {
     return mergeFlightRefresh(kids[0], nextPage)
   }
-  if (!isReactElement(nextPage) || kids.length === 0) return nextPage
+  if (kids.length === 0) return nextPage
 
-  const matchIndex = kids.findIndex(
-    child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
-  )
-  if (matchIndex < 0) return nextPage
+  if (isReactElement(nextPage)) {
+    const matchIndex = kids.findIndex(
+      child => isReactElement(child) && elementsMatchForMerge(child, nextPage),
+    )
+    if (matchIndex >= 0) {
+      const nextKids = [...kids]
+      nextKids[matchIndex] = mergeFlightRefresh(kids[matchIndex], nextPage)
+      return nextKids
+    }
+  }
+
+  const contentIndex = findPreferredContentChildIndex(kids)
+  if (contentIndex < 0) return nextPage
 
   const nextKids = [...kids]
-  nextKids[matchIndex] = mergeFlightRefresh(kids[matchIndex], nextPage)
+  const existing = kids[contentIndex]
+  nextKids[contentIndex] = isReactElement(existing)
+    ? cloneWithMergedChildren(
+        existing,
+        elementPropsRecord(existing),
+        mergeIntoHostChild(existing, nextPage),
+      )
+    : nextPage
   return nextKids
 }
 

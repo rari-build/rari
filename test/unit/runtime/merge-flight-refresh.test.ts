@@ -248,7 +248,7 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(kids[1]).props.children).toBe('about')
   })
 
-  it('does not splice into the first sibling when layout path misses and there is no main', () => {
+  it('preserves chrome siblings when layout path misses and content is a non-main host', () => {
     const current = React.createElement(
       'body',
       null,
@@ -263,8 +263,60 @@ describe('mergeFlightRefresh', () => {
 
     const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
     const kids = childList(mergedBody)
-    expect(kids).toHaveLength(1)
-    expect(kids[0]).toBe('about')
+    expect(kids).toHaveLength(2)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[0]).props.children).toBe('nav')
+    const content = expectElement(kids[1])
+    expect(content.type).toBe('div')
+    expect(content.props.className).toBe('content')
+    expect(content.props.children).toBe('about')
+  })
+
+  it('preserves client Providers chrome around main on document-reuse soft-nav', () => {
+    const providers = clientRef('src/providers.tsx')
+    const navbar = clientRef('src/components/Navbar.tsx')
+    const footer = clientRef('src/components/Footer.tsx')
+    const template = clientRef('src/app/template.tsx')
+
+    const current = React.createElement(
+      'html',
+      { lang: 'en' },
+      React.createElement('head', null, React.createElement('title', null, 'Home')),
+      React.createElement(
+        'body',
+        null,
+        React.createElement(
+          providers,
+          { key: 'providers' },
+          React.createElement(navbar, { key: 'nav' }),
+          React.createElement(
+            'main',
+            null,
+            React.createElement(template, { key: 'template' }, 'home'),
+          ),
+          React.createElement(footer, { key: 'footer' }),
+        ),
+      ),
+    )
+    const refresh = React.createElement(
+      'rari-layout-reuse',
+      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
+      React.createElement(clientRef('src/app/template.tsx'), { key: 'template' }, 'about'),
+    )
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    expect(merged.type).toBe('html')
+    const [, body] = childList(merged).map(child => expectElement(child))
+    const shell = expectElement(childList(body)[0])
+    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
+    const kids = childList(shell)
+    expect(kids).toHaveLength(3)
+    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/Navbar.tsx')
+    const main = expectElement(kids[1])
+    expect(main.type).toBe('main')
+    expect(clientReferenceId(expectElement(childList(main)[0]).type)).toBe('src/app/template.tsx')
+    expect(expectElement(childList(main)[0]).props.children).toBe('about')
+    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
   })
 
   it('prefers nested main over preceding void or empty siblings', () => {

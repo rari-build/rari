@@ -914,7 +914,11 @@ pub async fn render_synchronous(
                 }
             } else {
                 tracing::error!("Failed to render route '{}': {}", route_match.route.path, e);
-                return render_fallback_html(&state, route_match.not_found.is_some()).await;
+                return render_fallback_html(
+                    &state,
+                    route_match.not_found.is_some() || is_rari_page_not_found(&e),
+                )
+                .await;
             }
         }
     };
@@ -1758,8 +1762,44 @@ pub async fn handle_app_route(
             {
                 Ok(result) => result,
                 Err(e) => {
-                    tracing::error!("Direct HTML rendering failed: {}, falling back to shell", e);
-                    return render_fallback_html(&state, route_match.not_found.is_some()).await;
+                    if let Some(app_router) = state.app_router.as_ref()
+                        && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
+                    {
+                        match layout_renderer
+                            .render_route_with_streaming(
+                                &route_match,
+                                &context,
+                                Some(Arc::clone(&request_context)),
+                                false,
+                                None,
+                            )
+                            .await
+                        {
+                            Ok(result) => result,
+                            Err(retry_err) => {
+                                tracing::error!(
+                                    "Direct HTML rendering failed after not-found retry: {}",
+                                    retry_err
+                                );
+                                return render_fallback_html(
+                                    &state,
+                                    route_match.not_found.is_some()
+                                        || is_rari_page_not_found(&retry_err),
+                                )
+                                .await;
+                            }
+                        }
+                    } else {
+                        tracing::error!(
+                            "Direct HTML rendering failed: {}, falling back to shell",
+                            e
+                        );
+                        return render_fallback_html(
+                            &state,
+                            route_match.not_found.is_some() || is_rari_page_not_found(&e),
+                        )
+                        .await;
+                    }
                 }
             };
 

@@ -125,6 +125,15 @@ test.describe('Error Handling', () => {
       expect(response.status()).toBe(404)
     })
 
+    test('should render not-found UI when a page calls notFound()', async ({ page, request }) => {
+      const response = await request.get(`/not-found-trigger`)
+      expect(response.status()).toBe(404)
+
+      await page.goto(`/not-found-trigger`)
+      await expect(page.locator('[data-testid="not-found-page"]')).toBeVisible()
+      await expect(page.locator('[data-testid="site-nav"], nav, a[href="/"]').first()).toBeVisible()
+    })
+
     test('should show 404 for deeply nested non-existent routes', async ({ page }) => {
       await page.goto(`/a/b/c/d/e/f/non-existent`)
 
