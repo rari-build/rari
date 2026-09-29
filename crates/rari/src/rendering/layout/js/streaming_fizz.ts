@@ -20,6 +20,24 @@ declare function rariCreateHtmlBoundaryTracker(): {
     }
   }
 
+  function rariIsNotFoundError(error: unknown): boolean {
+    if (error == null || typeof error !== 'object') return false
+    const digest: unknown = Reflect.get(error, 'digest')
+    if (digest === 'RARI_NOT_FOUND') return true
+    const message: unknown = Reflect.get(error, 'message')
+    return message === 'RARI_NOT_FOUND'
+  }
+
+  function rariCreateNotFoundError(): Error {
+    const error = new Error('RARI_NOT_FOUND')
+    Reflect.set(error, 'digest', 'RARI_NOT_FOUND')
+    return error
+  }
+
+  function rariThrowIfCaughtNotFound(caughtErrors: readonly unknown[]): void {
+    if (caughtErrors.some(rariIsNotFoundError)) throw rariCreateNotFoundError()
+  }
+
   function rariStreamLog(phase: string, detail?: string) {
     // Hot-path logging adds Deno-op cost under concurrent streams; keep off by default.
     if (!g.RARI_STREAM_DEBUG) return
@@ -889,44 +907,52 @@ declare function rariCreateHtmlBoundaryTracker(): {
 
     const bundlerConfig = g['~rari']?.clientReferenceManifest ?? {}
 
-    const rscStream = await ReactServerRenderer.renderToReadableStream(
-      capturedElement,
-      bundlerConfig,
-      rariFlightRenderOptions((error: unknown) => {
-        console.error('[rari] RSC error:', error)
-        caughtErrors.push(error)
-      }),
-    )
+    try {
+      const rscStream = await ReactServerRenderer.renderToReadableStream(
+        capturedElement,
+        bundlerConfig,
+        rariFlightRenderOptions((error: unknown) => {
+          if (!rariIsNotFoundError(error)) console.error('[rari] RSC error:', error)
+          caughtErrors.push(error)
+        }),
+      )
 
-    const { flightReadable, liveFlight, ensureSourceComplete } =
-      rariCreatePullFlightFanout(rscStream)
+      const { flightReadable, liveFlight, ensureSourceComplete } =
+        rariCreatePullFlightFanout(rscStream)
 
-    const fullDoc = rariCreateStreamingRoot(flightReadable)
+      const fullDoc = rariCreateStreamingRoot(flightReadable)
 
-    const fizzStream = (await ReactDOMServer.renderToReadableStream(fullDoc, {
-      onError(error: unknown) {
-        console.error('[rari] Fizz static error:', error)
-        caughtErrors.push(error)
-      },
-    })) as ReadableStream & { allReady?: Promise<void> }
+      const fizzStream = (await ReactDOMServer.renderToReadableStream(fullDoc, {
+        onError(error: unknown) {
+          if (!rariIsNotFoundError(error)) console.error('[rari] Fizz static error:', error)
+          caughtErrors.push(error)
+        },
+      })) as ReadableStream & { allReady?: Promise<void> }
 
-    await fizzStream.allReady
-    await ensureSourceComplete()
+      await fizzStream.allReady
+      await ensureSourceComplete()
+      rariThrowIfCaughtNotFound(caughtErrors)
 
-    let html = await rariReadStream(fizzStream)
-    html = rariStripLeadingDoctype(html)
-    if (!html.trimStart().toLowerCase().startsWith('<!doctype')) html = `<!DOCTYPE html>\n${html}`
+      let html = await rariReadStream(fizzStream)
+      html = rariStripLeadingDoctype(html)
+      if (!html.trimStart().toLowerCase().startsWith('<!doctype')) html = `<!DOCTYPE html>\n${html}`
 
-    if (headContent) {
-      const headClose = rariFindClosingHeadTag(html)
-      if (headClose !== -1)
-        html = `${html.slice(0, headClose)}${headContent}${html.slice(headClose)}`
+      if (headContent) {
+        const headClose = rariFindClosingHeadTag(html)
+        if (headClose !== -1)
+          html = `${html.slice(0, headClose)}${headContent}${html.slice(headClose)}`
+      }
+
+      const flightScripts = await rariCollectFlightEmbedScripts(liveFlight, nonce)
+      const completionScript = rariStreamingCompleteScript(nonce)
+
+      return rariInjectBeforeBodyClose(html, `${flightScripts}\n${completionScript}`)
+    } catch (error) {
+      if (rariIsNotFoundError(error) || caughtErrors.some(rariIsNotFoundError)) {
+        throw rariCreateNotFoundError()
+      }
+      throw error
     }
-
-    const flightScripts = await rariCollectFlightEmbedScripts(liveFlight, nonce)
-    const completionScript = rariStreamingCompleteScript(nonce)
-
-    return rariInjectBeforeBodyClose(html, `${flightScripts}\n${completionScript}`)
   }
 
   async function pumpRscElementStream(

@@ -1057,9 +1057,20 @@ impl LayoutRenderer {
                         let script = format!(
                             r"(async function() {{
                         let caughtErrors = [];
+                        const isNotFoundError = (error) =>
+                            error?.digest === 'RARI_NOT_FOUND' || error?.message === 'RARI_NOT_FOUND';
                         try {{
-                            try {{ await ({composition_script}); }} catch(e) {{
+                            let compositionResult;
+                            try {{
+                                compositionResult = await ({composition_script});
+                            }} catch(e) {{
+                                if (isNotFoundError(e)) {{
+                                    return {{ ok: false, notFound: true }};
+                                }}
                                 console.error('[rari] Composition error in static:', e);
+                            }}
+                            if (compositionResult?.notFound === true) {{
+                                return {{ ok: false, notFound: true }};
                             }}
 
                             const capturedElement = globalThis['~rari']?.capturedElement;
@@ -1081,6 +1092,10 @@ impl LayoutRenderer {
                                 caughtErrors,
                             }});
 
+                            if (caughtErrors.some(isNotFoundError)) {{
+                                return {{ ok: false, notFound: true }};
+                            }}
+
                             const isDynamic = (globalThis['~rari']?.useCacheDynamicDepth ?? 0) > 0;
                             let pageCacheTags = [];
                             if (!isDynamic) {{
@@ -1095,6 +1110,9 @@ impl LayoutRenderer {
 
                             return {{ ok: true, html, isDynamic, pageCacheTags }};
                         }} catch(e) {{
+                            if (isNotFoundError(e) || caughtErrors.some(isNotFoundError)) {{
+                                return {{ ok: false, notFound: true }};
+                            }}
                             return {{ ok: false, error: String(e?.message || e) }};
                         }}
                     }})()",
@@ -1139,6 +1157,10 @@ impl LayoutRenderer {
                             let result = rt
                                 .execute_script("static_document_render".to_string(), script)
                                 .await?;
+
+                            if result.get("notFound").and_then(Value::as_bool).unwrap_or(false) {
+                                return Err(RariError::not_found("RARI_NOT_FOUND"));
+                            }
 
                             let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
                             if !ok {
