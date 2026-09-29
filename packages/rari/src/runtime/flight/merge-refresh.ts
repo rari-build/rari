@@ -214,6 +214,28 @@ function refreshHasDocumentWideMetaReplacement(
   })
 }
 
+function isTitleElement(element: React.ReactElement): boolean {
+  return element.type === 'title' || element.type === 'TITLE'
+}
+
+function isDescriptionMeta(element: React.ReactElement): boolean {
+  if (element.type !== 'meta' && element.type !== 'META') return false
+  const name = elementPropsRecord(element).name
+  return typeof name === 'string' && name.toLowerCase() === 'description'
+}
+
+function refreshHasTitle(refreshKids: readonly React.ReactNode[]): boolean {
+  return flattenHeadChildren(refreshKids).some(
+    child => isReactElement(child) && isTitleElement(child),
+  )
+}
+
+function refreshHasDescription(refreshKids: readonly React.ReactNode[]): boolean {
+  return flattenHeadChildren(refreshKids).some(
+    child => isReactElement(child) && isDescriptionMeta(child),
+  )
+}
+
 function mergeDocumentHeads(
   currentHead: React.ReactElement,
   refreshHead: React.ReactElement,
@@ -222,14 +244,17 @@ function mergeDocumentHeads(
   const flatCurrentKids = flattenHeadChildren(elementChildren(currentHead))
   const refreshKids = elementChildren(refreshHead)
   const flatRefreshKids = flattenHeadChildren(refreshKids)
+  const hasRefreshTitle = refreshHasTitle(flatRefreshKids)
+  const hasRefreshDescription = refreshHasDescription(flatRefreshKids)
 
   const kept = flatCurrentKids.filter(child => {
     if (!isReactElement(child)) return true
-    if (child.type === 'title' || child.type === 'TITLE') return false
+    if (isTitleElement(child)) return !hasRefreshTitle
     if (child.type === 'meta' || child.type === 'META') {
       if (isDocumentWideMeta(child)) {
         return !refreshHasDocumentWideMetaReplacement(child, refreshKids)
       }
+      if (isDescriptionMeta(child)) return !hasRefreshDescription
       return false
     }
     if (!isResourceHeadLink(child)) {
