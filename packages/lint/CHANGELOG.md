@@ -1,3 +1,11 @@
+## [@rari/lint@0.1.5] - 2026-09-29
+
+### 🚜 Refactor
+
+- update PageProps and LayoutProps to interfaces, enhance mergeFlightRefresh handling for nested layout paths by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/lint@0.1.4...@rari/lint@0.1.5
 ## [@rari/lint@0.1.4] - 2026-09-29
 
 ### 🚀 Features
