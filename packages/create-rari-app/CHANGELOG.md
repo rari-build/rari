@@ -1,3 +1,25 @@
+## [create-rari-app@0.5.29] - 2026-09-29
+
+### 🚀 Features
+
+- replace index.html shell with layout-owned document rendering by @skiniks
+- soft-nav layout reuse with document-preserving flight merges by @skiniks
+- add environment variable type generation for Vite by @skiniks
+
+### 🚜 Refactor
+
+- update linting configurations and sorting rules for JSON files by @skiniks
+- remove unused environment type generation and clean up tsconfig includes by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- bump dependencies and harden image and Google Fonts tooling by @skiniks
+- update dependencies across multiple packages including async-compression, clap, and pnpm to latest versions for improved stability and features by @skiniks
+- update Node.js version requirements across documentation and configuration files to >=24.21.0 by @skiniks
+- update pnpm version and dependencies across the project by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.28...create-rari-app@0.5.29
 ## [create-rari-app@0.5.27] - 2026-08-31
 
 ### ⚙️ Miscellaneous Tasks

@@ -18,7 +18,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "rari": "^0.16.0",
+    "rari": "^0.17.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
