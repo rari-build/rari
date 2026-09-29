@@ -6,179 +6,154 @@ importers:
   .:
     configDependencies: {}
     packageManagerDependencies:
-      '@pnpm/exe':
-        specifier: 12.6.0
-        version: 12.6.0
       pnpm:
-        specifier: 12.6.0
-        version: 12.6.0
+        specifier: 12.8.1
+        version: 12.8.1
 
 packages:
 
-  '@pnpm/exe.android-arm64@12.6.0':
-    resolution: {integrity: sha512-kviIHft9h02q+7N2In7tSL9T/HRUSGwYmU74YPtsWU5ee7vgqPyC0JT6RRX6miW+NxX1CvHgQxg69qq1qTLJYQ==}
+  '@pnpm/exe.android-arm64@12.8.1':
+    resolution: {integrity: sha512-siDxcidfz5eM6L2tJfik+i2bbUEw8UC7MZ3Yl2HYdRmqbdhHGAOQACtOOu6QVW4Jul4/w5wVKm+wM8ACtgh1Pg==}
     cpu: [arm64]
     os: [android]
 
-  '@pnpm/exe.android-x64@12.6.0':
-    resolution: {integrity: sha512-CT8aJKLq2mtZFE71pr4E5Z2xHL8uGnRGr+NclDqsXlVF4SVcQ2QAs14mWi0C8gjT4hbmi+Q0lJRRIkMAWfjjng==}
+  '@pnpm/exe.android-x64@12.8.1':
+    resolution: {integrity: sha512-0F/uqPRc3aN4vLHsa0f+6fTtmsigFQ9/yxEU43fionF//pNHEd5e97b3w/nKIgqYMCUQCJphmBRMA9Q8/wlo9Q==}
     cpu: [x64]
     os: [android]
 
-  '@pnpm/exe.darwin-arm64@12.6.0':
-    resolution: {integrity: sha512-rafpVkjzugKBMxSvGQd5wK1x5eOTkD/+lcJIFHeQhvd+BJ8kDisOOvwhQDrpGd4vd2Fx+hhW0P2Ptt638OlhFg==}
+  '@pnpm/exe.darwin-arm64@12.8.1':
+    resolution: {integrity: sha512-/rwavvMQJsl2RIxOHBnDF+4Gk+fhQFAY4M3PQZoKskJOEnaJcygG9p1xby6wcQcbS4d9dIubv09CQhufTgfmpw==}
     cpu: [arm64]
     os: [darwin]
 
-  '@pnpm/exe.darwin-x64@12.6.0':
-    resolution: {integrity: sha512-72Jpuv1m24gI8zUNcaylYpBWEhBzz1VPhnDIU2GYM2eRP+KsOqVLwV78i+JrihI39zY2NNXmaN4eAKX1inpaDQ==}
+  '@pnpm/exe.darwin-x64@12.8.1':
+    resolution: {integrity: sha512-htYt2gN7zqJKLhC99Ft6EUiO7myjZAZXfmGCTJUL1v+o7vE9hZdE1+fAkk4Oj1ZHNRti6b2woOxEkRkAusi8OQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@pnpm/exe.freebsd-x64@12.6.0':
-    resolution: {integrity: sha512-LON4QgNy1w/XF4uySZIyC/5hEB0oGdelXsY9tSKqstER+2j2X2oHz67skD11RRd/HWFRtMr64shQZ4I9ZoZ0zg==}
+  '@pnpm/exe.freebsd-x64@12.8.1':
+    resolution: {integrity: sha512-PB5BULNgytxvExoOXUUeseS/DcpPENs+cg3iA6xHHeaLT4ctEGKSGXEbuj7USeqvo8JBpAx039hivnbzGqDwnA==}
     cpu: [x64]
     os: [freebsd]
 
-  '@pnpm/exe.linux-arm64-musl@12.6.0':
-    resolution: {integrity: sha512-BdDpX+DeaMUc5x6WNcE6FkmFy36NwrBbBvwsZU737Zt3u1fTY+iKFPchjEQNCM4rT6q6xvF2oN3ZwExGsJCkxQ==}
+  '@pnpm/exe.linux-arm64-musl@12.8.1':
+    resolution: {integrity: sha512-kKeyC/ArjrgdciQRBrOL0j9HtOI4gDRgoyP+eJ1CQKyadpKlf/DhDDyspXe07R3B9KagTVLUF2nlt6Dr5quFIg==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-arm64@12.6.0':
-    resolution: {integrity: sha512-8h2sNoIhHDpHDYqZZCh9PXr6krqW10btb0GHVGuw710muDHlFAHMtUG2ogmaHge6zJG1xgY4Y7mwX5g/LWvrYg==}
+  '@pnpm/exe.linux-arm64@12.8.1':
+    resolution: {integrity: sha512-q4s9a9X2O3N9aeUFooW24orNrxvu20+jyVUFR5RanPCqOKKPBrgs2iywMkBBx1aXkkzdWT54/mfz8Be8sJlWEw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-ppc64@12.6.0':
-    resolution: {integrity: sha512-ld6xgcEhFCFrsVsJhbmdmR714PnsEspO/Ij8w0/D7OSiz2hYGu3fZd5tKRxOI5m6H6Gl0/RRFAPncTHbsgXVjQ==}
+  '@pnpm/exe.linux-ppc64@12.8.1':
+    resolution: {integrity: sha512-F7XSjKJthwCh/L6abZiMpAfo2Cm61SZIT3e4dfgiIjESndlWaXCnfLKngSgZ/SEMsdmHT6dud3+kWIB3tw0/xQ==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-riscv64@12.6.0':
-    resolution: {integrity: sha512-HIbImydoC3J8NFt+8MXfhTCf5rO6NjCMyinSAHac0VmV8uCHw+kbQkyAzxV84rzz9ZOzmBOnj0b1N461UIYGsw==}
+  '@pnpm/exe.linux-riscv64@12.8.1':
+    resolution: {integrity: sha512-z1ecpIK/ZY08Unk69KWWE9867oaKUytGUjrHnBoGFAAhsK+q+0cfvBH+f5fWobJ7FX97leMlLO+gkJolddM45Q==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-s390x@12.6.0':
-    resolution: {integrity: sha512-DjSqT7+BZ/lWcDHwNMuzsRVfyxUimh+D54Xw4tSWbdVVQhtWtNMUyI93LVnwCmsoEpar2gC3SFeAgywx37svKQ==}
+  '@pnpm/exe.linux-s390x@12.8.1':
+    resolution: {integrity: sha512-KU6tnrBfu4uKXTq6N5qJwSm8FSrs9Wc8b5AUEsHK9bRXwNdsZ1/lRxG1++X29SKRW9OSNuDSjxASv5mAvGo1gA==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-x64-musl@12.6.0':
-    resolution: {integrity: sha512-31lKeGPmRE6xfV6I3VjaEGVFRei14pl/zgoFDK4w+UkbJqOuNl2Ht3O1GuqNIg3Gl14qTEb4kZRAYFHXifDx9A==}
+  '@pnpm/exe.linux-x64-musl@12.8.1':
+    resolution: {integrity: sha512-eUE8BWJkDr2tJb/yrk0yVnszlmNqFarVxUlqiZ9BAkct28Nq/5g2H0tvMDmPA7fAQW3STNj+omJPPRVT+4s5sQ==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-x64@12.6.0':
-    resolution: {integrity: sha512-qFWBneHJAJ73W4whtbaFOL1M/7DBC6ILHXuxc7ZPtEhfPuT1zeZiGrmKHoMAfJA+mcm6xhOFljqVTUS+00Jabw==}
+  '@pnpm/exe.linux-x64@12.8.1':
+    resolution: {integrity: sha512-8bDZ0lZlCdi2rvnFul7EYgcC7zKeWSe76y8JV2oXobaS8p9i9d6PSf6LgLtTM0fI7R9Oh4eLCbveXyNDMmvZ+g==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.win32-arm64@12.6.0':
-    resolution: {integrity: sha512-OhfefXEEykZlslSUhR8PPRe6MVPV3Oink/dVfIecE5velpc7j80cZYsHlaDrtRDcm3TPwQHkaRW1SJ1efX9oFg==}
+  '@pnpm/exe.win32-arm64@12.8.1':
+    resolution: {integrity: sha512-MsT0dlrRxnCRCHCaosNbhWpEiAFnFuMEu3KuDJDU41BXgTwiINxU8goloUSUDejWZUqKaUqNC/qUTihl9nFtqg==}
     cpu: [arm64]
     os: [win32]
 
-  '@pnpm/exe.win32-x64@12.6.0':
-    resolution: {integrity: sha512-L2tuyrD2+Imgxs3VK/ST/2L3xD6vDP0ktJQxM0TaGw7TbAQEMq+RMc8iK6Ew7Id579uzjJe8jSfJID2ZGsOHCA==}
+  '@pnpm/exe.win32-x64@12.8.1':
+    resolution: {integrity: sha512-SWtPe0PsbTTk//gJND10tMdOfCYjrkq5+qV49hzVhY7xz2iJ339Rc+xwASlcvbwTfrvH39YNqpKYibD+CRGLwA==}
     cpu: [x64]
     os: [win32]
 
-  '@pnpm/exe@12.6.0':
-    resolution: {integrity: sha512-CkNetlJZugjKp9vPvWqCm5ahORU6FfO46BlOqqSCKLJ+W6QcRgM0qmmPTvlgrXVvkAiH+9hE+mMp/wSaqcU5Aw==}
-    engines: {node: '>=18.*'}
-    hasBin: true
-
-  pnpm@12.6.0:
-    resolution: {integrity: sha512-PvaPlRyxEawgS0paFvCy3fDaVqluBBPoHYVdnwtV75JnFHCQKOHNAMQFwsX7e56OxNxGd3yAXQNzwvL/AP0g7A==}
+  pnpm@12.8.1:
+    resolution: {integrity: sha512-9kupB1B/XOr+BsjTjmBS0BeURFgOwSed3Vv8EctIqoomRLZlmOB+dh2oSHKp/FfV+QK4f6SdAkGY1VhhKqu+RQ==}
     engines: {node: '>=18.*'}
     hasBin: true
 
 snapshots:
 
-  '@pnpm/exe.android-arm64@12.6.0':
+  '@pnpm/exe.android-arm64@12.8.1':
     optional: true
 
-  '@pnpm/exe.android-x64@12.6.0':
+  '@pnpm/exe.android-x64@12.8.1':
     optional: true
 
-  '@pnpm/exe.darwin-arm64@12.6.0':
+  '@pnpm/exe.darwin-arm64@12.8.1':
     optional: true
 
-  '@pnpm/exe.darwin-x64@12.6.0':
+  '@pnpm/exe.darwin-x64@12.8.1':
     optional: true
 
-  '@pnpm/exe.freebsd-x64@12.6.0':
+  '@pnpm/exe.freebsd-x64@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-arm64-musl@12.6.0':
+  '@pnpm/exe.linux-arm64-musl@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-arm64@12.6.0':
+  '@pnpm/exe.linux-arm64@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-ppc64@12.6.0':
+  '@pnpm/exe.linux-ppc64@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-riscv64@12.6.0':
+  '@pnpm/exe.linux-riscv64@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-s390x@12.6.0':
+  '@pnpm/exe.linux-s390x@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-x64-musl@12.6.0':
+  '@pnpm/exe.linux-x64-musl@12.8.1':
     optional: true
 
-  '@pnpm/exe.linux-x64@12.6.0':
+  '@pnpm/exe.linux-x64@12.8.1':
     optional: true
 
-  '@pnpm/exe.win32-arm64@12.6.0':
+  '@pnpm/exe.win32-arm64@12.8.1':
     optional: true
 
-  '@pnpm/exe.win32-x64@12.6.0':
+  '@pnpm/exe.win32-x64@12.8.1':
     optional: true
 
-  '@pnpm/exe@12.6.0':
+  pnpm@12.8.1:
     optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.6.0
-      '@pnpm/exe.android-x64': 12.6.0
-      '@pnpm/exe.darwin-arm64': 12.6.0
-      '@pnpm/exe.darwin-x64': 12.6.0
-      '@pnpm/exe.freebsd-x64': 12.6.0
-      '@pnpm/exe.linux-arm64': 12.6.0
-      '@pnpm/exe.linux-arm64-musl': 12.6.0
-      '@pnpm/exe.linux-ppc64': 12.6.0
-      '@pnpm/exe.linux-riscv64': 12.6.0
-      '@pnpm/exe.linux-s390x': 12.6.0
-      '@pnpm/exe.linux-x64': 12.6.0
-      '@pnpm/exe.linux-x64-musl': 12.6.0
-      '@pnpm/exe.win32-arm64': 12.6.0
-      '@pnpm/exe.win32-x64': 12.6.0
-
-  pnpm@12.6.0:
-    optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.6.0
-      '@pnpm/exe.android-x64': 12.6.0
-      '@pnpm/exe.darwin-arm64': 12.6.0
-      '@pnpm/exe.darwin-x64': 12.6.0
-      '@pnpm/exe.freebsd-x64': 12.6.0
-      '@pnpm/exe.linux-arm64': 12.6.0
-      '@pnpm/exe.linux-arm64-musl': 12.6.0
-      '@pnpm/exe.linux-ppc64': 12.6.0
-      '@pnpm/exe.linux-riscv64': 12.6.0
-      '@pnpm/exe.linux-s390x': 12.6.0
-      '@pnpm/exe.linux-x64': 12.6.0
-      '@pnpm/exe.linux-x64-musl': 12.6.0
-      '@pnpm/exe.win32-arm64': 12.6.0
-      '@pnpm/exe.win32-x64': 12.6.0
+      '@pnpm/exe.android-arm64': 12.8.1
+      '@pnpm/exe.android-x64': 12.8.1
+      '@pnpm/exe.darwin-arm64': 12.8.1
+      '@pnpm/exe.darwin-x64': 12.8.1
+      '@pnpm/exe.freebsd-x64': 12.8.1
+      '@pnpm/exe.linux-arm64': 12.8.1
+      '@pnpm/exe.linux-arm64-musl': 12.8.1
+      '@pnpm/exe.linux-ppc64': 12.8.1
+      '@pnpm/exe.linux-riscv64': 12.8.1
+      '@pnpm/exe.linux-s390x': 12.8.1
+      '@pnpm/exe.linux-x64': 12.8.1
+      '@pnpm/exe.linux-x64-musl': 12.8.1
+      '@pnpm/exe.win32-arm64': 12.8.1
+      '@pnpm/exe.win32-x64': 12.8.1
 
 ---
 lockfileVersion: '9.0'
@@ -190,7 +165,7 @@ settings:
 catalogs:
   analytics:
     posthog-js:
-      specifier: ^1.434.15
+      specifier: ^1.434.17
       version: 1.434.17
   build:
     '@napi-rs/cli':
@@ -227,10 +202,10 @@ catalogs:
       specifier: ^4.8.1
       version: 4.8.1
     '@eslint-react/eslint-plugin':
-      specifier: ^5.20.8
+      specifier: ^5.21.2
       version: 5.21.2
     '@typescript-eslint/parser':
-      specifier: ^8.70.1
+      specifier: ^8.71.0
       version: 8.71.0
     eslint:
       specifier: ^10.11.0
@@ -251,7 +226,7 @@ catalogs:
       specifier: ^3.4.2
       version: 3.4.2
     eslint-plugin-oxlint:
-      specifier: ^1.85.0
+      specifier: ^1.86.0
       version: 1.86.0
     eslint-plugin-perfectionist:
       specifier: ^5.12.1
@@ -269,7 +244,7 @@ catalogs:
       specifier: ^0.1.3
       version: 0.1.3
     eslint-plugin-sonarjs:
-      specifier: ^4.2.1
+      specifier: ^4.2.2
       version: 4.2.2
     eslint-plugin-unused-imports:
       specifier: ^4.4.1
@@ -313,7 +288,7 @@ catalogs:
       version: 4.0.1
   monitoring:
     '@sentry/react':
-      specifier: ^11.0.0
+      specifier: ^11.1.0
       version: 11.1.0
   rari:
     rari:
@@ -403,7 +378,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
   examples/playground:
     dependencies:
@@ -453,7 +428,7 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
   packages/deploy:
     devDependencies:
@@ -471,13 +446,13 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
   packages/lint:
     dependencies:
       '@e18e/eslint-plugin':
         specifier: catalog:lint
-        version: 0.8.1(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))
+        version: 0.8.1(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))
       '@eslint-community/eslint-plugin-eslint-comments':
         specifier: catalog:lint
         version: 4.8.1(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))
@@ -504,7 +479,7 @@ importers:
         version: 3.4.2(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))
       eslint-plugin-oxlint:
         specifier: catalog:lint
-        version: 1.86.0(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))
+        version: 1.86.0(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))
       eslint-plugin-perfectionist:
         specifier: catalog:lint
         version: 5.12.1(@typescript/typescript6@6.0.2)(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
@@ -550,7 +525,7 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
   packages/logger:
     devDependencies:
@@ -565,7 +540,7 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
   packages/rari:
     dependencies:
@@ -617,7 +592,7 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
     optionalDependencies:
       rari-darwin-arm64:
         specifier: 0.17.1
@@ -655,7 +630,7 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
     optionalDependencies:
       '@rari/use-cache-darwin-arm64':
         specifier: 0.17.1
@@ -796,7 +771,7 @@ importers:
         version: typescript@7.0.2
       vite-plus:
         specifier: catalog:build
-        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
+        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
 
 packages:
 
@@ -3524,11 +3499,6 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
-    peerDependencies:
-      ajv: ^8.0.0
-    peerDependenciesMeta:
-      ajv:
-        optional: true
 
   ajv-keywords@5.1.0:
     resolution: {integrity: sha512-YCS/JNFAUyr5vAuhk1DWm1CBxRHW9LbJ2ozWeemrIqpbsqKjHVxYPyi5GC0rjZIT5JxJ3virVTS8wk4i/Z+krw==}
@@ -5869,14 +5839,14 @@ snapshots:
 
   '@dual-bundle/import-meta-resolve@4.2.1': {}
 
-  '@e18e/eslint-plugin@0.8.1(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))':
+  '@e18e/eslint-plugin@0.8.1(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)))':
     dependencies:
       empathic: 2.1.0
       module-replacements: 3.4.0
       verkit: 0.4.1
     optionalDependencies:
       eslint: 10.11.0(jiti@2.7.0)(supports-color@8.1.1)
-      oxlint: 1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      oxlint: 1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
 
   '@emnapi/core@1.11.2':
     dependencies:
@@ -7584,19 +7554,7 @@ snapshots:
       '@testing-library/dom': 10.4.2
       '@testing-library/user-event': 14.6.7(@testing-library/dom@10.4.2)
       '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))(vitest@5.0.1)
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-
-  '@vitest/browser-preview@5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)':
-    dependencies:
-      '@testing-library/dom': 10.4.2
-      '@testing-library/user-event': 14.6.7(@testing-library/dom@10.4.2)
-      '@vitest/browser': 5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
     transitivePeerDependencies:
       - bufferutil
       - msw
@@ -7631,25 +7589,7 @@ snapshots:
       pngjs: 7.0.0
       sirv: 3.0.2
       tinyrainbow: 3.1.1
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-      ws: 8.22.0
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-
-  '@vitest/browser@5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)':
-    dependencies:
-      '@blazediff/core': 1.10.0
-      '@vitest/mocker': 5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-      '@vitest/ui': 5.0.1(vitest@5.0.1)
-      '@vitest/utils': 5.0.1
-      magic-string: 1.4.2
-      pngjs: 7.0.0
-      sirv: 3.0.2
-      tinyrainbow: 3.1.1
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
       ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
@@ -7693,15 +7633,6 @@ snapshots:
     optionalDependencies:
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)'
 
-  '@vitest/mocker@5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))':
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
-      '@vitest/spy': 5.0.1
-      estree-walker: 3.0.3
-      magic-string: 1.4.2
-    optionalDependencies:
-      vite: 8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
-
   '@vitest/mocker@5.0.2(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -7735,17 +7666,6 @@ snapshots:
       sirv: 3.0.2
       tinyrainbow: 3.1.1
       vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-
-  '@vitest/ui@5.0.1(vitest@5.0.2)':
-    dependencies:
-      '@vitest/utils': 5.0.1
-      fflate: 0.8.3
-      flatted: 3.4.4
-      pathe: 2.0.3
-      sirv: 3.0.2
-      tinyrainbow: 3.1.1
-      vitest: 5.0.2(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-    optional: true
 
   '@vitest/utils@5.0.1':
     dependencies:
@@ -7989,8 +7909,8 @@ snapshots:
 
   acorn@8.18.0: {}
 
-  ajv-formats@3.0.1(ajv@8.20.0):
-    optionalDependencies:
+  ajv-formats@3.0.1:
+    dependencies:
       ajv: 8.20.0
 
   ajv-keywords@5.1.0(ajv@8.20.0):
@@ -8437,10 +8357,10 @@ snapshots:
     transitivePeerDependencies:
       - '@eslint/json'
 
-  eslint-plugin-oxlint@1.86.0(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))):
+  eslint-plugin-oxlint@1.86.0(oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))):
     dependencies:
       jsonc-parser: 3.3.1
-      oxlint: 1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      oxlint: 1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
 
   eslint-plugin-perfectionist@5.12.1(@typescript/typescript6@6.0.2)(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1):
     dependencies:
@@ -9722,7 +9642,7 @@ snapshots:
       '@oxc-transform-react/binding-win32-ia32-msvc': 0.151.0
       '@oxc-transform-react/binding-win32-x64-msvc': 0.151.0
 
-  oxfmt@0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
+  oxfmt@0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
     dependencies:
       tinypool: 2.1.2
     optionalDependencies:
@@ -9745,9 +9665,9 @@ snapshots:
       '@oxfmt/binding-win32-arm64-msvc': 0.70.0
       '@oxfmt/binding-win32-ia32-msvc': 0.70.0
       '@oxfmt/binding-win32-x64-msvc': 0.70.0
-      vite-plus: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+      vite-plus: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
-  oxfmt@0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
+  oxfmt@0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
     dependencies:
       tinypool: 2.1.2
     optionalDependencies:
@@ -9770,7 +9690,7 @@ snapshots:
       '@oxfmt/binding-win32-arm64-msvc': 0.70.0
       '@oxfmt/binding-win32-ia32-msvc': 0.70.0
       '@oxfmt/binding-win32-x64-msvc': 0.70.0
-      vite-plus: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
+      vite-plus: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
 
   oxlint-tsgolint@7.0.2003:
     optionalDependencies:
@@ -9781,7 +9701,7 @@ snapshots:
       '@oxlint-tsgolint/win32-arm64': 7.0.2003
       '@oxlint-tsgolint/win32-x64': 7.0.2003
 
-  oxlint@1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
+  oxlint@1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.85.0
       '@oxlint/binding-android-arm64': 1.85.0
@@ -9803,9 +9723,9 @@ snapshots:
       '@oxlint/binding-win32-ia32-msvc': 1.85.0
       '@oxlint/binding-win32-x64-msvc': 1.85.0
       oxlint-tsgolint: 7.0.2003
-      vite-plus: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+      vite-plus: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
-  oxlint@1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
+  oxlint@1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.85.0
       '@oxlint/binding-android-arm64': 1.85.0
@@ -9827,9 +9747,9 @@ snapshots:
       '@oxlint/binding-win32-ia32-msvc': 1.85.0
       '@oxlint/binding-win32-x64-msvc': 1.85.0
       oxlint-tsgolint: 7.0.2003
-      vite-plus: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
+      vite-plus: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
 
-  oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
+  oxlint@1.86.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.86.0
       '@oxlint/binding-android-arm64': 1.86.0
@@ -9851,7 +9771,7 @@ snapshots:
       '@oxlint/binding-win32-ia32-msvc': 1.86.0
       '@oxlint/binding-win32-x64-msvc': 1.86.0
       oxlint-tsgolint: 7.0.2003
-      vite-plus: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+      vite-plus: 1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
 
   p-limit@3.1.0:
     dependencies:
@@ -10137,7 +10057,7 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
       ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
+      ajv-formats: 3.0.1
       ajv-keywords: 5.1.0(ajv@8.20.0)
 
   scslre@0.3.0:
@@ -10374,7 +10294,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1):
+  vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1):
     dependencies:
       '@oxc-project/types': 0.151.0
       '@oxlint/plugins': 1.79.0
@@ -10385,11 +10305,11 @@ snapshots:
       '@vitest/snapshot': 5.0.1
       '@vitest/spy': 5.0.1
       '@vitest/utils': 5.0.1
-      oxfmt: 0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-      oxlint: 1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      oxfmt: 0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      oxlint: 1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
       oxlint-tsgolint: 7.0.2003
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)'
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
     optionalDependencies:
       '@voidzero-dev/vite-plus-darwin-arm64': 1.0.0
       '@voidzero-dev/vite-plus-darwin-x64': 1.0.0
@@ -10429,7 +10349,7 @@ snapshots:
       - utf-8-validate
       - yaml
 
-  vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1):
+  vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1):
     dependencies:
       '@oxc-project/types': 0.151.0
       '@oxlint/plugins': 1.79.0
@@ -10440,11 +10360,11 @@ snapshots:
       '@vitest/snapshot': 5.0.1
       '@vitest/spy': 5.0.1
       '@vitest/utils': 5.0.1
-      oxfmt: 0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-      oxlint: 1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
+      oxfmt: 0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
+      oxlint: 1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
       oxlint-tsgolint: 7.0.2003
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)'
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
+      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
     optionalDependencies:
       '@voidzero-dev/vite-plus-darwin-arm64': 1.0.0
       '@voidzero-dev/vite-plus-darwin-x64': 1.0.0
@@ -10498,78 +10418,6 @@ snapshots:
       terser: 5.51.2
       yaml: 2.9.1
 
-  vitest@5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-      chai: 6.2.2
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 1.4.2
-      obug: 2.2.1
-      picomatch: 4.0.7
-      std-env: 4.2.0
-      tinybench: 6.1.4
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.17
-      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)'
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 26.6.3
-      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
-      '@vitest/coverage-v8': 5.0.2(vitest@5.0.2)
-      '@vitest/ui': 5.0.1(vitest@5.0.1)
-    transitivePeerDependencies:
-      - msw
-
-  vitest@5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-      chai: 6.2.2
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 1.4.2
-      obug: 2.2.1
-      picomatch: 4.0.7
-      std-env: 4.2.0
-      tinybench: 6.1.4
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.17
-      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)'
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 26.6.3
-      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
-      '@vitest/coverage-v8': 5.0.2(vitest@5.0.2)
-      '@vitest/ui': 5.0.1(vitest@5.0.2)
-    transitivePeerDependencies:
-      - msw
-
-  vitest@5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@vitest/ui@5.0.1)(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-      chai: 6.2.2
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 1.4.2
-      obug: 2.2.1
-      picomatch: 4.0.7
-      std-env: 4.2.0
-      tinybench: 6.1.4
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.17
-      vite: 8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 26.6.3
-      '@vitest/browser-preview': 5.0.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
-      '@vitest/coverage-v8': 5.0.2(vitest@5.0.2)
-      '@vitest/ui': 5.0.1(vitest@5.0.1)
-    transitivePeerDependencies:
-      - msw
-
   vitest@5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
@@ -10585,6 +10433,29 @@ snapshots:
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)'
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 26.6.3
+      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(@typescript/typescript6@6.0.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
+      '@vitest/coverage-v8': 5.0.2(vitest@5.0.2)
+    transitivePeerDependencies:
+      - msw
+
+  vitest@5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.2)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
+    dependencies:
+      '@types/chai': 5.2.3
+      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
+      chai: 6.2.2
+      es-module-lexer: 2.3.2
+      expect-type: 1.4.0
+      magic-string: 1.4.2
+      obug: 2.2.1
+      picomatch: 4.0.7
+      std-env: 4.2.0
+      tinybench: 6.1.4
+      tinyexec: 1.3.0
+      tinyglobby: 0.2.17
+      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)'
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 26.6.3
