@@ -237,4 +237,34 @@ describe('requireClientComponent lazy load errors', () => {
       setClientComponents({})
     }
   })
+
+  it('returns Context $$typeof exports for client module ids', () => {
+    const context = { $$typeof: Symbol.for('react.context'), _currentValue: null }
+    const label = () => null
+    const componentInfo: ComponentInfo = {
+      id: 'demo-user-context',
+      path: 'src/app/context-from-rsc/demo-user-context.tsx',
+      type: 'client',
+      registered: true,
+      component: {
+        DemoUserContext: context,
+        DemoUserLabel: label,
+      },
+      exportName: 'DemoUserContext',
+    }
+
+    setClientComponents({
+      'src/app/context-from-rsc/demo-user-context.tsx#DemoUserContext': componentInfo,
+    })
+
+    try {
+      const module = castMock<{ DemoUserContext: unknown; default: unknown }>(
+        requireClientComponent('src/app/context-from-rsc/demo-user-context.tsx#DemoUserContext'),
+      )
+      expect(module.DemoUserContext).toBe(context)
+      expect(module.default).toBe(context)
+    } finally {
+      setClientComponents({})
+    }
+  })
 })

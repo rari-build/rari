@@ -23,11 +23,18 @@ const ${bindingName} = (props) => {
     throw new Error('Component ${registryKey}#${exportName} not loaded');
   }
 
-  if (typeof Component !== 'function') {
-    throw new Error('Component ${registryKey}#${exportName} is not a function, got: ' + typeof Component);
+  if (typeof Component === 'function') {
+    return Component(props);
+  }
+  if (typeof Component === 'object' && Component != null && '$$typeof' in Component) {
+    const React = globalThis.React;
+    if (React == null || typeof React.createElement !== 'function') {
+      throw new Error('Component ${registryKey}#${exportName} needs React.createElement');
+    }
+    return React.createElement(Component, props);
   }
 
-  return Component(props);
+  throw new Error('Component ${registryKey}#${exportName} is not a component, got: ' + typeof Component);
 }`
 }
 

@@ -1806,7 +1806,7 @@ pub async fn handle_app_route(
             let cache_control_value = state.config.get_cache_control_for_route(path);
             let cache_policy =
                 response::RouteCachePolicy::from_cache_control(cache_control_value, path);
-            let for_response_cache = should_store_response_cache(&state, &cache_policy).await;
+            let mut for_response_cache = should_store_response_cache(&state, &cache_policy).await;
             if route_match.not_found.is_some() {
                 for_response_cache = false;
             }

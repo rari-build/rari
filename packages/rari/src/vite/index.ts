@@ -59,7 +59,6 @@ import {
   resolveModuleCachePath,
 } from './analysis/module-cache'
 import { normalizeScanDirs } from './analysis/source-walker'
-import { createSilenceReactDirectiveLogsPlugin } from './build/silence-directive-logs'
 import {
   buildClientHeadFromBundle,
   buildLayoutCssImportStatements,
@@ -152,6 +151,7 @@ const IMPORT_DEFAULT_REGEX = /import\s+(\w+)\s+from\s+["']\.\.?\/([^"']+)["'];?/
 const IMPORT_SIDE_EFFECT_REGEX = /import\s+["']\.\.?\/([^"']+)["'];?/g
 const EXPORT_DEFAULT_FUNCTION_DECL_REGEX = /export\s+default\s+(?:async\s+)?function\s+(\w+)/
 const USE_CLIENT_DIRECTIVE_REGEX = /^['"]use client['"];?\s*$/gm
+const USE_SERVER_DIRECTIVE_REGEX = /^['"]use server['"];?\s*$/gm
 const LOCAL_IMPORT_SOURCE_REGEX = /^[./@~#]/
 
 function matchesAliasImport(source: string, aliases: Readonly<Record<string, string>>): boolean {
@@ -181,7 +181,6 @@ const RSC_CLIENT_IMPORT_REGEX =
   /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
 const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
-const USE_CLIENT_DIRECTIVE_LINE_REGEX = /^['"]use client['"];?\s*\n/
 
 export interface RouterPluginOptions {
   readonly appDir?: string
@@ -522,13 +521,7 @@ function ensureReactImportInErrorBoundary(content: string): string {
   ) {
     return content
   }
-  const useClientMatch = USE_CLIENT_DIRECTIVE_LINE_REGEX.exec(content)
-  if (useClientMatch) {
-    const directive = useClientMatch[0]
-    const rest = content.slice(directive.length)
-    return `\n${directive}import * as React from 'react';\n${rest}`
-  }
-  return `\nimport * as React from 'react';\n${content}`
+  return `import * as React from 'react';\n${content}`
 }
 
 function resolveFlightClientPaths(flightBuild: string): {
@@ -1405,7 +1398,9 @@ if (import.meta.hot) {
     }
 
     const exportedNames = parseExportedNames(newCode, analysis)
-    if (exportedNames.length === 0 && inlineTransformed == null) return code
+    if (exportedNames.length === 0 && inlineTransformed == null) {
+      return newCode.replace(USE_SERVER_DIRECTIVE_REGEX, '')
+    }
 
     const idJson = JSON.stringify(moduleId)
     if (!hasRegisterServerReferenceImport(newCode)) {
@@ -1424,6 +1419,7 @@ if (import.meta.hot) {
       }
     }
 
+    newCode = newCode.replace(USE_SERVER_DIRECTIVE_REGEX, '')
     return appendHmrAcceptStub(newCode)
   }
 
@@ -1554,6 +1550,17 @@ if (import.meta.hot) {
   }
 
   function isClientBoundaryModule(filePath: string): boolean {
+    if (
+      filePath.includes('virtual:client-router') ||
+      filePath.includes('virtual:app-router-provider') ||
+      filePath.includes('virtual:error-boundary-wrapper') ||
+      filePath.includes('ErrorBoundaryWrapper') ||
+      filePath.includes('/boundaries/error-boundary-wrapper') ||
+      filePath.includes('/navigation/client-router') ||
+      filePath.includes('/flight/app-router-provider')
+    ) {
+      return true
+    }
     if (!fs.existsSync(filePath)) return false
     try {
       return moduleAnalysisCache.get(filePath).topLevelUseClient
@@ -1750,7 +1757,6 @@ if (import.meta.hot) {
       JSX_TEST_REGEX.test(modifiedCode)
 
     if (hasJsx && isDevMode) {
-      modifiedCode = `'use client';\n\n${modifiedCode}`
       setComponentType(id, 'client')
     }
 
@@ -1801,7 +1807,6 @@ ${clientTransformedCode}`
       return { code, wasTransformed: false }
     }
     const transform = await getUseCacheTransform()
-    if (!transform) return { code, wasTransformed: false }
     const useCacheResult = transform(code, id)
     if (useCacheResult == null || useCacheResult === '') return { code, wasTransformed: false }
     return { code: useCacheResult, wasTransformed: true }
@@ -2630,7 +2635,6 @@ ${clientTransformedCode}`
 
   plugins.push(
     mainPlugin,
-    createSilenceReactDirectiveLogsPlugin(),
     createStaticImagePlugin(),
     createFontPlugin(),
     webpackRequirePatchPlugin,

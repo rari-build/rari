@@ -206,10 +206,16 @@ function clearClientComponents(): void {
   g['~clientComponentPaths'] = {}
 }
 
+function isRegisterableClientExport(value: unknown): boolean {
+  if (typeof value === 'function') return true
+  if (value == null || typeof value !== 'object') return false
+  return Reflect.has(value, '$$typeof')
+}
+
 function registerClientComponentFromModule(componentPath: string, moduleExports: unknown): void {
   if (componentPath === '' || moduleExports == null || typeof moduleExports !== 'object') return
 
-  if ('default' in moduleExports && typeof moduleExports.default === 'function') {
+  if ('default' in moduleExports && isRegisterableClientExport(moduleExports.default)) {
     const componentName = extractComponentNameFromPath(componentPath)
     const componentId =
       componentName != null && componentName !== '' ? componentName : 'DefaultExport'
@@ -217,7 +223,7 @@ function registerClientComponentFromModule(componentPath: string, moduleExports:
   }
 
   for (const [exportName, exportValue] of Object.entries(moduleExports)) {
-    if (typeof exportValue === 'function' && exportName !== 'default')
+    if (exportName !== 'default' && isRegisterableClientExport(exportValue))
       registerClientComponent(exportName, componentPath, exportValue)
   }
 }

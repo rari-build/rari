@@ -126,10 +126,13 @@ test.describe('Error Handling', () => {
     })
 
     test('should render not-found UI when a page calls notFound()', async ({ page, request }) => {
-      const first = await request.get(`/not-found-trigger`)
+      const headers = {
+        Cookie: `rari-action-form-state=${Buffer.from('{}').toString('base64')}`,
+      }
+      const first = await request.get(`/not-found-trigger`, { headers })
       expect(first.status()).toBe(404)
 
-      const second = await request.get(`/not-found-trigger`)
+      const second = await request.get(`/not-found-trigger`, { headers })
       expect(second.status()).toBe(404)
 
       await page.goto(`/not-found-trigger`)
