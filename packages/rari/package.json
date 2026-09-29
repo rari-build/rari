@@ -50,7 +50,7 @@
       "default": "./dist/font/local.mjs"
     },
     "./font/google": {
-      "types": "./dist/font/google.d.mts",
+      "types": "./dist/font/google-catalog.d.mts",
       "default": "./dist/font/google.mjs"
     },
     "./mdx": {
@@ -141,7 +141,7 @@
     "node": "^24.21.0 || >=26.0.0"
   },
   "scripts": {
-    "build": "pnpm typecheck && vp pack",
+    "build": "pnpm typecheck && vp pack && node ./scripts/update-google-fonts.ts --types-only",
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",

@@ -8,6 +8,7 @@ export const monorepoIgnorePatterns: string[] = [
   'packages/rari-*/',
   'packages/use-cache-*/',
   'packages/create-rari-app/templates/**',
+  'packages/rari/src/font/google-families.json',
   'packages/rari/src/vite/transform/react-refresh-runtime.ts',
 ]
 

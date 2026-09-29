@@ -5,12 +5,15 @@ import { createStripReactDirectivesPlugin } from './src/vite/build/strip-react-d
 import { createReactCompilerPlugin } from './src/vite/transform/react-compiler'
 
 export default defineConfig({
-  fmt: monorepoFmt,
+  fmt: {
+    ...monorepoFmt,
+    ignorePatterns: [...(monorepoFmt.ignorePatterns ?? []), 'src/font/google-families.json'],
+  },
   lint: {
     ...monorepoLint,
     ignorePatterns: [
       ...(monorepoLint.ignorePatterns ?? []),
-      'src/font/google.ts',
+      'src/font/google-families.json',
       'src/vite/transform/react-refresh-runtime.ts',
     ],
   },
