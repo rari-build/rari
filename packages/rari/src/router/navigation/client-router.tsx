@@ -23,6 +23,32 @@ function isNavigateErrorDetail(
   return isRecord(detail) && typeof detail.navigationId === 'number' && 'error' in detail
 }
 
+function applyMetadataFromRscResponse(response: Response): void {
+  const encoded = response.headers.get('x-rari-metadata')
+  if (encoded == null || encoded === '') return
+
+  try {
+    const parsed: unknown = JSON.parse(decodeURIComponent(encoded))
+    if (!isRecord(parsed)) return
+
+    if (typeof parsed.title === 'string' && parsed.title !== '') {
+      document.title = parsed.title
+    }
+
+    if (typeof parsed.description === 'string' && parsed.description !== '') {
+      let metaDesc = document.querySelector('meta[name="description"]')
+      if (!metaDesc) {
+        metaDesc = document.createElement('meta')
+        metaDesc.setAttribute('name', 'description')
+        document.head.appendChild(metaDesc)
+      }
+      metaDesc.setAttribute('content', parsed.description)
+    }
+  } catch {
+    // Ignore malformed metadata headers; Flight head injection remains the primary path.
+  }
+}
+
 async function waitForNavigationSettlement(
   navigationId: number,
   signal: AbortSignal,
@@ -393,6 +419,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
         }
 
         completeNavigation(routeIdentity, hash, options, navigationId, settledUrl)
+        applyMetadataFromRscResponse(response)
 
         pendingNavigationsRef.current.delete(targetPath)
       } catch (error) {

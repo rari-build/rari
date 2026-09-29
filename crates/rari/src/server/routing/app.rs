@@ -21,10 +21,7 @@ use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use tokio::{
     fs,
-    sync::{
-        mpsc::{Receiver, error::TryRecvError},
-        oneshot,
-    },
+    sync::mpsc::{Receiver, error::TryRecvError},
     time::{self, Duration},
 };
 
@@ -260,19 +257,6 @@ fn resolve_not_found_entry(
     app_router
         .find_not_found_for_route(&route_match.route)
         .or_else(|| app_router.find_not_found(&route_match.pathname))
-}
-
-fn spawn_page_metadata(
-    state: ServerState,
-    route_match: AppRouteMatch,
-    context: LayoutRenderContext,
-) -> oneshot::Receiver<Option<PageMetadata>> {
-    let (tx, rx) = oneshot::channel();
-    tokio::spawn(async move {
-        let metadata = collect_page_metadata(&state, &route_match, &context).await;
-        let _ = tx.send(metadata);
-    });
-    rx
 }
 
 pub(crate) async fn collect_page_metadata(
@@ -1407,8 +1391,7 @@ pub async fn handle_app_route(
                     .expect("Valid cached RSC response"));
             }
 
-            let metadata_rx =
-                spawn_page_metadata(state.clone(), route_match.clone(), context.clone());
+            context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
             let rsc_result = layout_renderer
                 .render_route_by_mode(&route_match, &context, Some(Arc::clone(&request_context)))
@@ -1420,6 +1403,8 @@ pub async fn handle_app_route(
                     if let Some(app_router) = state.app_router.as_ref()
                         && mark_route_not_found_if_signaled(&e, &mut route_match, app_router)
                     {
+                        context.metadata =
+                            collect_page_metadata(&state, &route_match, &context).await;
                         match layout_renderer
                             .render_route_by_mode(
                                 &route_match,
@@ -1442,8 +1427,6 @@ pub async fn handle_app_route(
             };
 
             {
-                context.metadata = metadata_rx.await.ok().flatten();
-
                 let status_code = if route_match.not_found.is_some() {
                     StatusCode::NOT_FOUND
                 } else {

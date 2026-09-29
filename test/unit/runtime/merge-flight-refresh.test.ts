@@ -611,7 +611,7 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(childList(body)[0]).props.children).toBe('about')
   })
 
-  it('clears stale title and description when the refreshed head is empty', () => {
+  it('preserves title and description when the refreshed head is empty', () => {
     const current = React.createElement(
       'html',
       { lang: 'en' },
@@ -641,10 +641,10 @@ describe('mergeFlightRefresh', () => {
     const [head, body] = childList(merged).map(child => expectElement(child))
     const headKids = childList(head).map(child => expectElement(child))
 
-    expect(headKids.find(child => child.type === 'title')).toBeUndefined()
+    expect(headKids.find(child => child.type === 'title')?.props.children).toBe('Home')
     expect(
-      headKids.find(child => child.type === 'meta' && child.props.name === 'description'),
-    ).toBeUndefined()
+      headKids.find(child => child.type === 'meta' && child.props.name === 'description')?.props.content,
+    ).toBe('Home page')
     expect(
       headKids.find(child => child.type === 'meta' && child.props.charSet != null),
     ).toBeTruthy()
