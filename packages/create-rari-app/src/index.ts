@@ -241,6 +241,7 @@ async function installDependencies(projectPath: string, packageManager: string):
     const child = spawn(packageManager, ['install'], {
       cwd: projectPath,
       stdio: 'pipe',
+      shell: process.platform === 'win32',
     })
 
     child.on('close', (code: number | null) => {
