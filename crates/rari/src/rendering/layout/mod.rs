@@ -23,21 +23,10 @@ mod tests {
     use rustc_hash::FxHashMap;
 
     use super::*;
-    use crate::{
-        rendering::base::constants::ROUTE_COMPOSER_SCRIPT,
-        server::routing::{
-            app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
-            types::ParamValue,
-        },
+    use crate::server::routing::{
+        app_router::{AppRouteEntry, AppRouteMatch, LayoutEntry},
+        types::ParamValue,
     };
-
-    #[test]
-    fn test_get_component_id() {
-        assert_eq!(utils::get_component_id("app/page.tsx"), "Page");
-        assert_eq!(utils::get_component_id("app/layout.tsx"), "Layout");
-        assert_eq!(utils::get_component_id("app/loading.tsx"), "Loading");
-        assert_eq!(utils::get_component_id("app/error.tsx"), "Error");
-    }
 
     #[test]
     fn test_component_dist_path_uses_hashed_id_from_file_path() {
@@ -106,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_with_use_suspense_true() {
+    fn test_compose_route_script_with_use_suspense_true() {
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -137,7 +126,7 @@ mod tests {
             reuse_layout_paths: Vec::new(),
         };
 
-        let script = LayoutRenderer::build_composition_script(
+        let script = LayoutRenderer::compose_route_script(
             &route_match,
             &context,
             Some("app/test/loading"),
@@ -162,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_with_use_suspense_false() {
+    fn test_compose_route_script_with_use_suspense_false() {
         let route_match = AppRouteMatch {
             route: AppRouteEntry {
                 path: "/test".to_string(),
@@ -193,7 +182,7 @@ mod tests {
             reuse_layout_paths: Vec::new(),
         };
 
-        let script = LayoutRenderer::build_composition_script(
+        let script = LayoutRenderer::compose_route_script(
             &route_match,
             &context,
             Some("app/test/loading"),
@@ -250,7 +239,7 @@ mod tests {
         };
 
         let script =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, true, false)
                 .unwrap();
 
         assert!(!script.contains("'data-content-slot': true"));
@@ -292,10 +281,10 @@ mod tests {
         };
 
         let script_ssr =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, true, false)
                 .unwrap();
         let script_rsc =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, false, false)
                 .unwrap();
 
         assert!(script_ssr.contains("composeRoute"));
@@ -304,10 +293,6 @@ mod tests {
         assert!(script_rsc.contains("createPageElement"));
         assert!(script_ssr.contains("metadata:"));
         assert!(script_rsc.contains("metadata:"));
-
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("rsc_data: rscData"));
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("pending_promises: pendingPromises"));
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("boundaries,"));
     }
 
     #[test]
@@ -342,7 +327,7 @@ mod tests {
             reuse_layout_paths: Vec::new(),
         };
 
-        let script_ssr = LayoutRenderer::build_composition_script(
+        let script_ssr = LayoutRenderer::compose_route_script(
             &route_match,
             &context,
             Some("app/test/loading"),
@@ -350,7 +335,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let script_rsc = LayoutRenderer::build_composition_script(
+        let script_rsc = LayoutRenderer::compose_route_script(
             &route_match,
             &context,
             Some("app/test/loading"),
@@ -405,10 +390,10 @@ mod tests {
         };
 
         let script_ssr =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, true, false)
                 .unwrap();
         let script_rsc =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, false, false)
                 .unwrap();
 
         assert!(!script_ssr.contains("const contentSlot = React.createElement"));
@@ -456,10 +441,10 @@ mod tests {
         };
 
         let script_ssr =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, true, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, true, false)
                 .unwrap();
         let script_rsc =
-            LayoutRenderer::build_composition_script(&route_match, &context, None, false, false)
+            LayoutRenderer::compose_route_script(&route_match, &context, None, false, false)
                 .unwrap();
 
         assert!(script_ssr.contains("createPageElement"));

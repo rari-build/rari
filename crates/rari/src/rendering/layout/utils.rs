@@ -81,21 +81,6 @@ pub fn create_client_component_id(file_path: &str) -> String {
         .to_string()
 }
 
-pub fn get_component_id(file_path: &str) -> String {
-    let path = Path::new(file_path);
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown");
-
-    let mut chars = stem.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => {
-            let mut result = first.to_uppercase().collect::<String>();
-            result.push_str(chars.as_str());
-            result
-        }
-    }
-}
-
 pub fn create_page_props(
     route_match: &AppRouteMatch,
     context: &LayoutRenderContext,

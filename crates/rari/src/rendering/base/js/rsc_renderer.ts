@@ -19,25 +19,7 @@ async function renderToRsc(element: unknown): Promise<string> {
     },
   })
 
-  const reader = stream.getReader()
-  const chunks: Uint8Array[] = []
-  let totalLength = 0
-
-  for (;;) {
-    const { done, value } = await reader.read()
-
-    if (done) break
-
-    chunks.push(value)
-    totalLength += value.byteLength
-  }
-
-  const fullBuffer = new Uint8Array(totalLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    fullBuffer.set(chunk, offset)
-    offset += chunk.byteLength
-  }
+  const fullBuffer = await readStreamToUint8Array(stream)
 
   const rari = (g['~rari'] ??= {})
   rari.lastRscBinary = fullBuffer

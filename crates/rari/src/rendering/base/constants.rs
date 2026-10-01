@@ -1,13 +1,6 @@
 use std::time::Duration;
 
-pub const MEMORY_PRESSURE_THRESHOLD: f64 = 0.8;
-pub const MEMORY_PRESSURE_RENDER_THRESHOLD_NUM: usize = 8;
-pub const MEMORY_PRESSURE_RENDER_THRESHOLD_DEN: usize = 10;
 pub const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_millis(10);
-
-pub const MAX_RETRIES: u64 = 3;
-pub const RETRY_BASE_DELAY_MS: u64 = 150;
-pub const COMPONENT_AVAILABILITY_CHECK_DELAY_MS: u64 = 20;
 
 pub const DEFAULT_MAX_CONCURRENT_RENDERS: usize = 50;
 pub const DEFAULT_MAX_RENDER_TIME_MS: u64 = 8000;
@@ -16,6 +9,7 @@ pub const DEFAULT_MAX_MEMORY_PER_COMPONENT_MB: usize = 50;
 pub const DEFAULT_MAX_CACHE_SIZE: usize = 1000;
 
 pub const ACTION_FLIGHT_ENCODE_SCRIPT: &str = concat!(
+    include_str!("js/stream_utils.ts"),
     include_str!("js/action_flight_shared.ts"),
     include_str!("js/action_flight_encode.ts"),
 );
@@ -23,7 +17,7 @@ pub const ACTION_HANDLER_SCRIPT: &str = concat!(
     "// rari-action-handler-v3\n",
     include_str!("js/action_fn_resolver.ts"),
     include_str!("js/action_args_validation.core.ts"),
-    include_str!("js/action_args_validation_v8.ts"),
+    include_str!("js/stream_utils.ts"),
     include_str!("js/action_flight_shared.ts"),
     include_str!("js/action_handler.ts"),
 );
@@ -38,7 +32,8 @@ pub const GET_RSC_BINARY_B64: &str = r"(function() {
     return btoa(str);
 })()";
 
-pub const FIZZ_RENDER_SCRIPT: &str = include_str!("../layout/js/fizz_render.ts");
+pub const FIZZ_RENDER_SCRIPT: &str =
+    concat!(include_str!("js/stream_utils.ts"), include_str!("../layout/js/fizz_render.ts"),);
 pub const ROUTE_COMPOSER_SCRIPT: &str = concat!(
     include_str!("../layout/js/layout_reuse.ts"),
     "\n",
@@ -49,7 +44,8 @@ pub const STREAMING_FIZZ_SCRIPT: &str = concat!(
     "\n",
     include_str!("../layout/js/streaming_fizz.ts"),
 );
-pub const RSC_RENDERER_SCRIPT: &str = include_str!("js/rsc_renderer.ts");
+pub const RSC_RENDERER_SCRIPT: &str =
+    concat!(include_str!("js/stream_utils.ts"), include_str!("js/rsc_renderer.ts"),);
 
 pub const STREAMING_PIPELINE_READY_CHECK: &str = "typeof globalThis['~rari']?.renderStreamingDocument === 'function' \
         && typeof globalThis['~rari']?.renderStaticDocument === 'function' \

@@ -245,7 +245,7 @@ async fn warm_route(
     }
 
     let rsc_result =
-        layout_renderer.render_route_by_mode(&route_match, &context, Some(request_context)).await;
+        layout_renderer.render_route(&route_match, &context, Some(request_context)).await;
 
     if let Ok(rsc_flight_protocol) = rsc_result {
         let rsc_cache_key =

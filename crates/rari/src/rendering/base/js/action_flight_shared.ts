@@ -1,26 +1,8 @@
 /// <reference path="../../types.d.ts" />
 
 async function readStreamToLastRscBinary(stream: ReadableStream<Uint8Array>): Promise<void> {
-  const reader = stream.getReader()
-  const chunks: Uint8Array[] = []
-  let totalLength = 0
-
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    chunks.push(value)
-    totalLength += value.byteLength
-  }
-
-  const fullBuffer = new Uint8Array(totalLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    fullBuffer.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-
   const rari = (g['~rari'] ??= {})
-  rari.lastRscBinary = fullBuffer
+  rari.lastRscBinary = await readStreamToUint8Array(stream)
 }
 
 async function encodeActionFlightResponse(

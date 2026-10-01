@@ -27,6 +27,7 @@ use tokio::{
 
 use crate::{
     rendering::{
+        html_shell::RscHtmlRenderer,
         layout::{
             ChunkedContentType, LayoutRenderContext, LayoutRenderer, OpenGraphImage,
             OpenGraphImageDescriptor, OpenGraphMetadata, PageMetadata, RenderResult,
@@ -35,7 +36,6 @@ use crate::{
             shared_layout_paths_for_navigation, sort_flight_protocol,
             tree_from_router_state_header,
         },
-        r#static::RscHtmlRenderer,
     },
     server::{
         ServerState,
@@ -1407,7 +1407,7 @@ pub async fn handle_app_route(
             context.metadata = collect_page_metadata(&state, &route_match, &context).await;
 
             let rsc_result = layout_renderer
-                .render_route_by_mode(&route_match, &context, Some(Arc::clone(&request_context)))
+                .render_route(&route_match, &context, Some(Arc::clone(&request_context)))
                 .await;
 
             let rsc_flight_protocol = match rsc_result {
@@ -1419,7 +1419,7 @@ pub async fn handle_app_route(
                         context.metadata =
                             collect_page_metadata(&state, &route_match, &context).await;
                         match layout_renderer
-                            .render_route_by_mode(
+                            .render_route(
                                 &route_match,
                                 &context,
                                 Some(Arc::clone(&request_context)),

@@ -179,6 +179,8 @@ declare global {
         callHandler: (requestData: any, moduleSpecifier: string, methodName: string) => Promise<any>
       }
       readStream?: (stream: ReadableStream) => Promise<string>
+      readStreamToText?: (stream: ReadableStream) => Promise<string>
+      readStreamToUint8Array?: (stream: ReadableStream) => Promise<Uint8Array>
       ssrModules?: Partial<Record<string, { default?: unknown; [key: string]: unknown }>>
       serverManifest?: Partial<Record<string, { id: string; name?: string; chunks: string[] }>>
       registeredServerFunctions?: Set<string>

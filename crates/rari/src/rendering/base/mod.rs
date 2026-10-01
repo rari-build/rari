@@ -10,7 +10,7 @@ pub use loader::{RscJsLoader, RscModuleOperation, StubType};
 pub use renderer::RscRenderer;
 pub use renderer_lock::{run_with_renderer, run_with_renderer_result};
 pub use sanitizer::sanitize_html_output;
-pub use types::{ResourceLimits, ResourceMetrics, ResourceTracker};
+pub use types::{ResourceLimits, ResourceTracker};
 
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::unwrap_used)]

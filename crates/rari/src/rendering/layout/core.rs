@@ -17,6 +17,7 @@ use crate::{
     RscHtmlRenderer,
     rendering::{
         base::{RscRenderer, run_with_renderer_result},
+        html_shell::inject_css_links,
         layout::{
             LayoutInfo, RouteComposer,
             route_composer::{ErrorBoundaryInfo, TemplateInfo},
@@ -424,24 +425,6 @@ impl LayoutRenderer {
         context: &LayoutRenderContext,
         request_context: Option<Arc<RequestContext>>,
     ) -> Result<String, RariError> {
-        self.render_route_with_mode_internal(route_match, context, request_context).await
-    }
-
-    pub async fn render_route_for_fizz_streaming(
-        &self,
-        route_match: &AppRouteMatch,
-        context: &LayoutRenderContext,
-        request_context: Option<Arc<RequestContext>>,
-    ) -> Result<String, RariError> {
-        self.render_route_with_mode_internal(route_match, context, request_context).await
-    }
-
-    async fn render_route_with_mode_internal(
-        &self,
-        route_match: &AppRouteMatch,
-        context: &LayoutRenderContext,
-        request_context: Option<Arc<RequestContext>>,
-    ) -> Result<String, RariError> {
         let loading_enabled = Config::get().map(|config| config.loading.enabled).unwrap_or(true);
 
         let loading_component_id = if loading_enabled {
@@ -455,7 +438,7 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script(
+        let composition_script = Self::compose_route_script(
             route_match,
             context,
             loading_component_id.as_deref(),
@@ -487,15 +470,6 @@ impl LayoutRenderer {
         }
     }
 
-    pub async fn render_route_by_mode(
-        &self,
-        route_match: &AppRouteMatch,
-        context: &LayoutRenderContext,
-        request_context: Option<Arc<RequestContext>>,
-    ) -> Result<String, RariError> {
-        self.render_route(route_match, context, request_context).await
-    }
-
     pub async fn compose_route_for_action_refresh(
         &self,
         route_match: &AppRouteMatch,
@@ -514,7 +488,7 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script_with_stream(
+        let composition_script = Self::compose_route_script_with_stream(
             route_match,
             context,
             loading_component_id.as_deref(),
@@ -564,7 +538,7 @@ impl LayoutRenderer {
             None
         };
 
-        let composition_script = Self::build_composition_script_with_stream(
+        let composition_script = Self::compose_route_script_with_stream(
             route_match,
             context,
             loading_component_id.as_deref(),
@@ -638,7 +612,7 @@ impl LayoutRenderer {
                     mpsc::channel::<Result<Vec<u8>, RariError>>(128);
 
                 let stream_id = Uuid::new_v4().to_string();
-                let composition_script = Self::build_composition_script_with_stream(
+                let composition_script = Self::compose_route_script_with_stream(
                     route_match,
                     context,
                     loading_component_id.as_deref(),
@@ -726,7 +700,7 @@ impl LayoutRenderer {
                 });
             }
 
-            let composition_script = Self::build_composition_script_with_stream(
+            let composition_script = Self::compose_route_script_with_stream(
                 route_match,
                 context,
                 loading_component_id.as_deref(),
@@ -819,7 +793,7 @@ impl LayoutRenderer {
                     }
                 }
 
-                let composition_script = match Self::build_composition_script_with_stream(
+                let composition_script = match Self::compose_route_script_with_stream(
                     &route_match,
                     &context,
                     loading_component_id.as_deref(),
@@ -861,7 +835,7 @@ impl LayoutRenderer {
                         let template = html_renderer
                             .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
                             .await?;
-                        let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
+                        let template = inject_css_links(&template, &css_links);
 
                         let head_content =
                             RscHtmlRenderer::client_head_fragment(&template).to_string();
@@ -971,7 +945,7 @@ impl LayoutRenderer {
             }
 
             let html = {
-                let composition_script = Self::build_composition_script(
+                let composition_script = Self::compose_route_script(
                     route_match,
                     context,
                     loading_component_id.as_deref(),
@@ -1001,7 +975,7 @@ impl LayoutRenderer {
                         let template = html_renderer
                             .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
                             .await?;
-                        let template = RscHtmlRenderer::inject_css_links(&template, &css_links);
+                        let template = inject_css_links(&template, &css_links);
 
                         let head_content =
                             RscHtmlRenderer::client_head_fragment(&template).to_string();
@@ -1287,14 +1261,14 @@ impl LayoutRenderer {
         ))
     }
 
-    pub fn build_composition_script(
+    pub fn compose_route_script(
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
         loading_component_id: Option<&str>,
         use_suspense: bool,
         defer_rsc: bool,
     ) -> Result<String, RariError> {
-        Self::build_composition_script_with_stream(
+        Self::compose_route_script_with_stream(
             route_match,
             context,
             loading_component_id,
@@ -1306,7 +1280,7 @@ impl LayoutRenderer {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn build_composition_script_with_stream(
+    pub fn compose_route_script_with_stream(
         route_match: &AppRouteMatch,
         context: &LayoutRenderContext,
         loading_component_id: Option<&str>,
@@ -1443,7 +1417,7 @@ impl LayoutRenderer {
             })
             .unwrap_or_else(|| "{}".to_string());
 
-        let script = RouteComposer::build_composition_script_with_templates(
+        let script = RouteComposer::format_compose_route(
             &page_render_script,
             &layouts,
             &templates,
@@ -1459,74 +1433,6 @@ impl LayoutRenderer {
         );
 
         Ok(script)
-    }
-
-    pub async fn render_loading(
-        &self,
-        loading_path: &str,
-        _context: &LayoutRenderContext,
-    ) -> Result<String, RariError> {
-        let component_id = utils::get_component_id(loading_path);
-
-        run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-            renderer.render_to_string(&component_id, None).await
-        })
-        .await
-    }
-
-    pub async fn render_error(
-        &self,
-        error_path: &str,
-        error: &str,
-        _context: &LayoutRenderContext,
-    ) -> Result<String, RariError> {
-        let component_id = utils::get_component_id(error_path);
-
-        let mut props = serde_json::Map::new();
-        props.insert("error".to_string(), Value::String(error.to_string()));
-        props.insert(
-            "reset".to_string(),
-            Value::String("() => window.location.reload()".to_string()),
-        );
-
-        let props_json = serde_json::to_string(&props)
-            .map_err(|e| RariError::internal(format!("Failed to serialize error props: {e}")))?;
-
-        run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-            renderer.render_to_string(&component_id, Some(&props_json)).await
-        })
-        .await
-    }
-
-    pub async fn render_not_found(
-        &self,
-        not_found_path: &str,
-        _context: &LayoutRenderContext,
-    ) -> Result<String, RariError> {
-        let component_id = utils::get_component_id(not_found_path);
-
-        run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-            renderer.render_to_string(&component_id, None).await
-        })
-        .await
-    }
-
-    pub async fn component_exists(&self, component_id: &str) -> bool {
-        let renderer = self.renderer.lock().await;
-        renderer.component_exists(component_id)
-    }
-
-    pub async fn register_component(
-        &self,
-        component_id: &str,
-        component_code: &str,
-    ) -> Result<(), RariError> {
-        let component_id = component_id.to_string();
-        let component_code = component_code.to_string();
-        run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-            renderer.register_component(&component_id, &component_code).await
-        })
-        .await
     }
 }
 
