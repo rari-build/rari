@@ -35,7 +35,9 @@ async function readStreamToText(stream: ReadableStream<Uint8Array>): Promise<str
   return text
 }
 
-const streamRari = (g['~rari'] ??= {})
-streamRari.readStreamToUint8Array = readStreamToUint8Array
-streamRari.readStreamToText = readStreamToText
-streamRari.readStream = readStreamToText
+{
+  const streamRari = (g['~rari'] ??= {})
+  streamRari.readStreamToUint8Array = readStreamToUint8Array
+  streamRari.readStreamToText = readStreamToText
+  streamRari.readStream = readStreamToText
+}
