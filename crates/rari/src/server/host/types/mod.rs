@@ -1,14 +1,8 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicU64},
-    time::Instant,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use bytes::Bytes;
-use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tokio::sync::{Mutex, RwLock};
+use serde::Deserialize;
+use tokio::sync::Mutex;
 
 pub mod request;
 
@@ -87,10 +81,6 @@ pub struct ServerState {
     pub renderer: Arc<Mutex<RscRenderer>>,
     pub ssr_renderer: Arc<RscHtmlRenderer>,
     pub config: Arc<Config>,
-    pub request_count: Arc<AtomicU64>,
-    pub start_time: Instant,
-    pub component_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
-    pub page_cache_configs: Arc<RwLock<FxHashMap<String, FxHashMap<String, String>>>>,
     pub app_router: Option<Arc<AppRouter>>,
     pub api_route_handler: Option<Arc<ApiRouteHandler>>,
     pub html_cache: FallbackHtmlCache,
@@ -107,28 +97,9 @@ pub struct ServerState {
 
 #[derive(Debug, Deserialize)]
 #[non_exhaustive]
-pub struct RenderRequest {
-    pub component_id: String,
-    pub props: Option<Value>,
-    pub ssr: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-#[non_exhaustive]
-pub struct RenderResponse {
-    pub success: bool,
-    pub data: Option<String>,
-    pub error: Option<String>,
-    pub component_id: String,
-    pub render_time_ms: u64,
-}
-
-#[derive(Debug, Deserialize)]
-#[non_exhaustive]
 pub struct RegisterRequest {
     pub component_id: String,
     pub component_code: String,
-    pub cache_config: Option<FxHashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,26 +108,6 @@ pub struct RegisterClientRequest {
     pub component_id: String,
     pub file_path: String,
     pub export_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[non_exhaustive]
-pub struct HmrRegisterRequest {
-    pub file_path: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[non_exhaustive]
-pub struct ReloadComponentRequest {
-    pub component_id: String,
-    pub bundle_path: String,
-}
-
-#[derive(Debug, Serialize)]
-#[non_exhaustive]
-pub struct ReloadComponentResponse {
-    pub success: bool,
-    pub message: String,
 }
 
 #[cfg(test)]
@@ -200,8 +151,7 @@ mod tests {
         );
         assert!(cache.get().is_none());
 
-        let next = cache.generation();
-        assert!(cache.set_if_generation(Bytes::from("<html>fresh</html>"), next));
-        assert_eq!(cache.get().expect("fresh"), Bytes::from("<html>fresh</html>"));
+        assert!(cache.set_if_generation(Bytes::from("<html>fresh</html>"), cache.generation()));
+        assert_eq!(cache.get().expect("cached"), Bytes::from("<html>fresh</html>"));
     }
 }

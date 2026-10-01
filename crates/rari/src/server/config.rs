@@ -15,10 +15,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::server::{
-    cache::handler::MemoryConfig, image::ImageConfig,
-    rendering::html_bots::compile_html_limited_bots_pattern,
-};
+use crate::server::{cache::handler::MemoryConfig, image::ImageConfig};
 
 pub static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -448,14 +445,12 @@ impl Default for CacheControlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct RscHtmlConfig {
-    pub enabled: bool,
-    pub timeout_ms: u64,
     pub cache_template: bool,
 }
 
 impl Default for RscHtmlConfig {
     fn default() -> Self {
-        Self { enabled: true, timeout_ms: 5000, cache_template: true }
+        Self { cache_template: true }
     }
 }
 
@@ -463,13 +458,11 @@ impl Default for RscHtmlConfig {
 #[non_exhaustive]
 pub struct LoadingConfig {
     pub enabled: bool,
-    pub min_display_time_ms: u64,
-    pub cache_loading_components: bool,
 }
 
 impl Default for LoadingConfig {
     fn default() -> Self {
-        Self { enabled: true, min_display_time_ms: 200, cache_loading_components: true }
+        Self { enabled: true }
     }
 }
 
@@ -510,11 +503,6 @@ pub struct Config {
     pub cache: CacheConfig,
     #[serde(default)]
     pub use_cache: UseCacheConfig,
-    #[serde(default, rename = "htmlLimitedBots")]
-    pub html_limited_bots: Option<String>,
-    /// Precompiled override from `html_limited_bots`; `None` uses the default list.
-    #[serde(skip)]
-    pub html_limited_bots_regex: Option<regex::Regex>,
 }
 
 impl Config {
@@ -636,18 +624,6 @@ impl Config {
                 timeout_str.parse().map_err(|_| ConfigError::Timeout(timeout_str.clone()))?;
         }
 
-        if let Ok(rsc_html_enabled_str) = env::var("RARI_RSC_HTML_ENABLED") {
-            config.rsc_html.enabled = rsc_html_enabled_str.cow_to_lowercase() == "true"
-                || rsc_html_enabled_str == "1"
-                || rsc_html_enabled_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(rsc_html_timeout_str) = env::var("RARI_RSC_HTML_TIMEOUT_MS") {
-            config.rsc_html.timeout_ms = rsc_html_timeout_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_RSC_HTML_TIMEOUT_MS".to_string()))?;
-        }
-
         if let Ok(rsc_html_cache_template_str) = env::var("RARI_RSC_HTML_CACHE_TEMPLATE") {
             config.rsc_html.cache_template = rsc_html_cache_template_str.cow_to_lowercase()
                 == "true"
@@ -659,19 +635,6 @@ impl Config {
             config.loading.enabled = loading_enabled_str.cow_to_lowercase() == "true"
                 || loading_enabled_str == "1"
                 || loading_enabled_str.cow_to_lowercase() == "yes";
-        }
-
-        if let Ok(min_display_time_str) = env::var("RARI_LOADING_MIN_DISPLAY_TIME_MS") {
-            config.loading.min_display_time_ms = min_display_time_str
-                .parse()
-                .map_err(|_| ConfigError::Config("RARI_LOADING_MIN_DISPLAY_TIME_MS".to_string()))?;
-        }
-
-        if let Ok(cache_loading_str) = env::var("RARI_LOADING_CACHE_COMPONENTS") {
-            config.loading.cache_loading_components = cache_loading_str.cow_to_lowercase()
-                == "true"
-                || cache_loading_str == "1"
-                || cache_loading_str.cow_to_lowercase() == "yes";
         }
 
         let config_path = match base {
@@ -816,22 +779,6 @@ impl Config {
                     }
                 }
 
-                if let Some(pattern) =
-                    config_data.get("htmlLimitedBots").and_then(serde_json::Value::as_str)
-                {
-                    match compile_html_limited_bots_pattern(pattern) {
-                        Ok(re) => {
-                            config.html_limited_bots = Some(pattern.to_string());
-                            config.html_limited_bots_regex = Some(re);
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                "Invalid htmlLimitedBots regex in config.json ({pattern:?}): {err}. Using default list."
-                            );
-                        }
-                    }
-                }
-
                 if let Some(cache_control_data) = config_data.get("cacheControl")
                     && let Some(routes) =
                         cache_control_data.get("routes").and_then(|v| v.as_object())
@@ -958,20 +905,6 @@ impl Config {
                 return Err(ConfigError::Config("RARI_JS_POOL_SIZE must be >= 1".to_string()));
             }
             config.server.js_pool_size = pool_size;
-        }
-
-        if let Ok(pattern) = env::var("RARI_HTML_LIMITED_BOTS") {
-            match compile_html_limited_bots_pattern(&pattern) {
-                Ok(re) => {
-                    config.html_limited_bots = Some(pattern);
-                    config.html_limited_bots_regex = Some(re);
-                }
-                Err(err) => {
-                    tracing::warn!(
-                        "Invalid RARI_HTML_LIMITED_BOTS regex ({pattern:?}): {err}. Ignoring override."
-                    );
-                }
-            }
         }
 
         if config.mode == Mode::Development {
@@ -1435,31 +1368,6 @@ mod tests {
             Some(v) => unsafe { env::set_var("RARI_JS_POOL_SIZE", v) },
             None => unsafe { env::remove_var("RARI_JS_POOL_SIZE") },
         }
-    }
-
-    #[test]
-    fn test_html_limited_bots_config_validates_regex() {
-        let temp_dir =
-            env::temp_dir().join(format!("rari_test_html_limited_bots_{}", process::id()));
-        let dist_server_dir = temp_dir.join("dist").join("server");
-        fs::create_dir_all(&dist_server_dir).unwrap();
-
-        fs::write(dist_server_dir.join("config.json"), r#"{"htmlLimitedBots":"OnlyMyBot"}"#)
-            .unwrap();
-        let valid = Config::from_env_with_base(Some(&temp_dir)).unwrap();
-        assert_eq!(valid.html_limited_bots.as_deref(), Some("OnlyMyBot"));
-        assert!(valid.html_limited_bots_regex.is_some());
-
-        fs::write(dist_server_dir.join("config.json"), r#"{"htmlLimitedBots":"(OnlyMyBot"}"#)
-            .unwrap();
-        let invalid = Config::from_env_with_base(Some(&temp_dir)).unwrap();
-        assert!(
-            invalid.html_limited_bots.is_none(),
-            "invalid regex must fall back to default (None override)"
-        );
-        assert!(invalid.html_limited_bots_regex.is_none());
-
-        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

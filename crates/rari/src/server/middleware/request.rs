@@ -5,7 +5,7 @@ use axum::{
 };
 use cow_utils::CowUtils;
 
-use crate::server::{config::Config, core::utils::http::CORS_ALLOW_HEADERS};
+use crate::server::{config::Config, host::utils::http::CORS_ALLOW_HEADERS};
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]

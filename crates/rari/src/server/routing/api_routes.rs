@@ -21,17 +21,11 @@ use crate::{
     rendering::layout::{component_dist_path, create_component_id},
     runtime::JsExecutionRuntime,
     server::{
-        core::utils::http::extract_headers, middleware::request_context::RequestContext,
-        routing::types::RouteSegment,
+        host::utils::http::extract_headers,
+        middleware::request_context::RequestContext,
+        routing::{match_path::match_route_pattern_as_strings, types::RouteSegment},
     },
 };
-
-fn parse_decoded_path_segments(path: &str) -> Vec<String> {
-    path.split('/')
-        .filter(|s| !s.is_empty())
-        .map(|s| urlencoding::decode(s).unwrap_or_else(|_| s.to_string().into()).into_owned())
-        .collect()
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -112,7 +106,7 @@ impl ApiRouteHandler {
         let normalized_path = Self::normalize_path(path);
 
         for route in &self.manifest.api_routes {
-            if Self::match_route_pattern(route, &normalized_path).is_some() {
+            if match_route_pattern_as_strings(&route.path, &normalized_path).is_some() {
                 return Some(route.methods.clone());
             }
         }
@@ -125,7 +119,7 @@ impl ApiRouteHandler {
         let normalized_path = Self::normalize_path(path);
 
         for route in &self.manifest.api_routes {
-            if let Some(params) = Self::match_route_pattern(route, &normalized_path) {
+            if let Some(params) = match_route_pattern_as_strings(&route.path, &normalized_path) {
                 if !route.methods.iter().any(|m| m.eq_ignore_ascii_case(method)) {
                     return Err(RariError::bad_request(format!(
                         "Method {} not allowed for route {}. Supported methods: {}",
@@ -146,65 +140,6 @@ impl ApiRouteHandler {
         }
 
         Err(RariError::not_found(format!("No API route found for path: {path}")))
-    }
-
-    fn match_route_pattern(route: &ApiRouteEntry, path: &str) -> Option<FxHashMap<String, String>> {
-        let route_segments = route.path.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
-        let path_segments = parse_decoded_path_segments(path);
-
-        let mut params = FxHashMap::default();
-        let mut route_idx = 0;
-        let mut path_idx = 0;
-
-        while route_idx < route_segments.len() {
-            let route_seg = route_segments[route_idx];
-
-            if route_seg.starts_with("[[...") && route_seg.ends_with("]]") {
-                let param_name = &route_seg[5..route_seg.len() - 2];
-
-                if path_idx < path_segments.len() {
-                    let remaining: Vec<String> = path_segments[path_idx..].to_vec();
-                    params.insert(param_name.to_string(), remaining.join("/"));
-                }
-
-                return Some(params);
-            }
-
-            if route_seg.starts_with("[...") && route_seg.ends_with(']') {
-                let param_name = &route_seg[4..route_seg.len() - 1];
-
-                if path_idx >= path_segments.len() {
-                    return None;
-                }
-
-                let remaining: Vec<String> = path_segments[path_idx..].to_vec();
-                params.insert(param_name.to_string(), remaining.join("/"));
-
-                return Some(params);
-            }
-
-            if route_seg.starts_with('[') && route_seg.ends_with(']') {
-                if path_idx >= path_segments.len() {
-                    return None;
-                }
-
-                let param_name = &route_seg[1..route_seg.len() - 1];
-                params.insert(param_name.to_string(), path_segments[path_idx].clone());
-
-                path_idx += 1;
-                route_idx += 1;
-                continue;
-            }
-
-            if path_idx >= path_segments.len() || route_seg != path_segments[path_idx] {
-                return None;
-            }
-
-            path_idx += 1;
-            route_idx += 1;
-        }
-
-        if path_idx == path_segments.len() { Some(params) } else { None }
     }
 
     fn normalize_path(path: &str) -> String {

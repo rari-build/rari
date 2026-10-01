@@ -26,7 +26,7 @@ use tower::{Layer, Service};
 
 use crate::{
     runtime::JsExecutionRuntime,
-    server::{config::Config, core::types::ServerState},
+    server::{config::Config, host::types::ServerState},
     utils::path::path_to_file_url,
 };
 

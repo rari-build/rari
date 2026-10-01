@@ -20,7 +20,7 @@ use crate::{
     rendering::base,
     server::{
         actions,
-        core::utils::client,
+        host::utils::client,
         middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
     },
 };

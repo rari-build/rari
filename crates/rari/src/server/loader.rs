@@ -12,7 +12,7 @@ use crate::{
     runtime::JsExecutionRuntime,
     server::{
         config::Config,
-        core::utils::component::{
+        host::utils::component::{
             extract_component_id, has_use_client_directive, has_use_server_directive,
             is_server_action_module, wrap_server_action_module,
         },

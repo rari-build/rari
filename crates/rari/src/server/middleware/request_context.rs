@@ -18,7 +18,7 @@ use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
 use crate::server::{
-    core::utils::{client::get_http_client, http},
+    host::utils::{client::get_http_client, http},
     middleware::request::X_RARI_CSP_NONCE,
 };
 

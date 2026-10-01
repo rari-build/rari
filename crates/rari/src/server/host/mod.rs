@@ -6,8 +6,7 @@ use std::{
     future::{self, Future},
     net::{IpAddr, SocketAddr},
     path::PathBuf,
-    sync::{Arc, atomic::AtomicU64},
-    time::Instant,
+    sync::Arc,
 };
 
 use axum::{
@@ -20,12 +19,7 @@ use axum::{
 };
 use colored::Colorize;
 use rari_error::RariError;
-use rustc_hash::FxHashMap;
-use tokio::{
-    fs,
-    net::TcpListener,
-    sync::{Mutex, RwLock},
-};
+use tokio::{fs, net::TcpListener, sync::Mutex};
 use tower_http::{
     compression::{CompressionLayer, Predicate},
     services::ServeDir,
@@ -38,7 +32,7 @@ use crate::{
     runtime::JsExecutionRuntime,
     server::{
         actions::{handle_page_server_action, handle_server_action},
-        cache::{handler::CacheHandlerRegistry, loader::CacheLoader, response, warmup},
+        cache::{handler::CacheHandlerRegistry, response, warmup},
         config::{
             CACHE_LAYER_FETCH, CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_MODULE,
             CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
@@ -59,12 +53,12 @@ use crate::{
             app_router,
         },
         static_assets::{
-            cors_preflight_ok, root_handler, serve_static_asset, static_or_spa_handler,
+            cors_preflight_response, root_handler, serve_static_asset, static_or_spa_handler,
         },
         vite::{
             hmr::handle_hmr_action,
             rsc::{health_check, register_client_component, register_component},
-            vite_reverse_proxy, vite_src_proxy, vite_websocket_proxy,
+            vite_proxy, vite_websocket_proxy,
         },
     },
 };
@@ -251,10 +245,6 @@ impl Server {
             renderer: renderer_arc,
             ssr_renderer,
             config: Arc::new(config.clone()),
-            request_count: Arc::new(AtomicU64::new(0)),
-            start_time: Instant::now(),
-            component_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
-            page_cache_configs: Arc::new(RwLock::new(FxHashMap::default())),
             app_router,
             api_route_handler,
             html_cache: FallbackHtmlCache::default(),
@@ -273,7 +263,6 @@ impl Server {
         };
 
         if config.is_production() {
-            CacheLoader::load_page_cache_configs(&state).await?;
             let warmup_state = state.clone();
             tokio::spawn(async move {
                 warmup::warm_cache(&warmup_state).await;
@@ -364,12 +353,12 @@ impl Server {
                 .route("/_rari/register-client", routing::post(register_client_component))
                 .layer(large_body_limit)
                 .route("/_rari/hmr", routing::post(handle_hmr_action))
-                .route("/_rari/hmr", routing::options(cors_preflight_ok))
+                .route("/_rari/hmr", routing::options(|| async { cors_preflight_response() }))
                 .layer(medium_body_limit)
                 .route("/vite-server", routing::get(vite_websocket_proxy))
                 .route("/vite-server/", routing::get(vite_websocket_proxy))
-                .route("/vite-server/{*path}", routing::any(vite_reverse_proxy))
-                .route("/src/{*path}", routing::any(vite_src_proxy));
+                .route("/vite-server/{*path}", routing::any(vite_proxy))
+                .route("/src/{*path}", routing::any(vite_proxy));
         }
 
         let has_app_router = state.app_router.is_some();
@@ -388,10 +377,10 @@ impl Server {
             router = router
                 .route("/", routing::get(handle_app_route))
                 .route("/", routing::post(handle_page_server_action))
-                .route("/", routing::options(cors_preflight_ok))
+                .route("/", routing::options(|| async { cors_preflight_response() }))
                 .route("/{*path}", routing::get(handle_app_route))
                 .route("/{*path}", routing::post(handle_page_server_action))
-                .route("/{*path}", routing::options(cors_preflight_ok));
+                .route("/{*path}", routing::options(|| async { cors_preflight_response() }));
         } else if config.is_production() {
             router = router
                 .route("/", routing::get(root_handler))

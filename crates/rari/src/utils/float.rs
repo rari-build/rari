@@ -20,10 +20,3 @@ pub const fn i32_to_f32(value: i32) -> f32 {
 pub const fn usize_to_f32(value: usize) -> f32 {
     value as f32
 }
-
-#[expect(clippy::cast_precision_loss)]
-#[inline]
-#[must_use]
-pub fn u64_ratio(numerator: u64, denominator: u64) -> f64 {
-    numerator as f64 / denominator as f64
-}

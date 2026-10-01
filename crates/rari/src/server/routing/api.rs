@@ -10,7 +10,7 @@ use axum::{
 
 use crate::server::{
     ServerState,
-    core::utils::http::{add_api_cors_headers, add_api_security_headers},
+    host::utils::http::{add_api_cors_headers, add_api_security_headers},
     routing::api_error::{ApiRouteError, create_generic_error_response},
     static_assets::cors_preflight_response,
 };

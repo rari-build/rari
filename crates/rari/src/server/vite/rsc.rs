@@ -13,12 +13,11 @@ use crate::{
     rsc::extract_dependencies,
     runtime::factory::component_ops::is_esm_code,
     server::{
-        RegisterClientRequest, RegisterRequest, ServerState,
-        core::utils::{
+        RegisterClientRequest, RegisterRequest, ServerState, error_response,
+        host::utils::{
             component::{get_dist_path_for_component, wrap_server_action_module},
             path_validation::{normalize_component_path, validate_component_path},
         },
-        error_response,
     },
 };
 
@@ -34,11 +33,6 @@ pub async fn register_component(
     State(state): State<ServerState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    if let Some(cache_config) = &request.cache_config {
-        let mut cache_configs = state.component_cache_configs.write().await;
-        cache_configs.insert(request.component_id.clone(), cache_config.clone());
-    }
-
     let result = {
         let renderer = Arc::clone(&state.renderer);
         let component_id = request.component_id.clone();

@@ -114,7 +114,7 @@ fn optimize_dedupe_key(params: &OptimizeParams) -> String {
     )
 }
 
-pub fn schedule_prewarm_from_html(optimizer: Arc<ImageOptimizer>, html: &str) {
+fn schedule_prewarm_from_html(optimizer: Arc<ImageOptimizer>, html: &str) {
     let params = extract_optimize_params_from_html(html);
     if params.is_empty() {
         return;

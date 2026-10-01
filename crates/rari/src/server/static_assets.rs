@@ -14,11 +14,11 @@ use tokio::fs;
 use crate::server::{
     ServerState,
     config::Config,
-    core::utils::{
+    error_response::HttpError,
+    host::utils::{
         http::{CORS_ALLOW_HEADERS, get_content_type},
         path_validation::validate_safe_path,
     },
-    error_response::HttpError,
 };
 
 fn static_dev() -> bool {
@@ -182,9 +182,4 @@ pub fn cors_preflight_response() -> Response {
 
     #[expect(clippy::expect_used, reason = "Response::builder() with valid components never fails")]
     builder.body(Body::empty()).expect("Valid CORS preflight response")
-}
-
-#[axum::debug_handler]
-pub async fn cors_preflight_ok() -> Response {
-    cors_preflight_response()
 }
