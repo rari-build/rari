@@ -1,7 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { applySoftNavFlightPatch } from '@rari/runtime/flight/apply-flight-patch'
 import {
-  FlightLayoutRouter,
   renderFlightDocument,
   renderFlightLayoutRouter,
 } from '@rari/runtime/flight/layout-router'
@@ -102,7 +101,7 @@ describe('flightDocument soft-nav fill', () => {
     expect(rendered.key).toBe('/about')
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     expect(rendered.props).toEqual({ children: createElement('section', null, 'about') })
-    expect(String(FlightLayoutRouter)).not.toBe(LAYOUT_SLOT_ELEMENT)
+    expect(rendered.type).not.toBe(LAYOUT_SLOT_ELEMENT)
   })
 
   it('flightDocument returns filled tree when ok', () => {

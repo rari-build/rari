@@ -12,8 +12,8 @@ import Socket from './_components/Socket'
 
 const SPONSOR_URL = 'https://github.com/sponsors/skiniks'
 
-function hexWithAlpha(hex: string, alpha: string): string {
-  return hex.startsWith('#') && hex.length === 7 ? `${hex}${alpha}` : hex
+function hexWithAlpha(color: string, alpha: string): string {
+  return color.startsWith('#') && color.length === 7 ? `${color}${alpha}` : color
 }
 
 const neonPartner = {
