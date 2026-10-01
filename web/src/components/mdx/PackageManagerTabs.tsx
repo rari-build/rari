@@ -9,15 +9,11 @@ import Pnpm from '../icons/Pnpm'
 import Yarn from '../icons/Yarn'
 import CommandPanel from './CommandPanel'
 
-interface PackageManagerCommands {
-  readonly pnpm: string
-  readonly npm: string
-  readonly yarn: string
-  readonly bun: string
-}
-
-interface PackageManagerTabsProps extends Partial<PackageManagerCommands> {
-  readonly commands?: PackageManagerCommands
+export interface PackageManagerTabsProps {
+  readonly pnpm?: string
+  readonly npm?: string
+  readonly yarn?: string
+  readonly bun?: string
 }
 
 const PACKAGE_MANAGER_KEYS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
@@ -29,41 +25,19 @@ const packageManagerIcons: Record<PackageManager, ComponentType<{ className?: st
   bun: Bun,
 }
 
-function resolveCommands({
-  commands,
-  pnpm,
-  npm,
-  yarn,
-  bun,
-}: PackageManagerTabsProps): PackageManagerCommands {
-  if (commands != null) return commands
-  return {
-    pnpm: pnpm ?? '',
-    npm: npm ?? '',
-    yarn: yarn ?? '',
-    bun: bun ?? '',
-  }
-}
-
-function availableManagers(commands: PackageManagerCommands): PackageManager[] {
-  return PACKAGE_MANAGER_KEYS.filter(pm => commands[pm] !== '')
-}
-
-function resolveSelectedManager(
-  available: readonly PackageManager[],
-  preferred: PackageManager,
-): PackageManager {
-  if (available.length === 0) return 'pnpm'
-  if (available.includes(preferred)) return preferred
-  return available[0]
+function availableManagers(props: PackageManagerTabsProps): PackageManager[] {
+  return PACKAGE_MANAGER_KEYS.filter(pm => {
+    const command = props[pm]
+    return command != null && command !== ''
+  })
 }
 
 export default function PackageManagerTabs(props: PackageManagerTabsProps) {
-  const commands = resolveCommands(props)
-  const available = availableManagers(commands)
+  const available = availableManagers(props)
   const { packageManager: preferred, setPackageManager: setActiveTab } = usePackageManager()
-  const selected = resolveSelectedManager(available, preferred)
-  const selectedCommand = commands[selected]
+  const selected =
+    available.length === 0 ? 'pnpm' : available.includes(preferred) ? preferred : available[0]
+  const selectedCommand = props[selected] ?? ''
 
   return (
     <CommandPanel

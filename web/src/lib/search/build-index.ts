@@ -2,7 +2,6 @@ import type { SearchIndexEntry } from './types'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { TITLE_EXPORT_REGEX } from '@/lib/content/patterns'
-import { WHITESPACE_REGEX } from '@/lib/utils/whitespace'
 
 interface SearchCache {
   index: SearchIndexEntry[]
@@ -99,7 +98,7 @@ function extractContent(mdxContent: string): {
     .map(line => line.trim())
     .filter(line => line.length > 0 && !line.startsWith('{') && !line.startsWith('}'))
     .join(' ')
-    .replace(WHITESPACE_REGEX, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 
   if (title && content.toLowerCase().startsWith(title.toLowerCase()))

@@ -1,7 +1,6 @@
 import type { JSX, ReactNode } from 'react'
 import { isValidElement } from 'react'
 import LinkIcon from '@/components/icons/Link'
-import { WHITESPACE_REGEX } from '@/lib/utils/whitespace'
 
 const NON_WORD_REGEX = /[^\w-]+/g
 const MULTIPLE_DASHES_REGEX = /-{2,}/g
@@ -16,7 +15,7 @@ function slugify(text: string): string {
   return text
     .toLowerCase()
     .trim()
-    .replace(WHITESPACE_REGEX, '-')
+    .replace(/\s+/g, '-')
     .replace(NON_WORD_REGEX, '')
     .replace(MULTIPLE_DASHES_REGEX, '-')
 }

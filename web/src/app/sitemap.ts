@@ -1,7 +1,7 @@
 import type { Sitemap } from 'rari'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getBlogPostsMinimal, getDocsDir } from '@/lib/content'
+import { getAllBlogPosts, getDocsDir } from '@/lib/content'
 import { siteUrl } from '@/lib/site'
 import { parseDate } from '@/lib/utils/date'
 
@@ -44,7 +44,7 @@ async function getDocPages(): Promise<DocPage[]> {
 }
 
 export default async function sitemap(): Promise<Sitemap> {
-  const blogPosts = await getBlogPostsMinimal()
+  const blogPosts = await getAllBlogPosts()
   const docPages = await getDocPages()
 
   return [

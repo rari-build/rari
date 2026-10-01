@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { PackageManager } from './usePackageManager'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { PackageManagerContext } from './usePackageManager'
 
 function isPackageManager(value: string): value is PackageManager {
@@ -23,17 +23,17 @@ export function PackageManagerProvider({ children }: Readonly<{ children: ReactN
     return 'pnpm'
   })
 
-  const handleSetPackageManager = useCallback((pm: PackageManager) => {
+  function commitPackageManager(pm: PackageManager) {
     setPackageManager(pm)
     try {
       localStorage.setItem('preferred-package-manager', pm)
     } catch {
       // localStorage write failed, but state is still updated
     }
-  }, [])
+  }
 
   return (
-    <PackageManagerContext value={{ packageManager, setPackageManager: handleSetPackageManager }}>
+    <PackageManagerContext value={{ packageManager, setPackageManager: commitPackageManager }}>
       {children}
     </PackageManagerContext>
   )
