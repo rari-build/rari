@@ -22,12 +22,10 @@ export default function HomePage() {
               </div>
 
               <PackageManagerTabs
-                commands={{
-                  pnpm: 'pnpm create rari-app@latest my-rari-app',
-                  npm: 'npm create rari-app@latest my-rari-app',
-                  yarn: 'yarn create rari-app my-rari-app',
-                  bun: 'bun create rari-app my-rari-app',
-                }}
+                pnpm="pnpm create rari-app@latest my-rari-app"
+                npm="npm create rari-app@latest my-rari-app"
+                yarn="yarn create rari-app my-rari-app"
+                bun="bun create rari-app my-rari-app"
               />
 
               <p className="text-lg text-fg-muted mb-6">

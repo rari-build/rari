@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { ResolvedTheme, ThemePreference } from './useTheme'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { THEME_STORAGE_KEY } from './theme-constants'
 import { ThemeContext } from './useTheme'
 
@@ -45,7 +45,7 @@ export function ThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
     resolveTheme(readStoredTheme()),
   )
 
-  const handleSetTheme = useCallback((next: ThemePreference) => {
+  function commitTheme(next: ThemePreference) {
     setTheme(next)
     const resolved = resolveTheme(next)
     setResolvedTheme(resolved)
@@ -55,7 +55,7 @@ export function ThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
     } catch {
       // localStorage write failed
     }
-  }, [])
+  }
 
   useEffect(() => {
     applyThemeClass(resolveTheme(theme))
@@ -77,10 +77,7 @@ export function ThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
   }, [theme])
 
-  const value = useMemo(
-    () => ({ theme, resolvedTheme, setTheme: handleSetTheme }),
-    [theme, resolvedTheme, handleSetTheme],
+  return (
+    <ThemeContext value={{ theme, resolvedTheme, setTheme: commitTheme }}>{children}</ThemeContext>
   )
-
-  return <ThemeContext value={value}>{children}</ThemeContext>
 }

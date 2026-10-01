@@ -1,6 +1,5 @@
 import type { SearchResult } from './types'
 import { getDocsDir } from '@/lib/content'
-import { WHITESPACE_REGEX } from '@/lib/utils/whitespace'
 import {
   angleBracketRegex,
   extractExcerpt,
@@ -40,12 +39,12 @@ export async function searchDocumentation(query: string): Promise<SearchResult[]
     .replace(inlineCodeRegex, '$1')
     .replace(markdownFormattingRegex, '')
     .replace(angleBracketRegex, ' ')
-    .replace(WHITESPACE_REGEX, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
   if (!normalizedQuery) return []
 
   const index = await getSearchIndex(await getDocsDir())
-  const words = normalizedQuery.split(WHITESPACE_REGEX).filter(Boolean)
+  const words = normalizedQuery.split(/\s+/).filter(Boolean)
   const results: Array<SearchResult & { score: number }> = []
 
   for (const entry of index) {

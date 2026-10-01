@@ -101,29 +101,3 @@ export async function getAllBlogPosts(): Promise<BlogPost[]> {
     return []
   }
 }
-
-export async function getBlogPostsMinimal(): Promise<Array<{ slug: string; date: string }>> {
-  try {
-    const blogDir = await getBlogDir()
-    const files = await readdir(blogDir)
-    const mdxFiles = files.filter(file => file.endsWith('.mdx'))
-
-    return await Promise.all(
-      mdxFiles.map(async file => {
-        const slug = file.replace('.mdx', '')
-        const content = await readFile(join(blogDir, file), 'utf-8')
-        const metadata = extractBlogMetadata(content)
-
-        return {
-          slug,
-          date:
-            metadata.date != null && metadata.date !== ''
-              ? metadata.date
-              : new Date().toISOString(),
-        }
-      }),
-    )
-  } catch {
-    return []
-  }
-}
