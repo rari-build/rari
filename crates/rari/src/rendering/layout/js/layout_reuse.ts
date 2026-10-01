@@ -10,6 +10,7 @@
   }
 
   const LAYOUT_REUSE_ELEMENT = 'rari-layout-reuse'
+  const LAYOUT_STAMP_ELEMENT = 'rari-layout-stamp'
   const LAYOUT_PATH_PROP = 'data-rari-layout-path'
   const DISPLAY_CONTENTS = { display: 'contents' }
 
@@ -32,7 +33,10 @@
   function alreadyStamped(child: unknown, path: string): boolean {
     if (!isRecord(child)) return false
     const type = Reflect.get(child, 'type')
-    if (type === LAYOUT_REUSE_ELEMENT) return true
+    if (type === LAYOUT_REUSE_ELEMENT || type === LAYOUT_STAMP_ELEMENT) {
+      const props = Reflect.get(child, 'props')
+      return isRecord(props) && props[LAYOUT_PATH_PROP] === path
+    }
     const props = Reflect.get(child, 'props')
     return isRecord(props) && props[LAYOUT_PATH_PROP] === path
   }
@@ -40,7 +44,7 @@
   function stampLayoutPath(path: string, child: unknown): unknown {
     if (path === '' || alreadyStamped(child, path)) return child
     return requireCreateElement()(
-      'div',
+      LAYOUT_STAMP_ELEMENT,
       { [LAYOUT_PATH_PROP]: path, style: DISPLAY_CONTENTS },
       child,
     )

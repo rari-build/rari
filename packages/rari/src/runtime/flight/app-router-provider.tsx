@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
+import type { PendingLeafEviction } from './apply-flight-patch'
 import type { PendingScrollToTop } from './pending-scroll'
 import type { FlightContent } from './react-helpers'
 import {
@@ -48,6 +49,7 @@ interface RscPayload {
   readonly element: FlightContent
   readonly flightProtocol?: string
   readonly maySuspend?: boolean
+  readonly pendingEvictLeaf?: PendingLeafEviction
 }
 
 interface NavigationOptions {
@@ -185,6 +187,7 @@ async function mergeNavigatedFlightPayload(
   fromPathname: string,
   toPathname: string,
   search: string,
+  fromSearch: string,
 ): Promise<
   | { readonly kind: 'payload'; readonly payload: RscPayload }
   | { readonly kind: 'hard-nav' }
@@ -240,6 +243,7 @@ async function mergeNavigatedFlightPayload(
     refresh: resolvedElement,
     fromPathname,
     toPathname,
+    fromSearch,
     search,
   })
   if (patched.kind === 'hard-nav') return { kind: 'hard-nav' }
@@ -250,6 +254,7 @@ async function mergeNavigatedFlightPayload(
       ...parsedPayload,
       element: patched.element,
       maySuspend: patched.maySuspend,
+      pendingEvictLeaf: patched.pendingEvictLeaf,
     },
   }
 }
@@ -645,6 +650,7 @@ export function AppRouterProvider({
           detail.from,
           detail.to,
           searchFromNavigationDetail(detail),
+          currentRouteLocation().search,
         )
         if (merged.kind === 'superseded') return null
         if (merged.kind === 'hard-nav') {
@@ -691,6 +697,7 @@ export function AppRouterProvider({
         maySuspend: resolvedPayload.maySuspend === true,
         pendingHistory: detail.pendingHistory,
         routeLocation: nextLocation,
+        pendingEvictLeaf: resolvedPayload.pendingEvictLeaf,
         startTransition,
         currentNavigationIdRef,
         pendingScrollPayloadRef,
@@ -1030,7 +1037,6 @@ export function AppRouterProvider({
       )}
       <FlightDocument
         fallback={documentFallback}
-        revision={renderKey}
         pathname={routeLocation.pathname}
         search={routeLocation.search}
       />

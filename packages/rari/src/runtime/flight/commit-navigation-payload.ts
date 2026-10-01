@@ -1,7 +1,9 @@
 // oxlint-disable typescript/prefer-readonly-parameter-types
 import type { Dispatch, RefObject, SetStateAction, TransitionFunction } from 'react'
+import type { PendingLeafEviction } from './apply-flight-patch'
 import type { PendingScrollToTop } from './pending-scroll'
 import { addTransitionType, startTransition as defaultStartTransition } from 'react'
+import { flightRouteCache } from './route-cache'
 
 export interface PendingHistoryUpdate {
   readonly url: string
@@ -30,6 +32,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly setRouteLocation?: Dispatch<SetStateAction<RouteLocation>>
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
+  readonly pendingEvictLeaf?: PendingLeafEviction
 }
 
 export function resolveNavigationTransitionTypes(options: {
@@ -88,6 +91,7 @@ export function commitNavigationPayload<T extends object>(
     setRouteLocation,
     clearHmrError,
     pendingNavigateCommittedIdRef,
+    pendingEvictLeaf,
   } = options
 
   if (currentNavigationIdRef.current !== navigationId) return
@@ -105,6 +109,9 @@ export function commitNavigationPayload<T extends object>(
 
     if (!maySuspend) applyPendingHistory(pendingHistory)
     if (routeLocation != null) setRouteLocation?.(routeLocation)
+    if (pendingEvictLeaf != null) {
+      flightRouteCache.evictLeaf(pendingEvictLeaf.pathname, pendingEvictLeaf.search)
+    }
 
     setRenderKey(prev => {
       const commitKey = prev + 1
