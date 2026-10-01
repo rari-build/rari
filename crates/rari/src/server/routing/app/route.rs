@@ -269,6 +269,7 @@ pub async fn handle_app_route(
                     route_match,
                     context,
                     accept_encoding,
+                    request_context,
                 )
                 .await;
             }
@@ -514,6 +515,7 @@ pub async fn handle_app_route(
                     route_match.clone(),
                     context,
                     accept_encoding,
+                    Arc::clone(&request_context),
                 )
                 .await?;
 

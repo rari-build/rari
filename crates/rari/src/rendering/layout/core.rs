@@ -244,7 +244,7 @@ fn stream_composition_check_script(composition_script: &str) -> String {
                     return {{ notFound: true }};
                 }}
                 console.error('[rari] Composition error before stream pump:', e);
-                return {{ notFound: false }};
+                return {{ notFound: false, error: String(e?.message || e) }};
             }}
         }})()"
     )
@@ -301,6 +301,14 @@ async fn compose_then_queue_streaming_script(
             let _ = handle.unregister_request_context(request_id).await;
         }
         return Err(RariError::not_found("RARI_NOT_FOUND"));
+    }
+    if let Some(error) = check_result.get("error").and_then(Value::as_str) {
+        if let Some(request_id) = request_id.as_deref() {
+            let _ = handle.unregister_request_context(request_id).await;
+        }
+        let err = RariError::js_execution(format!("Stream composition failed: {error}"));
+        let _ = err_sender.send(Err(err.clone())).await;
+        return Err(err);
     }
 
     let wrapped = wrap_streaming_script(request_id.as_deref(), &stream_id, &pump_script);

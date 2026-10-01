@@ -87,11 +87,7 @@ function ingestActionRefresh(
     return flightRouteCache.ingest(refresh, pathname, search)
   }
 
-  if (
-    isValidElement(refresh) &&
-    isLayoutReuseMarker(refresh) &&
-    flightRouteCache.getShell() != null
-  ) {
+  if (isValidElement(refresh) && flightRouteCache.getShell() != null) {
     return flightRouteCache.ingestSegment(refresh, pathname, search)
   }
 
