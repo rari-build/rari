@@ -4,7 +4,7 @@ import {
   encodeReply,
 } from 'virtual:react-flight-client'
 import { isError, isRecord } from '@/shared/utils/type-guards'
-import { serializeRouterState } from '../flight/serialize-router-state'
+import { serializeRouterState } from '../flight/route-cache'
 import { scheduleActionFlightRefresh } from './flight-refresh'
 
 interface ActionFlightResponse {

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
-import { isReactElementLike, isRecord } from '@/shared/utils/type-guards'
+import { isValidElement } from 'react'
+import { isFlightThenable, isRecord } from '@/shared/utils/type-guards'
 
 export interface ImageResponseOptions {
   readonly width?: number
@@ -40,10 +41,6 @@ type RenderableComponent = ComponentLike | ((props: Readonly<Record<string, unkn
 
 function isComponentLike(value: unknown): value is ComponentLike {
   return isRecord(value) && typeof value.toString === 'function'
-}
-
-function isThenable(value: unknown): value is { then: unknown } {
-  return isRecord(value) && 'then' in value
 }
 
 function unwrapComponentType(type: unknown): RenderableComponent | null {
@@ -90,7 +87,7 @@ export class ImageResponse {
 
     try {
       const rendered = resolved(props)
-      if (rendered !== null && isThenable(rendered)) {
+      if (rendered !== null && isFlightThenable(rendered)) {
         console.warn(
           `[ImageResponse] async/server component "${resolved.name || resolved.toString()}" is not supported; skipping`,
         )
@@ -111,9 +108,10 @@ export class ImageResponse {
     if (typeof element === 'string' || typeof element === 'number')
       return { type: 'text', value: String(element) }
 
-    if (!isRecord(element) || !isReactElementLike(element)) return null
+    if (!isValidElement(element)) return null
 
-    const { type, props = {} } = element
+    const { type } = element
+    const props: Record<string, unknown> = isRecord(element.props) ? element.props : {}
 
     const unwrapped = unwrapComponentType(type)
     if (typeof unwrapped === 'function' || (unwrapped != null && isComponentLike(unwrapped)))

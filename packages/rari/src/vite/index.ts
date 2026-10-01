@@ -174,13 +174,9 @@ function isExactReactAliasFind(find: string | RegExp): boolean {
   )
 }
 
-const REACT_IMPORT_REGEX = /import\s+\{[^}]*\}\s+from\s+['"]react['"]/
-const REACT_IMPORT_WITH_DEFAULT_REGEX = /import\s+[^,\s]+\s*,\s*\{[^}]*\}\s+from\s+['"]react['"]/
-const REACT_IMPORT_MATCH_REGEX = /import React(,\s*\{([^}]*)\})?\s+from\s+['"]react['"];?/
 const RSC_CLIENT_IMPORT_REGEX =
   /from(\s*)(['"])(?:\.\/vendor\/react-flight-client\/index|rari\/runtime\/vendor\/react-flight-client\/index)\.mjs\2/g
 const JSX_TEST_REGEX = /\bJSX\b/
-const IMPORT_SPECIFIERS_REGEX = /\{([^}]*)\}/
 
 export interface RouterPluginOptions {
   readonly appDir?: string
@@ -533,17 +529,6 @@ function loadRuntimeDistVirtual(filename: string): string {
   throw new Error(DIST_NOT_BUILT_ERROR)
 }
 
-function ensureReactImportInErrorBoundary(content: string): string {
-  if (
-    content.includes('import React') ||
-    content.includes('from "react"') ||
-    content.includes("from 'react'")
-  ) {
-    return content
-  }
-  return `import * as React from 'react';\n${content}`
-}
-
 function resolveFlightClientPaths(flightBuild: string): {
   browserClientPath: string
   edgeClientPath: string
@@ -708,7 +693,7 @@ async function loadNamedVirtualModule(
   if (runtimeDist != null) return loadRuntimeDistVirtual(runtimeDist)
 
   if (id === 'virtual:error-boundary-wrapper.tsx') {
-    return ensureReactImportInErrorBoundary(loadRuntimeDistVirtual('ErrorBoundaryWrapper.mjs'))
+    return loadRuntimeDistVirtual('ErrorBoundaryWrapper.mjs')
   }
 
   if (id === 'virtual:rsc-integration.ts') {
@@ -1659,22 +1644,6 @@ if (import.meta.hot) {
     }
   }
 
-  function ensureSuspenseReactImport(modifiedCode: string): string {
-    if (modifiedCode.includes('Suspense')) return modifiedCode
-    const reactImportMatch = REACT_IMPORT_MATCH_REGEX.exec(modifiedCode)
-    if (!reactImportMatch) return modifiedCode
-    if (reactImportMatch[1] && !reactImportMatch[2].includes('Suspense')) {
-      return modifiedCode.replace(
-        reactImportMatch[0],
-        reactImportMatch[0].replace(IMPORT_SPECIFIERS_REGEX, `{ Suspense, $1 }`),
-      )
-    }
-    if (!reactImportMatch[1]) {
-      return modifiedCode.replace(reactImportMatch[0], `import React, { Suspense } from 'react';`)
-    }
-    return modifiedCode
-  }
-
   function shouldRewriteImportAsClientRef(
     isClientComponent: boolean,
     importingFileIsClient: boolean,
@@ -1694,12 +1663,10 @@ if (import.meta.hot) {
   ): {
     replacements: Array<{ start: number; end: number; replacement: string }>
     clientRefHelpers: Set<string>
-    needsReactImport: boolean
   } | null {
     const importingFileIsClient = id.includes('entry-client')
     const replacements: Array<{ start: number; end: number; replacement: string }> = []
     const clientRefHelpers = new Set<string>()
-    let needsReactImport = false
 
     for (const imp of scanImportStatements(code)) {
       if (imp.typeOnly || imp.sideEffectOnly) continue
@@ -1736,11 +1703,10 @@ if (import.meta.hot) {
         end: imp.end,
         replacement: clientRefReplacement.code,
       })
-      needsReactImport = true
     }
 
     if (replacements.length === 0) return null
-    return { replacements, clientRefHelpers, needsReactImport }
+    return { replacements, clientRefHelpers }
   }
 
   function transformUnknownModuleClientRefs(
@@ -1763,16 +1729,6 @@ if (import.meta.hot) {
         ...collected.clientRefHelpers,
       ])
     }
-
-    const hasReactImport =
-      modifiedCode.includes('import React') ||
-      REACT_IMPORT_REGEX.test(modifiedCode) ||
-      REACT_IMPORT_WITH_DEFAULT_REGEX.test(modifiedCode)
-
-    if (collected.needsReactImport && !hasReactImport) {
-      modifiedCode = `import React from 'react';\n${modifiedCode}`
-    }
-    modifiedCode = ensureSuspenseReactImport(modifiedCode)
 
     const isDevMode = process.env.NODE_ENV !== 'production'
     const hasJsx =

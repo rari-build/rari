@@ -1,10 +1,10 @@
 'use client'
 
-import type * as React from 'react'
+import type { ReactNode } from 'react'
 import type { NavigationError } from './error-handler'
 import type { NavigationOptions } from './types'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { serializeRouterState } from '@/runtime/flight/serialize-router-state'
+import { serializeRouterState } from '@/runtime/flight/route-cache'
 import { normalizePath } from '@/shared/utils/path'
 import { getCustomEventDetail, isError, isHistoryState, isRecord } from '@/shared/utils/type-guards'
 import { debounce } from './debounce'
@@ -90,7 +90,7 @@ async function waitForNavigationSettlement(
 }
 
 export interface ClientRouterProps {
-  readonly children: React.ReactNode
+  readonly children: ReactNode
   readonly initialRoute: string
 }
 
@@ -115,7 +115,7 @@ interface HistoryState {
   key: string
 }
 
-export function ClientRouter({ children, initialRoute }: ClientRouterProps): React.ReactNode {
+export function ClientRouter({ children, initialRoute }: ClientRouterProps): ReactNode {
   const [navigationState, setNavigationState] = useState<NavigationState>(() => ({
     currentRoute:
       typeof window !== 'undefined'
@@ -388,7 +388,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
         window.dispatchEvent(
           new CustomEvent('rari:navigate', {
             detail: {
-              from: fromRoute,
+              from: new URL(fromRoute, window.location.origin).pathname,
               to: pathname,
               navigationId,
               options,

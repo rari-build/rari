@@ -1,7 +1,7 @@
 // oxlint-disable typescript/no-unsafe-assignment
 import { callServer } from '@rari/runtime/actions/call-server'
 import { scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'
-import { serializeRouterState } from '@rari/runtime/flight/serialize-router-state'
+import { serializeRouterState } from '@rari/runtime/flight/route-cache'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const flightClientMocks = vi.hoisted(() => ({

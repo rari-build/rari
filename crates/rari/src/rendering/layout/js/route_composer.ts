@@ -10,6 +10,7 @@
   }
 
   type WrapLayoutReuseFn = NonNullable<NonNullable<(typeof g)['~rari']>['wrapLayoutReuse']>
+  type StampLayoutPathFn = NonNullable<NonNullable<(typeof g)['~rari']>['stampLayoutPath']>
   type RequireCreateElementFn = NonNullable<
     NonNullable<(typeof g)['~rari']>['requireCreateElement']
   >
@@ -20,6 +21,14 @@
       throw new TypeError('[rari] wrapLayoutReuse not loaded')
     }
     return wrap
+  }
+
+  function requireStampLayoutPath(): StampLayoutPathFn {
+    const stamp = g['~rari']?.stampLayoutPath
+    if (typeof stamp !== 'function') {
+      throw new TypeError('[rari] stampLayoutPath not loaded')
+    }
+    return stamp
   }
 
   function requireCreateElement(): ReturnType<RequireCreateElementFn> {
@@ -112,7 +121,8 @@
         throw new TypeError(`Layout component ${layout.componentId} not found`)
       }
 
-      const layoutProps = { children: child, pathname }
+      const stampedChild = requireStampLayoutPath()(layout.path, child)
+      const layoutProps = { children: stampedChild, pathname }
       if (expandDocument) {
         const invoked: unknown = Reflect.apply(LayoutComponent, undefined, [layoutProps])
         result = isThenable(invoked) ? await invoked : invoked
@@ -148,15 +158,6 @@
     return requireCreateElement()(ErrorWrapper, { errorComponentId }, child)
   }
 
-  function isDocumentReuseMarker(value: unknown): boolean {
-    if (value == null || typeof value !== 'object') return false
-    const type: unknown = Reflect.get(value, 'type')
-    if (type !== 'rari-layout-reuse') return false
-    const props: unknown = Reflect.get(value, 'props')
-    if (props == null || typeof props !== 'object') return false
-    return Reflect.get(props, 'data-rari-document-reuse') === true
-  }
-
   async function finalizeComposition(
     element: unknown,
     options: ComposeRouteOptions,
@@ -188,16 +189,6 @@
     const rari = (g['~rari'] ??= {})
     const hasMetadata =
       metadata != null && typeof metadata === 'object' && Object.keys(metadata).length > 0
-
-    if (isDocumentReuseMarker(elementToRender)) {
-      const createElement = requireCreateElement()
-      elementToRender = createElement(
-        'html',
-        null,
-        createElement('head', null),
-        createElement('body', null, elementToRender),
-      )
-    }
 
     if (hasMetadata && typeof rari.injectMetadataIntoDocument === 'function') {
       const injected = rari.injectMetadataIntoDocument(elementToRender, metadata)
@@ -422,7 +413,7 @@
       const react = g.React
       const Suspense = react != null ? Reflect.get(react, 'Suspense') : undefined
       if (Suspense == null) {
-        throw new TypeError('[rari] React.Suspense is not available')
+        throw new TypeError('[rari] Suspense is not available')
       }
       return createElement(
         Suspense,

@@ -644,7 +644,7 @@ pub async fn initialize_proxy(state: &ServerState) -> Result<(), RariError> {
         ));
     };
 
-    let executor_path = rari_pkg_dir.join("dist/proxy/runtime-executor.mjs");
+    let executor_path = rari_pkg_dir.join("dist/proxy/executor.mjs");
 
     if !fs::try_exists(&executor_path).await.unwrap_or(false) {
         tracing::debug!(

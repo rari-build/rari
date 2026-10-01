@@ -411,7 +411,7 @@ declare function rariCreateHtmlBoundaryTracker(): {
       typeof react.createElement !== 'function' ||
       typeof react.use !== 'function'
     )
-      throw new Error('[rari] React.use not available for streaming App')
+      throw new Error('[rari] use not available for streaming App')
 
     const { createElement, use } = react
 

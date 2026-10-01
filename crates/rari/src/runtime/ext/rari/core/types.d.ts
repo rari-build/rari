@@ -287,6 +287,7 @@ declare global {
         }>,
       ) => unknown
       wrapLayoutReuse?: (path: string, child: unknown, expandDocument: boolean) => unknown
+      stampLayoutPath?: (path: string, child: unknown) => unknown
       requireCreateElement?: () => (
         component: unknown,
         props: unknown,

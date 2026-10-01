@@ -1,6 +1,6 @@
 'use client'
 
-import * as React from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 export type HmrFailureType = 'fetch' | 'parse' | 'stale' | 'network'
 
@@ -20,7 +20,7 @@ export interface HmrFailureBannerProps {
   readonly onDismiss: () => void
 }
 
-const OVERLAY_STYLE: React.CSSProperties = {
+const OVERLAY_STYLE: CSSProperties = {
   position: 'fixed',
   top: '50%',
   left: '50%',
@@ -35,7 +35,7 @@ const OVERLAY_STYLE: React.CSSProperties = {
   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
 }
 
-const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
+const PRIMARY_BUTTON_STYLE: CSSProperties = {
   padding: '8px 16px',
   background: 'white',
   color: '#dc2626',
@@ -46,7 +46,7 @@ const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
   fontSize: '14px',
 }
 
-const SECONDARY_BUTTON_STYLE: React.CSSProperties = {
+const SECONDARY_BUTTON_STYLE: CSSProperties = {
   padding: '8px 16px',
   background: 'rgba(255, 255, 255, 0.2)',
   color: 'white',
@@ -72,7 +72,7 @@ export function HmrFailureBanner({
   maxRetries,
   onRefresh,
   onDismiss,
-}: HmrFailureBannerProps): React.ReactNode {
+}: HmrFailureBannerProps): ReactNode {
   return (
     <div style={OVERLAY_STYLE}>
       <div style={{ marginBottom: '16px', fontWeight: 'bold', fontSize: '16px' }}>

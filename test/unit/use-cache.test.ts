@@ -517,7 +517,7 @@ async function getData() {
 
     it('captures module imports and destructured module bindings', () => {
       const src = `
-import React, { cache as reactCache } from 'react';
+import { cache as reactCache, createElement } from 'react';
 import * as model from './model';
 
 const { token, nested: alias, ...others } = config;
@@ -525,7 +525,7 @@ const [first, second] = list;
 
 async function getData({ id, nested: { slug }, ...props }, [head], ...tail) {
   "use cache";
-  return React.createElement(model.Card, {
+  return createElement(model.Card, {
     value: reactCache(token + alias + first + second + others.x + id + slug + props.y + head + tail.length)
   });
 }
@@ -534,7 +534,7 @@ async function getData({ id, nested: { slug }, ...props }, [head], ...tail) {
 
       expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",/)
       for (const name of [
-        'React',
+        'createElement',
         'reactCache',
         'model',
         'token',

@@ -1,13 +1,10 @@
 import type { ActionFlightRefreshDetail } from '@rari/runtime/actions/flight-refresh'
 import { scheduleActionFlightRefresh } from '@rari/runtime/actions/flight-refresh'
+import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { castMock } from '../../helpers/mock-cast'
 
-const refreshElement = {
-  $$typeof: Symbol.for('react.element'),
-  type: 'div',
-  props: { children: 'refresh' },
-}
+const refreshElement = createElement('div', null, 'refresh')
 
 describe('action-flight-refresh', () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import type { ComponentType, ReactElement, ReactNode } from 'react'
+import type { ComponentType } from 'react'
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -6,10 +6,6 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function isFlightThenable<T = unknown>(value: unknown): value is PromiseLike<T> {
   return isRecord(value) && typeof value.then === 'function'
-}
-
-export function isLikelyReactElement(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && '$$typeof' in value
 }
 
 export function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
@@ -122,12 +118,6 @@ export function isComponentType(value: unknown): value is ComponentType<any> {
   )
 }
 
-export function isReactElementLike(
-  value: Readonly<Record<string, unknown>>,
-): value is { type: unknown; props?: Record<string, unknown> } {
-  return 'type' in value
-}
-
 export function isFlightImportTuple(
   value: unknown,
 ): value is [string, unknown, string | undefined, ...unknown[]] {
@@ -140,10 +130,6 @@ export function isClientReferenceType(type: unknown): boolean {
 
 export function hasClientReferenceId(type: unknown): type is { $$id: string } {
   return isRecord(type) && typeof type.$$id === 'string'
-}
-
-export function getReactElementProps(element: ReactElement): { children?: ReactNode } {
-  return element.props as { children?: ReactNode } // oxlint-disable-line typescript/no-unsafe-type-assertion ReactElement props are intentionally loose
 }
 
 export function aliasEntriesFromRecord(

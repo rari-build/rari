@@ -418,42 +418,6 @@ impl LayoutRenderer {
         Ok(not_found)
     }
 
-    async fn resolve_page_not_found_before_stream(
-        &self,
-        route_match: &AppRouteMatch,
-        context: &LayoutRenderContext,
-        request_context: Option<Arc<RequestContext>>,
-    ) -> Result<(), RariError> {
-        if route_match.not_found.is_some() {
-            return Ok(());
-        }
-
-        let composition_script =
-            Self::build_composition_script(route_match, context, None, false, false)?;
-
-        let runtime = {
-            run_with_renderer_result(Arc::clone(&self.renderer), move |renderer| async move {
-                renderer.ensure_rsc_pipeline().await?;
-                Ok(Arc::clone(&renderer.runtime))
-            })
-            .await?
-        };
-
-        if let Some(ctx) = request_context {
-            runtime
-                .with_request_context(ctx, move |rt| async move {
-                    Self::run_composition_on(None, Some(rt), composition_script).await
-                })
-                .await?;
-        } else {
-            let handle = runtime.pick_runtime().await?;
-            let rt = Arc::clone(handle.runtime());
-            Self::run_composition_on(None, Some(rt), composition_script).await?;
-        }
-
-        Ok(())
-    }
-
     pub async fn render_route(
         &self,
         route_match: &AppRouteMatch,
@@ -667,13 +631,9 @@ impl LayoutRenderer {
 
         if return_rsc_on_fallback {
             if needs_streaming {
-                self.resolve_page_not_found_before_stream(
-                    route_match,
-                    context,
-                    request_context.clone(),
-                )
-                .await?;
-
+                // Do not pre-render the page before streaming: that awaits async
+                // page data and defeats loading.tsx. Dynamic not-found is handled
+                // earlier via check_page_not_found (getData) in the request path.
                 let (chunk_sender, chunk_receiver) =
                     mpsc::channel::<Result<Vec<u8>, RariError>>(128);
 
@@ -833,13 +793,8 @@ impl LayoutRenderer {
                 Config::get().ok_or_else(|| RariError::internal("Config not available"))?;
 
             if needs_streaming {
-                self.resolve_page_not_found_before_stream(
-                    route_match,
-                    context,
-                    request_context.clone(),
-                )
-                .await?;
-
+                // Skip full pre-render before Fizz: it blocks TTFB on page data and
+                // prevents loading.tsx from streaming immediately.
                 let (chunk_sender, chunk_receiver) =
                     mpsc::channel::<Result<Vec<u8>, RariError>>(128);
 

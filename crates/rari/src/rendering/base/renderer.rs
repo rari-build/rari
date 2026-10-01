@@ -363,7 +363,7 @@ globalThis['~errors'].batch.push({{
             .runtime
             .execute_script(
                 "<check_rsc>".to_string(),
-                "typeof globalThis.renderToRsc === 'function' && typeof globalThis['~rari']?.composeRoute === 'function' && typeof globalThis['~rari']?.createPageElement === 'function' && typeof globalThis['~rari']?.wrapLayoutReuse === 'function'".to_string(),
+                "typeof globalThis.renderToRsc === 'function' && typeof globalThis['~rari']?.composeRoute === 'function' && typeof globalThis['~rari']?.createPageElement === 'function' && typeof globalThis['~rari']?.wrapLayoutReuse === 'function' && typeof globalThis['~rari']?.stampLayoutPath === 'function'".to_string(),
             )
             .await
             .map_err(|e| {

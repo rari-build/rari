@@ -1,5 +1,6 @@
 'use client'
 
+import type { ComponentType } from 'react'
 import type { PackageManager } from '@/providers/usePackageManager'
 import { usePackageManager } from '@/providers/usePackageManager'
 import Bun from '../icons/Bun'
@@ -21,7 +22,7 @@ interface PackageManagerTabsProps extends Partial<PackageManagerCommands> {
 
 const PACKAGE_MANAGER_KEYS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
 
-const packageManagerIcons: Record<PackageManager, React.ComponentType<{ className?: string }>> = {
+const packageManagerIcons: Record<PackageManager, ComponentType<{ className?: string }>> = {
   pnpm: Pnpm,
   npm: Npm,
   yarn: Yarn,
