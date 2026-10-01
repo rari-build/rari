@@ -1,4 +1,5 @@
 #![expect(clippy::missing_errors_doc)]
+
 use std::{env, fmt::Write, path::PathBuf, sync::Arc};
 
 use cow_utils::CowUtils;
