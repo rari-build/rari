@@ -10,7 +10,6 @@ const CHILDREN_SLOT = 'children'
 function trimTrailingSlashes(pathname: string): string {
   let end = pathname.length
   while (end > 1 && pathname[end - 1] === '/') end -= 1
-
   return pathname.slice(0, end)
 }
 
@@ -36,7 +35,6 @@ export function segmentPathFromRouterState(tree: FlightRouterState): SegmentPath
     const segment: string = current[0]
     const parallelRoutes: { children?: FlightRouterState } = current[1]
     if (segment) path.push(segment)
-
     current = parallelRoutes.children
   }
 
@@ -45,12 +43,6 @@ export function segmentPathFromRouterState(tree: FlightRouterState): SegmentPath
 
 export function segmentPathFromPathname(pathname: string): SegmentPath {
   return segmentPathFromRouterState(buildFlightRouterState(pathname))
-}
-
-export function pathnameFromSegmentPath(segmentPath: SegmentPath): string {
-  if (segmentPath.length === 0) return '/'
-
-  return `/${segmentPath.join('/')}`
 }
 
 export function sharedSegmentPath(fromPathname: string, toPathname: string): SegmentPath {

@@ -1,5 +1,6 @@
 'use client'
 
+import type { MouseEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
 interface MermaidChartProps {
@@ -88,12 +89,12 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
     }
   }, [])
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: MouseEvent) => {
     setIsDragging(true)
     dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y }
   }
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return
     setPosition({
       x: e.clientX - dragStartRef.current.x,

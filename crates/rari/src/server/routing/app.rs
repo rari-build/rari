@@ -33,6 +33,7 @@ use crate::{
             TwitterMetadata, component_dist_path, create_layout_context, drain_chunked_stream,
             is_rari_page_not_found, pathname_from_router_state_header, router_state_from_headers,
             shared_layout_paths_for_navigation, sort_flight_protocol,
+            tree_from_router_state_header,
         },
         r#static::RscHtmlRenderer,
     },
@@ -1326,8 +1327,13 @@ pub async fn handle_app_route(
         && let Some(state_header) = router_state_from_headers(&context.headers)
         && let Some(from_pathname) = pathname_from_router_state_header(&state_header)
     {
-        context.reuse_layout_paths =
-            shared_layout_paths_for_navigation(app_router, &from_pathname, &context.pathname);
+        let client_tree = tree_from_router_state_header(&state_header);
+        context.reuse_layout_paths = shared_layout_paths_for_navigation(
+            app_router,
+            &from_pathname,
+            &context.pathname,
+            client_tree.as_ref(),
+        );
     }
 
     let layout_renderer = LayoutRenderer::with_shared_cache(

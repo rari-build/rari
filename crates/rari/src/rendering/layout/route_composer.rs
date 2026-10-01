@@ -583,6 +583,7 @@ mod tests {
             ROUTE_COMPOSER_SCRIPT.contains("wrapLayoutReuse"),
             "layout reuse tree must live in TS helper, not Rust format!"
         );
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("stampLayoutPath"));
         assert!(ROUTE_COMPOSER_SCRIPT.contains("rari-layout-reuse"));
         assert!(ROUTE_COMPOSER_SCRIPT.contains("data-rari-layout-path"));
     }
@@ -659,17 +660,11 @@ mod tests {
               startTotal: performance.now(),
             });
             const captured = globalThis['~rari'].capturedElement;
-            if (captured.type !== 'html') throw new Error('expected html document wrapper');
-            const head = captured.children?.[0];
-            const body = captured.children?.[1];
-            if (head?.type !== 'head') throw new Error('expected empty head');
-            if (body?.type !== 'body') throw new Error('expected body wrapper');
-            const marker = body.children?.[0];
-            if (marker?.type !== 'rari-layout-reuse') throw new Error('expected reuse marker');
-            if (marker.props['data-rari-layout-path'] !== '/') {
+            if (captured.type !== 'rari-layout-reuse') throw new Error('expected reuse marker');
+            if (captured.props['data-rari-layout-path'] !== '/') {
               throw new Error('expected reuse path');
             }
-            if (marker.props['data-rari-document-reuse'] !== true) {
+            if (captured.props['data-rari-document-reuse'] !== true) {
               throw new Error('expected document reuse marker');
             }
             return true;
@@ -680,6 +675,89 @@ mod tests {
             .execute_script("layout_reuse_compose".to_string(), script.to_string())
             .await
             .expect("layout reuse compose should execute");
+        assert_eq!(result, serde_json::Value::Bool(true));
+    }
+
+    #[tokio::test]
+    async fn test_full_layout_compose_stamps_path() {
+        use std::sync::Arc;
+
+        use crate::runtime::JsExecutionRuntime;
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        runtime
+            .execute_script("route_composer.ts".to_string(), ROUTE_COMPOSER_SCRIPT.to_string())
+            .await
+            .expect("route composer should load");
+
+        let script = r"
+            (async () => {
+            globalThis.React = {
+              createElement(type, props, ...children) {
+                const next = { ...(props || {}) };
+                if (children.length === 1) next.children = children[0];
+                else if (children.length > 1) next.children = children;
+                return { type, props: next };
+              },
+            };
+            globalThis.RootLayout = ({ children }) =>
+              globalThis.React.createElement(
+                'html',
+                null,
+                globalThis.React.createElement('head', null),
+                globalThis.React.createElement(
+                  'body',
+                  null,
+                  globalThis.React.createElement('nav', null, 'nav'),
+                  children,
+                  globalThis.React.createElement('footer', null, 'footer'),
+                ),
+              );
+            const timings = {};
+            await globalThis['~rari'].composeRoute({
+              pageElement: { kind: 'page' },
+              layouts: [{
+                componentId: 'RootLayout',
+                isRoot: true,
+                filePath: 'app/layout.tsx',
+                path: '/',
+              }],
+              templates: [],
+              pathname: '/about',
+              templateKey: '/about',
+              errorComponentId: '',
+              metadata: {},
+              deferRsc: true,
+              captureStreamId: null,
+              expandRootLayout: true,
+              reuseLayoutPaths: [],
+              timings,
+              startTotal: performance.now(),
+            });
+            const captured = globalThis['~rari'].capturedElement;
+            if (captured.type !== 'html') throw new Error('expected html');
+            const body = captured.props.children[1];
+            if (body?.type !== 'body') throw new Error('expected body');
+            const kids = body.props.children;
+            if (!Array.isArray(kids) || kids.length !== 3) {
+              throw new Error('expected nav, stamp, footer');
+            }
+            const stamp = kids[1];
+            if (stamp?.type !== 'div') throw new Error('expected stamp host');
+            if (stamp.props['data-rari-layout-path'] !== '/') {
+              throw new Error('expected stamped path');
+            }
+            if (stamp.props.style?.display !== 'contents') {
+              throw new Error('expected display contents');
+            }
+            return true;
+            })()
+            ";
+
+        let result = runtime
+            .execute_script("layout_stamp_compose".to_string(), script.to_string())
+            .await
+            .expect("full layout stamp compose should execute");
         assert_eq!(result, serde_json::Value::Bool(true));
     }
 }

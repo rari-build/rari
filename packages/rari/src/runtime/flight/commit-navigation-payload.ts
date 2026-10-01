@@ -2,7 +2,6 @@
 import type { Dispatch, RefObject, SetStateAction, TransitionFunction } from 'react'
 import type { PendingScrollToTop } from './pending-scroll'
 import { addTransitionType, startTransition as defaultStartTransition } from 'react'
-import { publishNavigationTransition } from '@/router/navigation/navigation-transition-store'
 
 export interface PendingHistoryUpdate {
   readonly url: string
@@ -10,17 +9,25 @@ export interface PendingHistoryUpdate {
   readonly replace?: boolean
 }
 
+export interface RouteLocation {
+  readonly pathname: string
+  readonly search: string
+}
+
 export interface CommitNavigationPayloadOptions<T extends object> {
   readonly parsedPayload: T
   readonly shouldScrollToTop: boolean
   readonly navigationId: number
   readonly transitionTypes?: readonly string[]
+  readonly maySuspend?: boolean
   readonly pendingHistory?: PendingHistoryUpdate
+  readonly routeLocation?: RouteLocation
   readonly startTransition?: (scope: TransitionFunction) => void
   readonly currentNavigationIdRef: RefObject<number>
   readonly pendingScrollPayloadRef: RefObject<PendingScrollToTop<T> | null>
   readonly setRenderKey: Dispatch<SetStateAction<number>>
   readonly setRscPayload: Dispatch<SetStateAction<T | undefined>>
+  readonly setRouteLocation?: Dispatch<SetStateAction<RouteLocation>>
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
 }
@@ -34,15 +41,11 @@ export function resolveNavigationTransitionTypes(options: {
   return ['nav', 'nav-forward']
 }
 
-function applyPendingHistory(pendingHistory: PendingHistoryUpdate | undefined): void {
-  if (pendingHistory == null || typeof window === 'undefined') return
-  if (pendingHistory.replace === true)
-    window.history.replaceState(pendingHistory.state, '', pendingHistory.url)
-  else window.history.pushState(pendingHistory.state, '', pendingHistory.url)
-}
-
-function publishLocationFromPendingHistory(pendingHistory: PendingHistoryUpdate | undefined): void {
-  if (pendingHistory == null || pendingHistory.url === '') return
+export function routeLocationFromPendingHistory(
+  pendingHistory: PendingHistoryUpdate | undefined,
+  fallback: RouteLocation,
+): RouteLocation {
+  if (pendingHistory == null || pendingHistory.url === '') return fallback
   try {
     let base = 'http://localhost/'
     if (typeof window !== 'undefined') {
@@ -53,13 +56,17 @@ function publishLocationFromPendingHistory(pendingHistory: PendingHistoryUpdate 
       }
     }
     const locationUrl = new URL(pendingHistory.url, base)
-    publishNavigationTransition({
-      pathname: locationUrl.pathname,
-      search: locationUrl.search,
-    })
+    return { pathname: locationUrl.pathname, search: locationUrl.search }
   } catch {
-    // Ignore malformed pending history URLs in tests
+    return fallback
   }
+}
+
+function applyPendingHistory(pendingHistory: PendingHistoryUpdate | undefined): void {
+  if (pendingHistory == null || typeof window === 'undefined') return
+  if (pendingHistory.replace === true)
+    window.history.replaceState(pendingHistory.state, '', pendingHistory.url)
+  else window.history.pushState(pendingHistory.state, '', pendingHistory.url)
 }
 
 export function commitNavigationPayload<T extends object>(
@@ -70,27 +77,34 @@ export function commitNavigationPayload<T extends object>(
     shouldScrollToTop,
     navigationId,
     transitionTypes,
+    maySuspend = false,
     pendingHistory,
+    routeLocation,
     startTransition: startNavTransition = defaultStartTransition,
     currentNavigationIdRef,
     pendingScrollPayloadRef,
     setRenderKey,
     setRscPayload,
+    setRouteLocation,
     clearHmrError,
     pendingNavigateCommittedIdRef,
   } = options
 
+  if (currentNavigationIdRef.current !== navigationId) return
+
+  if (maySuspend) applyPendingHistory(pendingHistory)
+
   startNavTransition(() => {
     if (currentNavigationIdRef.current !== navigationId) return
+
     if (transitionTypes != null) {
       for (const type of transitionTypes) {
         addTransitionType(type)
       }
     }
 
-    applyPendingHistory(pendingHistory)
-
-    publishLocationFromPendingHistory(pendingHistory)
+    if (!maySuspend) applyPendingHistory(pendingHistory)
+    if (routeLocation != null) setRouteLocation?.(routeLocation)
 
     setRenderKey(prev => {
       const commitKey = prev + 1

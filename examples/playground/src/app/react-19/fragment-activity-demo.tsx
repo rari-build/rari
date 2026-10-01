@@ -1,5 +1,6 @@
 'use client'
 
+import type { FragmentInstance } from 'react'
 import {
   Activity,
   Fragment,
@@ -17,7 +18,7 @@ const CARDS = [
 ] as const
 
 export function FragmentRefsDemo() {
-  const fragmentRef = useRef<React.FragmentInstance | null>(null)
+  const fragmentRef = useRef<FragmentInstance | null>(null)
   const [visibleIds, setVisibleIds] = useState<readonly string[]>([])
 
   useEffect(() => {

@@ -59,14 +59,15 @@ pub const RARI_IMAGE_STUB: &str = r"
 export function Image(props) {
   const mod = globalThis['~rari']?.ssrModules?.['rari/image'];
   const Impl = mod?.Image ?? mod?.default;
+  const createElement = globalThis.React?.createElement;
   if (typeof Impl === 'function' && Impl !== Image) {
-    return globalThis.React.createElement(Impl, props);
+    if (typeof createElement !== 'function') return null;
+    return createElement(Impl, props);
   }
-  const React = globalThis.React;
-  if (React?.createElement) {
+  if (typeof createElement === 'function') {
     const { src, alt, width, height, className, style, ...rest } = props || {};
     const imgSrc = typeof src === 'object' && src != null ? src.src : src;
-    return React.createElement('img', {
+    return createElement('img', {
       src: imgSrc,
       alt: alt || '',
       width,

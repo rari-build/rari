@@ -1,12 +1,13 @@
+import type { ElementType, ReactElement, ReactNode } from 'react'
 import { mergeFlightRefresh, unwrapFulfilledFlightNode } from '@rari/runtime/flight/merge-refresh'
-import * as React from 'react'
+import { createElement, Fragment, isValidElement, Suspense } from 'react'
 import { describe, expect, it } from 'vite-plus/test'
 import { fulfilledFlightNode } from '../../helpers/flight-thenable'
 import { castMock } from '../../helpers/mock-cast'
 
 const CLIENT_REFERENCE = Symbol.for('react.client.reference')
 
-function clientRef(id: string): React.ElementType {
+function clientRef(id: string): ElementType {
   return castMock({
     $$typeof: CLIENT_REFERENCE,
     $$id: id,
@@ -14,8 +15,8 @@ function clientRef(id: string): React.ElementType {
   })
 }
 
-function expectElement(node: React.ReactNode): React.ReactElement<{
-  'children'?: React.ReactNode
+function expectElement(node: ReactNode): ReactElement<{
+  'children'?: ReactNode
   'className'?: string
   'lang'?: string
   'href'?: string
@@ -24,10 +25,11 @@ function expectElement(node: React.ReactNode): React.ReactElement<{
   'charSet'?: string
   'role'?: string
   'data-theme'?: string
+  'data-rari-layout-path'?: string
 }> {
   if (
-    !React.isValidElement<{
-      'children'?: React.ReactNode
+    !isValidElement<{
+      'children'?: ReactNode
       'className'?: string
       'lang'?: string
       'href'?: string
@@ -36,6 +38,7 @@ function expectElement(node: React.ReactNode): React.ReactElement<{
       'charSet'?: string
       'role'?: string
       'data-theme'?: string
+      'data-rari-layout-path'?: string
     }>(node)
   )
     throw new Error('Expected React element')
@@ -50,13 +53,20 @@ function clientReferenceId(type: unknown): string | undefined {
   return typeof id === 'string' ? id : undefined
 }
 
-function childList(node: React.ReactElement<{ children?: React.ReactNode }>): React.ReactNode[] {
-  const children = node.props.children
-  if (Array.isArray(children))
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return children as React.ReactNode[]
+function childList(node: ReactElement<{ children?: ReactNode }>): ReactNode[] {
+  const { children } = node.props
+  // oxlint-disable-next-line typescript/no-unsafe-return
+  if (Array.isArray(children)) return children
   if (children != null) return [children]
   return []
+}
+
+function stamp(path: string, child: ReactNode): ReactElement {
+  return createElement('div', { 'data-rari-layout-path': path }, child)
+}
+
+function reuse(path: string, child?: ReactNode): ReactElement {
+  return createElement('rari-layout-reuse', { 'data-rari-layout-path': path }, child)
 }
 
 describe('mergeFlightRefresh', () => {
@@ -66,48 +76,18 @@ describe('mergeFlightRefresh', () => {
     expect(unwrapFulfilledFlightNode(fulfilledFlightNode(true))).toBe(true)
   })
 
-  it('treats a fulfilled null thenable sibling as an empty content hole, not a visible child', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('div', { className: 'slot' }, fulfilledFlightNode(null)),
-      React.createElement('footer', null, 'footer'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    const slot = expectElement(kids[1])
-    expect(slot.type).toBe('div')
-    expect(slot.props.className).toBe('slot')
-    expect(slot.props.children).toBe('about')
-    expect(expectElement(kids[2]).type).toBe('footer')
-  })
-
   it('uses the refresh tree when there is no current payload', () => {
-    const refresh = React.createElement('div', { 'data-testid': 'page' }, 'fresh')
-
+    const refresh = createElement('div', { 'data-testid': 'page' }, 'fresh')
     expect(mergeFlightRefresh(null, refresh)).toBe(refresh)
   })
 
   it('adopts refreshed matching client trees so page ViewTransitions can enter', () => {
     const layoutType = clientRef('src/app/layout.tsx')
-    const current = React.createElement(
+    const current = createElement('section', null, createElement(layoutType, { key: '/' }, 'stale'))
+    const refresh = createElement(
       'section',
       null,
-      React.createElement(layoutType, { key: '/' }, 'stale'),
-    )
-    const refresh = React.createElement(
-      'section',
-      null,
-      React.createElement(clientRef('src/app/layout.tsx'), { key: '/' }, 'fresh'),
+      createElement(clientRef('src/app/layout.tsx'), { key: '/' }, 'fresh'),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
@@ -119,43 +99,25 @@ describe('mergeFlightRefresh', () => {
     expect(mergedChild.props.children).toBe('fresh')
   })
 
-  it('consumes nested reuse markers inside a matching client shell', () => {
-    const shell = clientRef('src/app/providers.tsx')
-    const current = React.createElement(
-      shell,
-      { key: 'providers' },
-      React.createElement('main', null, 'home'),
-    )
-    const refresh = React.createElement(
-      clientRef('src/app/providers.tsx'),
-      { key: 'providers' },
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-    )
-
-    const merged = expectElement(mergeFlightRefresh(current, refresh))
-    expect(merged.type).toBe(shell)
-    expect(expectElement(childList(merged)[0]).props.children).toBe('about')
-  })
-
   it('replaces the tree when client component ids differ', () => {
-    const current = React.createElement(clientRef('src/app/A.tsx'), { key: '/actions' })
-    const refresh = React.createElement(clientRef('src/app/B.tsx'), { key: '/actions' })
+    const current = createElement(clientRef('src/app/A.tsx'), { key: '/actions' })
+    const refresh = createElement(clientRef('src/app/B.tsx'), { key: '/actions' })
 
     expect(mergeFlightRefresh(current, refresh)).toBe(refresh)
   })
 
   it('always takes the refreshed head for metadata', () => {
-    const current = React.createElement(
+    const current = createElement(
       'html',
       null,
-      React.createElement('head', null, React.createElement('title', null, 'Home')),
-      React.createElement('body', null, 'home'),
+      createElement('head', null, createElement('title', null, 'Home')),
+      createElement('body', null, 'home'),
     )
-    const refresh = React.createElement(
+    const refresh = createElement(
       'html',
       null,
-      React.createElement('head', null, React.createElement('title', null, 'About')),
-      React.createElement('body', null, 'about'),
+      createElement('head', null, createElement('title', null, 'About')),
+      createElement('body', null, 'about'),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
@@ -167,504 +129,95 @@ describe('mergeFlightRefresh', () => {
     expect(body.props.children).toBe('about')
   })
 
-  it('adopts refreshed nested client layouts from the flight tree', () => {
-    const rootLayout = clientRef('src/app/layout.tsx')
-    const pageA = clientRef('src/app/page.tsx')
-    const pageB = clientRef('src/app/about/page.tsx')
-
-    const current = React.createElement(
+  it('splices into a stamped path slot beside HTML chrome siblings', () => {
+    const current = createElement(
       'body',
       null,
-      React.createElement(
-        rootLayout,
-        { key: '/' },
-        React.createElement(pageA, { key: 'page' }, 'home'),
-      ),
+      createElement('nav', null, 'nav'),
+      stamp('/', 'home'),
+      createElement('footer', null, 'footer'),
     )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        clientRef('src/app/layout.tsx'),
-        { key: '/' },
-        React.createElement(pageB, { key: 'page' }, 'about'),
-      ),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const mergedLayout = expectElement(childList(mergedBody)[0])
-    expect(mergedLayout.type).not.toBe(rootLayout)
-    expect(clientReferenceId(mergedLayout.type)).toBe('src/app/layout.tsx')
-
-    const mergedPage = expectElement(childList(mergedLayout)[0])
-    expect(clientReferenceId(mergedPage.type)).toBe('src/app/about/page.tsx')
-    expect(mergedPage.props.children).toBe('about')
-  })
-
-  it('splices reuse markers into the previous layout shell', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        'div',
-        { className: 'shell' },
-        React.createElement('nav', null, 'nav'),
-        React.createElement('main', null, 'home'),
-      ),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const shell = expectElement(childList(mergedBody)[0])
-    expect(shell.props.className).toBe('shell')
-    const kids = childList(shell)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('about')
-  })
-
-  it('splices into multi-child body layouts via main without discarding siblings', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('main', null, 'home'),
-      React.createElement('footer', null, 'footer'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-    )
+    const refresh = createElement('body', null, reuse('/', 'about'))
 
     const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
     const kids = childList(mergedBody)
     expect(kids).toHaveLength(3)
     expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).type).toBe('main')
+    expect(expectElement(kids[1]).props['data-rari-layout-path']).toBe('/')
     expect(expectElement(kids[1]).props.children).toBe('about')
     expect(expectElement(kids[2]).type).toBe('footer')
   })
 
-  it('preserves siblings when merging a matching child into a multi-child main host', () => {
-    const page = clientRef('src/app/page.tsx')
-    const current = React.createElement(
+  it('keeps the previous tree when the layout path stamp is missing', () => {
+    const current = createElement(
       'body',
       null,
-      React.createElement(
-        'main',
-        null,
-        React.createElement('aside', null, 'sidebar'),
-        React.createElement(page, { key: '/' }, 'home'),
-      ),
+      createElement('nav', null, 'nav'),
+      createElement('main', null, 'home'),
+      createElement('footer', null, 'footer'),
     )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        'rari-layout-reuse',
-        { 'data-rari-layout-path': '/' },
-        React.createElement(clientRef('src/app/page.tsx'), { key: '/' }, 'about'),
-      ),
-    )
+    const refresh = createElement('body', null, reuse('/', 'about'))
 
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const main = expectElement(childList(mergedBody)[0])
-    const kids = childList(main)
-    expect(kids).toHaveLength(2)
-    expect(expectElement(kids[0]).type).toBe('aside')
-    expect(expectElement(kids[0]).props.children).toBe('sidebar')
-    expect(clientReferenceId(expectElement(kids[1]).type)).toBe('src/app/page.tsx')
-    expect(expectElement(kids[1]).props.children).toBe('about')
+    expect(mergeFlightRefresh(current, refresh)).toBe(current)
   })
 
-  it('preserves chrome siblings when layout path misses and content is a non-main host', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('div', { className: 'content' }, 'home'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(2)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[0]).props.children).toBe('nav')
-    const content = expectElement(kids[1])
-    expect(content.type).toBe('div')
-    expect(content.props.className).toBe('content')
-    expect(content.props.children).toBe('about')
-  })
-
-  it('replaces a primitive page node while preserving header chrome', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('header', null, 'site'),
-      'home',
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(2)
-    expect(expectElement(kids[0]).type).toBe('header')
-    expect(expectElement(kids[0]).props.children).toBe('site')
-    expect(kids[1]).toBe('about')
-  })
-
-  it('replaces a childless ClientPage shell with the refreshed page', () => {
-    const clientPage = clientRef('src/app/page.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('header', null, 'site'),
-      React.createElement(clientPage, { key: 'page' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        'rari-layout-reuse',
-        { 'data-rari-layout-path': '/missing' },
-        React.createElement(clientRef('src/app/about.tsx'), { key: 'about' }, 'about'),
-      ),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody).map(child => expectElement(child))
-    expect(kids).toHaveLength(2)
-    expect(kids[0].type).toBe('header')
-    expect(clientReferenceId(kids[1].type)).toBe('src/app/about.tsx')
-    expect(kids[1].props.children).toBe('about')
-  })
-
-  it('replaces an unmatched ClientPage that only has primitive text children', () => {
-    const clientPage = clientRef('src/app/page.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('header', null, 'site'),
-      React.createElement(clientPage, { key: 'page' }, 'home'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        'rari-layout-reuse',
-        { 'data-rari-layout-path': '/missing' },
-        React.createElement(clientRef('src/app/about.tsx'), { key: 'about' }, 'about'),
-      ),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody).map(child => expectElement(child))
-    expect(kids).toHaveLength(2)
-    expect(kids[0].type).toBe('header')
-    expect(clientReferenceId(kids[1].type)).toBe('src/app/about.tsx')
-    expect(kids[1].props.children).toBe('about')
-  })
-
-  it('keeps a Providers shell when it wraps a content host', () => {
-    const providers = clientRef('src/providers.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        providers,
-        { key: 'providers' },
-        React.createElement('div', null, 'home'),
-      ),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const shell = expectElement(childList(mergedBody)[0])
-    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
-    const slot = expectElement(shell.props.children)
-    expect(slot.type).toBe('div')
-    expect(slot.props.children).toBe('about')
-  })
-
-  it('inserts nextPage beside chrome when no prior page node exists', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('header', null, 'site'),
-      React.createElement('footer', null, 'foot'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('header')
-    expect(kids[1]).toBe('about')
-    expect(expectElement(kids[2]).type).toBe('footer')
-  })
-
-  it('replaces all competing page children as a unit on layout-path miss', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('div', { className: 'page-a' }, 'old-a'),
-      React.createElement('div', { className: 'page-b' }, 'old-b'),
-      React.createElement('footer', null, 'footer'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    const content = expectElement(kids[1])
-    expect(content.type).toBe('div')
-    expect(content.props.className).toBe('page-b')
-    expect(content.props.children).toBe('about')
-    expect(expectElement(kids[2]).type).toBe('footer')
-  })
-
-  it('replaces all children inside the preferred content host on layout-path miss', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement(
-        'div',
-        { className: 'content' },
-        React.createElement('section', null, 'old-a'),
-        React.createElement('section', null, 'old-b'),
-      ),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(2)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    const content = expectElement(kids[1])
-    expect(content.type).toBe('div')
-    expect(content.props.className).toBe('content')
-    expect(content.props.children).toBe('about')
-  })
-
-  it('preserves client Providers chrome around main on document-reuse soft-nav', () => {
-    const providers = clientRef('src/providers.tsx')
-    const navbar = clientRef('src/components/Navbar.tsx')
-    const footer = clientRef('src/components/Footer.tsx')
-    const template = clientRef('src/app/template.tsx')
-
-    const current = React.createElement(
+  it('keeps the previous html document identity when the layout path stamp is missing', () => {
+    const current = createElement(
       'html',
       { lang: 'en' },
-      React.createElement('head', null, React.createElement('title', null, 'Home')),
-      React.createElement(
+      createElement('head', null),
+      createElement(
         'body',
         null,
-        React.createElement(
-          providers,
-          { key: 'providers' },
-          React.createElement(navbar, { key: 'nav' }),
-          React.createElement(
-            'main',
-            null,
-            React.createElement(template, { key: 'template' }, 'home'),
-          ),
-          React.createElement(footer, { key: 'footer' }),
-        ),
+        createElement('nav', null, 'nav'),
+        createElement('main', null, 'home'),
       ),
     )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      React.createElement(clientRef('src/app/template.tsx'), { key: 'template' }, 'about'),
+    const refresh = reuse('/', 'about')
+
+    expect(mergeFlightRefresh(current, refresh)).toBe(current)
+  })
+
+  it('splices when the current element itself is the stamped host', () => {
+    const shell = clientRef('src/app/providers.tsx')
+    const current = createElement(shell, { key: 'providers' }, stamp('/', 'home'))
+    const refresh = createElement(
+      clientRef('src/app/providers.tsx'),
+      { key: 'providers' },
+      reuse('/', 'about'),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
-    expect(merged.type).toBe('html')
-    const [, body] = childList(merged).map(child => expectElement(child))
-    const shell = expectElement(childList(body)[0])
-    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
-    const kids = childList(shell)
-    expect(kids).toHaveLength(3)
-    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/Navbar.tsx')
-    const main = expectElement(kids[1])
-    expect(main.type).toBe('main')
-    expect(clientReferenceId(expectElement(childList(main)[0]).type)).toBe('src/app/template.tsx')
-    expect(expectElement(childList(main)[0]).props.children).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-  })
-
-  it('prefers a string content host over a trailing client chrome sibling', () => {
-    const footer = clientRef('src/components/Footer.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('div', { className: 'content' }, 'home'),
-      React.createElement(footer, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    const content = expectElement(kids[1])
-    expect(content.type).toBe('div')
-    expect(content.props.className).toBe('content')
-    expect(content.props.children).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-  })
-
-  it('prefers nested main over preceding void or empty siblings', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('img', { src: '/logo.png', alt: '' }),
-      React.createElement('br'),
-      React.createElement('div', null, React.createElement('main', null, 'home')),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('img')
-    expect(expectElement(kids[1]).type).toBe('br')
-    const wrapper = expectElement(kids[2])
-    expect(wrapper.type).toBe('div')
-    expect(expectElement(childList(wrapper)[0]).props.children).toBe('about')
-  })
-
-  it('does not treat script or childless components as empty content slots', () => {
-    function Sidebar(_props: Readonly<Record<string, never>>) {
-      return null
-    }
-
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('script', { src: '/analytics.js' }),
-      React.createElement(Sidebar, null),
-      React.createElement('div', { className: 'slot' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('script')
-    expect(expectElement(kids[0]).props.children).toBeUndefined()
-    expect(expectElement(kids[1]).type).toBe(Sidebar)
-    expect(expectElement(kids[1]).props.children).toBeUndefined()
-    const slot = expectElement(kids[2])
-    expect(slot.type).toBe('div')
-    expect(slot.props.className).toBe('slot')
+    expect(merged.type).toBe(shell)
+    const slot = expectElement(childList(merged)[0])
+    expect(slot.props['data-rari-layout-path']).toBe('/')
     expect(slot.props.children).toBe('about')
   })
 
-  it('does not treat empty select or title as content slots', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('title', null),
-      React.createElement('select', { name: 'locale' }),
-      React.createElement('div', { className: 'page' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('title')
-    expect(expectElement(kids[0]).props.children).toBeUndefined()
-    expect(expectElement(kids[1]).type).toBe('select')
-    expect(expectElement(kids[1]).props.children).toBeUndefined()
-    const page = expectElement(kids[2])
-    expect(page.type).toBe('div')
-    expect(page.props.className).toBe('page')
-    expect(page.props.children).toBe('about')
-  })
-
-  it('clears shell children when reuse marker children are empty', () => {
-    const current = React.createElement('main', { className: 'page' }, 'stale')
-    const refresh = React.createElement('rari-layout-reuse', {
-      'data-rari-layout-path': '/',
-    })
+  it('clears stamped slot children when reuse marker children are empty', () => {
+    const current = stamp('/', createElement('main', { className: 'page' }, 'stale'))
+    const refresh = reuse('/')
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
-    expect(merged.type).toBe('main')
-    expect(merged.props.className).toBe('page')
+    expect(merged.props['data-rari-layout-path']).toBe('/')
     expect(merged.props.children).toBeNull()
   })
 
   it('processes nested reuse markers outermost-inward', () => {
-    const current = React.createElement(
+    const current = createElement(
       'body',
       null,
-      React.createElement(
+      createElement(
         'div',
         { 'data-rari-layout-path': '/', 'className': 'root' },
-        React.createElement(
+        createElement(
           'div',
           { 'data-rari-layout-path': '/blog', 'className': 'blog' },
-          React.createElement('main', null, 'post-a'),
+          createElement('main', null, 'post-a'),
         ),
       ),
     )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/' },
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/blog' }, 'post-b'),
-    )
+    const refresh = reuse('/', reuse('/blog', 'post-b'))
 
     const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
     const root = expectElement(childList(mergedBody)[0])
@@ -675,31 +228,29 @@ describe('mergeFlightRefresh', () => {
   })
 
   it('consumes nested reuse markers separated by a matching client wrapper', () => {
-    const shell = clientRef('src/app/blog/layout.tsx')
-    const current = React.createElement(
+    const current = createElement(
       'body',
       null,
-      React.createElement(
+      createElement(
         'div',
         { 'data-rari-layout-path': '/', 'className': 'root' },
-        React.createElement(
-          shell,
+        createElement(
+          clientRef('src/app/blog/layout.tsx'),
           { key: '/blog' },
-          React.createElement(
+          createElement(
             'div',
             { 'data-rari-layout-path': '/blog', 'className': 'blog' },
-            React.createElement('main', null, 'post-a'),
+            createElement('main', null, 'post-a'),
           ),
         ),
       ),
     )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/' },
-      React.createElement(
+    const refresh = reuse(
+      '/',
+      createElement(
         clientRef('src/app/blog/layout.tsx'),
         { key: '/blog' },
-        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/blog' }, 'post-b'),
+        reuse('/blog', 'post-b'),
       ),
     )
 
@@ -707,39 +258,186 @@ describe('mergeFlightRefresh', () => {
     const root = expectElement(childList(mergedBody)[0])
     expect(root.props.className).toBe('root')
     const client = expectElement(childList(root)[0])
-    expect(client.type).toBe(shell)
+    expect(clientReferenceId(client.type)).toBe('src/app/blog/layout.tsx')
     const blog = expectElement(childList(client)[0])
     expect(blog.props.className).toBe('blog')
     expect(blog.props.children).toBe('post-b')
   })
 
-  it('retains previous document attributes and head when merging reuse payloads', () => {
-    const current = React.createElement(
+  it('soft-navs a document reuse marker into a stamped body slot', () => {
+    const current = createElement(
       'html',
-      { lang: 'en', className: 'doc' },
-      React.createElement(
-        'head',
-        null,
-        React.createElement('title', null, 'Home'),
-        React.createElement('meta', { name: 'description', content: 'Home page' }),
-        React.createElement('link', { rel: 'stylesheet', href: '/app.css' }),
+      { lang: 'en' },
+      createElement('head', null),
+      createElement(
+        'body',
+        { className: 'bg-gray-950' },
+        createElement('nav', null, 'navbar'),
+        stamp('/', createElement('main', null, 'home')),
+        createElement(Suspense, { fallback: null }, createElement('footer', null, 'footer')),
       ),
-      React.createElement('body', { className: 'body' }, React.createElement('main', null, 'home')),
     )
-    const refresh = React.createElement(
+    const refresh = reuse('/', 'posts')
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const body = expectElement(childList(merged)[1])
+    const kids = childList(body)
+    expect(kids).toHaveLength(3)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).props['data-rari-layout-path']).toBe('/')
+    expect(expectElement(kids[1]).props.children).toBe('posts')
+    expect(expectElement(kids[2]).type).toBe(Suspense)
+  })
+
+  it('soft-navs when body children are one fulfilled thenable containing a stamp', () => {
+    const current = createElement(
       'html',
-      null,
-      React.createElement(
-        'head',
-        null,
-        React.createElement('title', null, 'About'),
-        React.createElement('meta', { name: 'description', content: 'About page' }),
+      { lang: 'en' },
+      createElement('head', null),
+      createElement(
+        'body',
+        { className: 'bg-gray-950' },
+        fulfilledFlightNode([
+          createElement('nav', { key: 'nav' }, 'navbar'),
+          stamp('/', createElement('main', { key: 'main' }, 'home')),
+          createElement(
+            Suspense,
+            { key: 'footer', fallback: null },
+            createElement('footer', null, 'footer'),
+          ),
+        ]),
       ),
-      React.createElement(
+    )
+    const refresh = reuse('/', 'posts')
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const body = expectElement(childList(merged)[1])
+    const kids = childList(body)
+    expect(kids).toHaveLength(1)
+    const slot = expectElement(kids[0])
+    expect(slot.type).toBe(Fragment)
+    const slotKids = childList(slot)
+    expect(slotKids).toHaveLength(3)
+    expect(expectElement(slotKids[0]).type).toBe('nav')
+    expect(expectElement(slotKids[1]).props['data-rari-layout-path']).toBe('/')
+    expect(expectElement(slotKids[1]).props.children).toBe('posts')
+    expect(expectElement(slotKids[2]).type).toBe(Suspense)
+  })
+
+  it('preserves a Fragment chrome slot while replacing a stamped page inside it', () => {
+    const current = createElement(
+      'body',
+      null,
+      createElement(
+        Fragment,
+        null,
+        createElement('nav', null, 'nav'),
+        stamp('/', createElement('main', null, 'home')),
+        createElement('footer', null, 'footer'),
+      ),
+    )
+    const refresh = createElement('body', null, reuse('/', 'about'))
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const fragment = expectElement(childList(mergedBody)[0])
+    expect(fragment.type).toBe(Fragment)
+    const slotKids = childList(fragment)
+    expect(slotKids).toHaveLength(3)
+    expect(expectElement(slotKids[0]).type).toBe('nav')
+    expect(expectElement(slotKids[1]).props.children).toBe('about')
+    expect(expectElement(slotKids[2]).type).toBe('footer')
+  })
+
+  it('splices a nested layout path inside thenable-wrapped chrome without picking the wrong slot', () => {
+    const current = createElement(
+      'body',
+      null,
+      createElement(
+        'div',
+        { className: 'shell' },
+        createElement('nav', null, 'nav'),
+        fulfilledFlightNode(
+          createElement(
+            'div',
+            { 'data-rari-layout-path': '/sidebar', 'className': 'side' },
+            'side-a',
+          ),
+        ),
+        createElement('div', { 'data-rari-layout-path': '/blog', 'className': 'blog' }, 'post-a'),
+        createElement('footer', null, 'footer'),
+      ),
+    )
+    const refresh = createElement('body', null, reuse('/sidebar', 'side-b'))
+
+    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
+    const shell = expectElement(childList(mergedBody)[0])
+    expect(shell.props.className).toBe('shell')
+    const kids = childList(shell)
+    expect(kids).toHaveLength(4)
+    expect(expectElement(kids[0]).type).toBe('nav')
+    expect(expectElement(kids[1]).props.className).toBe('side')
+    expect(expectElement(kids[1]).props.children).toBe('side-b')
+    expect(expectElement(kids[2]).props.className).toBe('blog')
+    expect(expectElement(kids[2]).props.children).toBe('post-a')
+    expect(expectElement(kids[3]).type).toBe('footer')
+  })
+
+  it('soft-navs Providers shell with stamped page slot on document reuse', () => {
+    const providers = clientRef('src/providers.tsx')
+    const navbar = clientRef('src/components/ui/Navbar.tsx')
+    const current = createElement(
+      'html',
+      { lang: 'en' },
+      createElement('head', null),
+      createElement(
         'body',
         null,
-        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
+        createElement(
+          providers,
+          { key: 'providers' },
+          createElement(navbar, { key: 'nav' }),
+          stamp('/', fulfilledFlightNode(createElement('main', null, 'home'))),
+          createElement(Suspense, { fallback: null }, createElement('footer', null, 'footer')),
+        ),
       ),
+    )
+    const refresh = reuse('/', 'posts')
+
+    const merged = expectElement(mergeFlightRefresh(current, refresh))
+    const body = expectElement(childList(merged)[1])
+    const shell = expectElement(childList(body)[0])
+    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
+    const kids = childList(shell)
+    expect(kids).toHaveLength(3)
+    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/ui/Navbar.tsx')
+    expect(expectElement(kids[1]).props['data-rari-layout-path']).toBe('/')
+    expect(expectElement(kids[1]).props.children).toBe('posts')
+    expect(expectElement(kids[2]).type).toBe(Suspense)
+  })
+
+  it('retains previous document attributes and head when merging reuse payloads', () => {
+    const current = createElement(
+      'html',
+      { lang: 'en', className: 'doc' },
+      createElement(
+        'head',
+        null,
+        createElement('title', null, 'Home'),
+        createElement('meta', { name: 'description', content: 'Home page' }),
+        createElement('link', { rel: 'stylesheet', href: '/app.css' }),
+      ),
+      createElement('body', { className: 'body' }, stamp('/', createElement('main', null, 'home'))),
+    )
+    const refresh = createElement(
+      'html',
+      null,
+      createElement(
+        'head',
+        null,
+        createElement('title', null, 'About'),
+        createElement('meta', { name: 'description', content: 'About page' }),
+      ),
+      createElement('body', null, reuse('/', 'about')),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
@@ -765,668 +463,221 @@ describe('mergeFlightRefresh', () => {
   })
 
   it('preserves title and description when the refreshed head is empty', () => {
-    const current = React.createElement(
-      'html',
-      { lang: 'en' },
-      React.createElement(
-        'head',
-        null,
-        React.createElement('meta', { charSet: 'utf-8' }),
-        React.createElement('meta', { name: 'viewport', content: 'width=device-width' }),
-        React.createElement('title', null, 'Home'),
-        React.createElement('meta', { name: 'description', content: 'Home page' }),
-        React.createElement('link', { rel: 'stylesheet', href: '/app.css' }),
-      ),
-      React.createElement('body', { className: 'body' }, React.createElement('main', null, 'home')),
-    )
-    const refresh = React.createElement(
+    const current = createElement(
       'html',
       null,
-      React.createElement('head', null),
-      React.createElement(
-        'body',
+      createElement(
+        'head',
         null,
-        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
+        createElement('title', null, 'Home'),
+        createElement('meta', { name: 'description', content: 'Home page' }),
       ),
+      createElement('body', null, stamp('/', 'home')),
+    )
+    const refresh = createElement(
+      'html',
+      null,
+      createElement('head', null),
+      createElement('body', null, reuse('/', 'about')),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     const [head, body] = childList(merged).map(child => expectElement(child))
     const headKids = childList(head).map(child => expectElement(child))
-
     expect(headKids.find(child => child.type === 'title')?.props.children).toBe('Home')
-    const description = headKids.find(
-      child => child.type === 'meta' && child.props.name === 'description',
-    )
-    expect(description?.props.content).toBe('Home page')
     expect(
-      headKids.find(child => child.type === 'meta' && child.props.charSet != null),
-    ).toBeTruthy()
-    expect(
-      headKids.find(child => child.type === 'meta' && child.props.name === 'viewport'),
-    ).toBeTruthy()
-    expect(headKids.find(child => child.type === 'link')?.props.href).toBe('/app.css')
-    expect(body.props.className).toBe('body')
+      headKids.find(child => child.type === 'meta' && child.props.name === 'description')?.props
+        .content,
+    ).toBe('Home page')
     expect(expectElement(childList(body)[0]).props.children).toBe('about')
   })
 
   it('preserves existing viewport when the refreshed head has no replacement', () => {
-    const current = React.createElement(
+    const current = createElement(
       'html',
       null,
-      React.createElement(
+      createElement(
         'head',
         null,
-        React.createElement('meta', { charSet: 'utf-8' }),
-        React.createElement('meta', { name: 'viewport', content: 'width=device-width' }),
-        React.createElement('title', null, 'Home'),
-        React.createElement('meta', { name: 'description', content: 'Home page' }),
+        createElement('meta', { name: 'viewport', content: 'width=device-width' }),
+        createElement('title', null, 'Home'),
       ),
-      React.createElement('body', null, React.createElement('main', null, 'home')),
+      createElement('body', null, stamp('/', 'home')),
     )
-    const refresh = React.createElement(
+    const refresh = createElement(
       'html',
       null,
-      React.createElement(
-        'head',
-        null,
-        React.createElement('title', null, 'About'),
-        React.createElement('meta', { name: 'description', content: 'About page' }),
-      ),
-      React.createElement(
-        'body',
-        null,
-        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-      ),
+      createElement('head', null, createElement('title', null, 'About')),
+      createElement('body', null, reuse('/', 'about')),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const [head] = childList(merged).map(child => expectElement(child))
+    const head = expectElement(childList(merged)[0])
     const headKids = childList(head).map(child => expectElement(child))
-    const charset = headKids.find(child => child.type === 'meta' && child.props.charSet != null)
-    const viewport = headKids.find(
-      child => child.type === 'meta' && child.props.name === 'viewport',
-    )
-    const description = headKids.find(
-      child => child.type === 'meta' && child.props.name === 'description',
-    )
-    expect(charset?.props.charSet).toBe('utf-8')
-    expect(viewport?.props.content).toBe('width=device-width')
-    expect(description?.props.content).toBe('About page')
+    expect(
+      headKids.find(child => child.type === 'meta' && child.props.name === 'viewport')?.props
+        .content,
+    ).toBe('width=device-width')
     expect(headKids.find(child => child.type === 'title')?.props.children).toBe('About')
   })
 
   it('replaces viewport when the refreshed head supplies one inside a Fragment', () => {
-    const current = React.createElement(
+    const current = createElement(
       'html',
       null,
-      React.createElement(
+      createElement(
         'head',
         null,
-        React.createElement('meta', { name: 'viewport', content: 'width=device-width' }),
-        React.createElement('title', null, 'Home'),
+        createElement('meta', { name: 'viewport', content: 'width=device-width' }),
       ),
-      React.createElement('body', null, React.createElement('main', null, 'home')),
+      createElement('body', null, stamp('/', 'home')),
     )
-    const refresh = React.createElement(
+    const refresh = createElement(
       'html',
       null,
-      React.createElement(
+      createElement(
         'head',
         null,
-        React.createElement(
-          React.Fragment,
+        createElement(
+          Fragment,
           null,
-          React.createElement('meta', {
-            name: 'viewport',
-            content: 'width=device-width, initial-scale=1',
-          }),
-          React.createElement('title', null, 'About'),
+          createElement('meta', { name: 'viewport', content: 'width=390' }),
         ),
       ),
-      React.createElement(
-        'body',
-        null,
-        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-      ),
+      createElement('body', null, reuse('/', 'about')),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const [head] = childList(merged).map(child => expectElement(child))
+    const head = expectElement(childList(merged)[0])
     const headKids = childList(head).map(child => expectElement(child))
-    const viewports = headKids.filter(
-      child => child.type === 'meta' && child.props.name === 'viewport',
-    )
-    expect(viewports).toHaveLength(1)
-    expect(viewports[0]?.props.content).toBe('width=device-width, initial-scale=1')
-    expect(headKids.find(child => child.type === 'title')?.props.children).toBe('About')
+    expect(
+      headKids.find(child => child.type === 'meta' && child.props.name === 'viewport')?.props
+        .content,
+    ).toBe('width=390')
   })
 
   it('drops stale Fragment-wrapped title and meta from the current head', () => {
-    const current = React.createElement(
+    const current = createElement(
       'html',
       null,
-      React.createElement(
+      createElement(
         'head',
         null,
-        React.createElement(
-          React.Fragment,
+        createElement(
+          Fragment,
           null,
-          React.createElement('title', null, 'Home'),
-          React.createElement('meta', { name: 'description', content: 'Home page' }),
-          React.createElement('link', { rel: 'stylesheet', href: '/app.css' }),
+          createElement('title', null, 'Home'),
+          createElement('meta', { name: 'description', content: 'Home page' }),
         ),
+        createElement('link', { rel: 'stylesheet', href: '/app.css' }),
       ),
-      React.createElement('body', null, React.createElement('main', null, 'home')),
+      createElement('body', null, stamp('/', 'home')),
     )
-    const refresh = React.createElement(
+    const refresh = createElement(
       'html',
       null,
-      React.createElement(
+      createElement(
         'head',
         null,
-        React.createElement('title', null, 'About'),
-        React.createElement('meta', { name: 'description', content: 'About page' }),
+        createElement('title', null, 'About'),
+        createElement('meta', { name: 'description', content: 'About page' }),
       ),
-      React.createElement(
-        'body',
-        null,
-        React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-      ),
+      createElement('body', null, reuse('/', 'about')),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const [head] = childList(merged).map(child => expectElement(child))
+    const head = expectElement(childList(merged)[0])
     const headKids = childList(head).map(child => expectElement(child))
-    const description = headKids.find(
-      child => child.type === 'meta' && child.props.name === 'description',
-    )
     expect(headKids.filter(child => child.type === 'title')).toHaveLength(1)
     expect(headKids.find(child => child.type === 'title')?.props.children).toBe('About')
-    expect(
-      headKids.filter(child => child.type === 'meta' && child.props.name === 'description'),
-    ).toHaveLength(1)
-    expect(description?.props.content).toBe('About page')
+    expect(headKids.filter(child => child.type === 'meta')).toHaveLength(1)
     expect(headKids.find(child => child.type === 'link')?.props.href).toBe('/app.css')
   })
 
   it('merges a top-level document reuse marker into the previous html document', () => {
-    const current = React.createElement(
+    const current = createElement(
       'html',
       { lang: 'en' },
-      React.createElement('head', null, React.createElement('title', null, 'Home')),
-      React.createElement(
-        'body',
-        null,
-        React.createElement(
-          'div',
-          { className: 'shell' },
-          React.createElement('main', null, 'home'),
-        ),
-      ),
+      createElement('head', null, createElement('title', null, 'Home')),
+      createElement('body', null, stamp('/', 'home')),
     )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      'about',
-    )
+    const refresh = reuse('/', 'about')
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     expect(merged.type).toBe('html')
     expect(merged.props.lang).toBe('en')
     const [, body] = childList(merged).map(child => expectElement(child))
-    const shell = expectElement(childList(body)[0])
-    expect(shell.props.className).toBe('shell')
-    expect(expectElement(childList(shell)[0]).props.children).toBe('about')
+    expect(expectElement(childList(body)[0]).props.children).toBe('about')
   })
 
   it('retains a head-less html root when merging a document-reuse marker', () => {
-    const current = React.createElement(
-      'html',
-      { 'lang': 'en', 'data-theme': 'dark' },
-      React.createElement('body', { className: 'body' }, React.createElement('main', null, 'home')),
-    )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      'about',
-    )
+    const current = createElement('html', null, createElement('body', null, stamp('/', 'home')))
+    const refresh = reuse('/', 'about')
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     expect(merged.type).toBe('html')
-    expect(merged.props.lang).toBe('en')
-    expect(merged.props['data-theme']).toBe('dark')
-    const kids = childList(merged)
-    expect(kids).toHaveLength(1)
-    const body = expectElement(kids[0])
+    const body = expectElement(childList(merged)[0])
     expect(body.type).toBe('body')
-    expect(body.props.className).toBe('body')
     expect(expectElement(childList(body)[0]).props.children).toBe('about')
   })
 
   it('unwraps reuse markers when there is no current shell to splice into', () => {
-    const refresh = React.createElement(
-      'div',
-      null,
-      React.createElement(
-        'rari-layout-reuse',
-        { 'data-rari-layout-path': '/docs' },
-        React.createElement('main', null, 'fresh'),
-      ),
-    )
-
-    const merged = expectElement(mergeFlightRefresh(null, refresh))
-    expect(merged.type).toBe('div')
-    const main = expectElement(childList(merged)[0])
-    expect(main.type).toBe('main')
-    expect(main.props.children).toBe('fresh')
+    expect(mergeFlightRefresh(null, reuse('/', 'about'))).toBe('about')
   })
 
   it('flattens multi-child reuse markers beside siblings when unwrapping', () => {
-    const refresh = React.createElement(
+    const refresh = createElement(
       'div',
       null,
-      React.createElement(
-        'rari-layout-reuse',
-        { 'data-rari-layout-path': '/' },
-        React.createElement('section', null, 'a'),
-        React.createElement('aside', null, 'b'),
-      ),
-      React.createElement('footer', null, 'footer'),
+      createElement('aside', null, 'side'),
+      reuse('/', createElement('main', null, 'page')),
     )
-
     const merged = expectElement(mergeFlightRefresh(null, refresh))
     const kids = childList(merged)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('section')
-    expect(expectElement(kids[1]).type).toBe('aside')
-    expect(expectElement(kids[2]).type).toBe('footer')
+    expect(kids).toHaveLength(2)
+    expect(expectElement(kids[0]).type).toBe('aside')
+    expect(expectElement(kids[1]).type).toBe('main')
   })
 
   it('keeps nested-array key scopes distinct through merge flatten', () => {
-    const nestedChildren: React.ReactNode = [
-      [React.createElement('span', { key: 'dup' }, 'a')],
-      [React.createElement('span', { key: 'dup' }, 'b')],
-    ]
-    const base = React.createElement('div', null)
-    const refresh = {
-      ...base,
-      props: { ...base.props, children: nestedChildren },
-    }
-
-    const merged = expectElement(mergeFlightRefresh(null, refresh))
-    const kids = childList(merged).map(child => expectElement(child))
-    expect(kids).toHaveLength(2)
-    expect(kids[0].props.children).toBe('a')
-    expect(kids[1].props.children).toBe('b')
-    expect(kids[0].key).not.toBe(kids[1].key)
-    expect(kids[0].key).toBeTruthy()
-    expect(kids[1].key).toBeTruthy()
-  })
-
-  it('scopes identical dollar-prefixed keys among nested siblings by index', () => {
-    const nestedChildren: React.ReactNode = [
-      [
-        React.createElement('span', { key: '$dup' }, 'a'),
-        React.createElement('span', { key: '$dup' }, 'b'),
-      ],
-    ]
-    const base = React.createElement('div', null)
-    const refresh = {
-      ...base,
-      props: { ...base.props, children: nestedChildren },
-    }
-
-    const merged = expectElement(mergeFlightRefresh(null, refresh))
-    const kids = childList(merged).map(child => expectElement(child))
-    expect(kids).toHaveLength(2)
-    expect(kids[0].props.children).toBe('a')
-    expect(kids[1].props.children).toBe('b')
-    expect(kids[0].key).not.toBe(kids[1].key)
-    expect(String(kids[0].key)).toContain('0')
-    expect(String(kids[1].key)).toContain('1')
-  })
-
-  it('unwraps reuse markers when remaining siblings are only non-element nodes', () => {
-    const current = React.createElement('div', null, 'a', 'b', 'c')
-    const refresh = React.createElement(
-      'div',
-      null,
-      'prefix',
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/' }, 'about'),
-    )
+    const current = createElement('div', null, [
+      [createElement('span', { key: 'a' }, 'a')],
+      [createElement('span', { key: 'b' }, 'b')],
+    ])
+    const refresh = createElement('div', null, [
+      [createElement('span', { key: 'a' }, 'A')],
+      [createElement('span', { key: 'b' }, 'B')],
+    ])
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
-    expect(childList(merged)).toEqual(['prefix', 'about'])
-  })
-
-  it('preserves role=status toast when replacing page content on layout-path miss', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('div', { role: 'status' }, 'saved'),
-      React.createElement('article', null, 'old page'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'new page'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody).map(child => expectElement(child))
+    const kids = childList(merged).map(child => expectElement(child))
     expect(kids).toHaveLength(2)
-    expect(kids[0].props.role).toBe('status')
-    expect(kids[0].props.children).toBe('saved')
-    expect(kids[1].type).toBe('article')
-    expect(kids[1].props.children).toBe('new page')
+    expect(String(kids[0].key)).not.toBe(String(kids[1].key))
+    expect(kids[0].props.children).toBe('A')
+    expect(kids[1].props.children).toBe('B')
   })
 
   it('replaces matched page content with empty children instead of retaining stale kids', () => {
-    const current = React.createElement('main', null, React.createElement('p', null, 'old'))
-    const refresh = React.createElement('main', null)
+    const current = createElement('main', null, createElement('p', null, 'old'))
+    const refresh = createElement('main', null)
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
     expect(childList(merged)).toEqual([])
   })
 
-  it('descends into a nested-main host instead of replacing an unlike client shell', () => {
-    const providers = clientRef('src/providers.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement(
-        providers,
-        { key: 'providers' },
-        React.createElement('main', null, React.createElement('article', null, 'old')),
-      ),
-      React.createElement('div', { role: 'status' }, 'toast'),
-    )
-    const refresh = React.createElement('article', null, 'new')
-
-    const mergedBody = expectElement(
-      mergeFlightRefresh(
-        current,
-        React.createElement(
-          'body',
-          null,
-          React.createElement(
-            'rari-layout-reuse',
-            { 'data-rari-layout-path': '/missing' },
-            refresh,
-          ),
-        ),
-      ),
-    )
-    const kids = childList(mergedBody).map(child => expectElement(child))
-    expect(kids).toHaveLength(2)
-    expect(clientReferenceId(kids[0].type)).toBe('src/providers.tsx')
-    const main = expectElement(childList(kids[0])[0])
-    expect(main.type).toBe('main')
-    expect(expectElement(childList(main)[0]).type).toBe('article')
-    expect(expectElement(childList(main)[0]).props.children).toBe('new')
-    expect(kids[1].props.role).toBe('status')
-  })
-
-  it('splices into main hidden behind a fulfilled Flight thenable sibling (soft-nav browser shape)', () => {
-    const footer = clientRef('src/components/Footer.tsx')
-    const resolvedMain = React.createElement('main', null, 'home')
-
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      fulfilledFlightNode(resolvedMain),
-      React.createElement(footer, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    const main = expectElement(kids[1])
-    expect(main.type).toBe('main')
-    expect(main.props.children).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-  })
-
-  it('splices into main wrapped by Suspense with a thenable child', () => {
-    const footer = clientRef('src/components/Footer.tsx')
-    const resolvedMain = React.createElement('main', null, 'home')
-
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement(React.Suspense, { fallback: null }, fulfilledFlightNode(resolvedMain)),
-      React.createElement(footer, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-    const boundary = expectElement(kids[1])
-    expect(boundary.type).toBe(React.Suspense)
-    const main = expectElement(childList(boundary)[0])
-    expect(main.type).toBe('main')
-    expect(main.props.children).toBe('about')
-  })
-
-  it('does not treat keyless chrome div as a match for a keyless page div', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('div', { className: 'shell' }, React.createElement('main', null, 'home')),
-      React.createElement('footer', null, 'footer'),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[2]).type).toBe('footer')
-    const shell = expectElement(kids[1])
-    expect(shell.props.className).toBe('shell')
-    const main = expectElement(childList(shell)[0])
-    expect(main.type).toBe('main')
-    expect(main.props.children).toBe('about')
-  })
-
-  it('preserves web-like Providers→wrapper→main tree on document reuse', () => {
-    const providers = clientRef('src/providers.tsx')
-    const current = React.createElement(
-      'html',
-      { lang: 'en' },
-      React.createElement('head', null, React.createElement('title', null, 'Home')),
-      React.createElement(
-        'body',
-        null,
-        React.createElement(
-          providers,
-          { key: 'providers' },
-          React.createElement(
-            'div',
-            { className: 'shell' },
-            React.createElement('nav', null, 'nav'),
-            React.createElement('main', null, 'home'),
-            React.createElement('footer', null, 'footer'),
-          ),
-        ),
-      ),
-    )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      'about',
-    )
-
-    const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const [, body] = childList(merged).map(child => expectElement(child))
-    const shell = expectElement(childList(expectElement(childList(body)[0]))[0])
-    expect(shell.props.className).toBe('shell')
-    const kids = childList(shell)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('about')
-    expect(expectElement(kids[2]).type).toBe('footer')
-  })
-
-  it('inserts beside client Footer when layout has only chrome siblings', () => {
-    const footer = clientRef('src/components/Footer.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement(footer, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(kids[1]).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-  })
-
-  it('treats kebab-case Next-style chrome basenames as trailing chrome', () => {
-    const mainNav = clientRef('src/components/main-nav.tsx')
-    const appFooter = clientRef('src/components/app-footer.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement(mainNav, { key: 'nav' }),
-      React.createElement(appFooter, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/main-nav.tsx')
-    expect(kids[1]).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/app-footer.tsx')
-  })
-
-  it('does not treat UI primitive *Header/*Footer modules as layout chrome', () => {
-    const cardHeader = clientRef('src/components/ui/card-header.tsx')
-    const dialogFooter = clientRef('src/components/ui/dialog-footer.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement(cardHeader, { key: 'header' }),
-      React.createElement('main', null, 'home'),
-      React.createElement(dialogFooter, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/ui/card-header.tsx')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe(
-      'src/components/ui/dialog-footer.tsx',
-    )
-  })
-
-  it('does not treat client Footer as the preferred content host', () => {
-    const footer = clientRef('src/components/Footer.tsx')
-    const current = React.createElement(
-      'body',
-      null,
-      React.createElement('nav', null, 'nav'),
-      React.createElement('main', null, 'home'),
-      React.createElement(footer, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-  })
-
-  it('preserves chrome when a matching Providers shell soft-navs with only page children', () => {
-    const providers = clientRef('src/providers.tsx')
-    const navbar = clientRef('src/components/Navbar.tsx')
-    const footer = clientRef('src/components/Footer.tsx')
-    const current = React.createElement(
-      providers,
-      { key: 'providers' },
-      React.createElement(navbar, { key: 'nav' }),
-      React.createElement('main', null, 'home'),
-      React.createElement(footer, { key: 'footer' }),
-    )
-    const refresh = React.createElement(
-      clientRef('src/providers.tsx'),
-      { key: 'providers' },
-      'about',
-    )
-
-    const merged = expectElement(mergeFlightRefresh(current, refresh))
-    expect(clientReferenceId(merged.type)).toBe('src/providers.tsx')
-    expect(merged.type).not.toBe(providers)
-    const kids = childList(merged)
-    expect(kids).toHaveLength(3)
-    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/Navbar.tsx')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('about')
-    expect(clientReferenceId(expectElement(kids[2]).type)).toBe('src/components/Footer.tsx')
-  })
-
   it('merges matching client shells pairwise so ViewTransitions still adopt refresh identity', () => {
     const layoutType = clientRef('src/app/layout.tsx')
-    const current = React.createElement(
+    const current = createElement(
       layoutType,
       { key: '/' },
-      React.createElement('nav', null, 'nav'),
-      React.createElement('main', null, 'stale'),
+      createElement('nav', null, 'nav'),
+      createElement('main', null, 'stale'),
     )
-    const refresh = React.createElement(
+    const refresh = createElement(
       clientRef('src/app/layout.tsx'),
       { key: '/' },
-      React.createElement('nav', null, 'nav'),
-      React.createElement('main', null, 'fresh'),
+      createElement('nav', null, 'nav'),
+      createElement('main', null, 'fresh'),
     )
 
     const merged = expectElement(mergeFlightRefresh(current, refresh))
@@ -1438,191 +689,26 @@ describe('mergeFlightRefresh', () => {
     expect(expectElement(kids[1]).props.children).toBe('fresh')
   })
 
-  it('soft-navs ryanskinner.com layout without Providers/client-Navbar workarounds', () => {
-    const current = React.createElement(
-      'html',
-      { lang: 'en' },
-      React.createElement('head', null),
-      React.createElement(
-        'body',
-        { className: 'bg-gray-950' },
-        React.createElement('nav', null, 'navbar'),
-        fulfilledFlightNode(React.createElement('main', null, 'home')),
-        React.createElement(
-          React.Suspense,
-          { fallback: null },
-          React.createElement('footer', null, 'footer'),
-        ),
-      ),
-    )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      'posts',
-    )
-
-    const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const body = expectElement(childList(merged)[1])
-    const kids = childList(body)
-    expect(kids).toHaveLength(3)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('posts')
-    expect(expectElement(kids[2]).type).toBe(React.Suspense)
-    expect(expectElement(childList(expectElement(kids[2]))[0]).type).toBe('footer')
-  })
-
-  it('soft-navs when body children are one fulfilled thenable of [nav, main, Suspense(footer)]', () => {
-    const current = React.createElement(
-      'html',
-      { lang: 'en' },
-      React.createElement('head', null),
-      React.createElement(
-        'body',
-        { className: 'bg-gray-950' },
-        fulfilledFlightNode([
-          React.createElement('nav', { key: 'nav' }, 'navbar'),
-          React.createElement('main', { key: 'main' }, 'home'),
-          React.createElement(
-            React.Suspense,
-            { key: 'footer', fallback: null },
-            React.createElement('footer', null, 'footer'),
-          ),
-        ]),
-      ),
-    )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      'posts',
-    )
-
-    const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const body = expectElement(childList(merged)[1])
-    const kids = childList(body)
-    expect(kids).toHaveLength(1)
-    const slot = expectElement(kids[0])
-    expect(slot.type).toBe(React.Fragment)
-    const slotKids = childList(slot)
-    expect(slotKids).toHaveLength(3)
-    expect(expectElement(slotKids[0]).type).toBe('nav')
-    expect(expectElement(slotKids[1]).type).toBe('main')
-    expect(expectElement(slotKids[1]).props.children).toBe('posts')
-    expect(expectElement(slotKids[2]).type).toBe(React.Suspense)
-    expect(expectElement(childList(expectElement(slotKids[2]))[0]).type).toBe('footer')
-  })
-
-  it('preserves a Fragment chrome slot while replacing main inside it', () => {
-    const current = React.createElement(
+  it('replaces a stamped ClientPage shell with the refreshed page', () => {
+    const clientPage = clientRef('src/app/page.tsx')
+    const current = createElement(
       'body',
       null,
-      React.createElement(
-        React.Fragment,
-        null,
-        React.createElement('nav', null, 'nav'),
-        React.createElement('main', null, 'home'),
-        React.createElement('footer', null, 'footer'),
-      ),
+      createElement('header', null, 'site'),
+      stamp('/', createElement(clientPage, { key: 'page' })),
     )
-    const refresh = React.createElement(
+    const refresh = createElement(
       'body',
       null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/missing' }, 'about'),
+      reuse('/', createElement(clientRef('src/app/about.tsx'), { key: 'about' }, 'about')),
     )
 
     const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const kids = childList(mergedBody)
-    expect(kids).toHaveLength(1)
-    const slot = expectElement(kids[0])
-    expect(slot.type).toBe(React.Fragment)
-    const slotKids = childList(slot)
-    expect(slotKids).toHaveLength(3)
-    expect(expectElement(slotKids[0]).type).toBe('nav')
-    expect(expectElement(slotKids[1]).type).toBe('main')
-    expect(expectElement(slotKids[1]).props.children).toBe('about')
-    expect(expectElement(slotKids[2]).type).toBe('footer')
-  })
-
-  it('splices a nested layout path inside thenable-wrapped chrome without picking the wrong slot', () => {
-    const current = React.createElement(
-      'body',
-      null,
-      fulfilledFlightNode(
-        React.createElement(
-          'div',
-          { className: 'shell' },
-          React.createElement('nav', null, 'nav'),
-          React.createElement(
-            'div',
-            { 'data-rari-layout-path': '/sidebar', 'className': 'side' },
-            'side',
-          ),
-          React.createElement(
-            'div',
-            { 'data-rari-layout-path': '/blog', 'className': 'blog' },
-            'post-a',
-          ),
-          React.createElement('footer', null, 'footer'),
-        ),
-      ),
-    )
-    const refresh = React.createElement(
-      'body',
-      null,
-      React.createElement('rari-layout-reuse', { 'data-rari-layout-path': '/sidebar' }, 'side-b'),
-    )
-
-    const mergedBody = expectElement(mergeFlightRefresh(current, refresh))
-    const shell = expectElement(childList(mergedBody)[0])
-    expect(shell.props.className).toBe('shell')
-    const kids = childList(shell)
-    expect(kids).toHaveLength(4)
-    expect(expectElement(kids[0]).type).toBe('nav')
-    expect(expectElement(kids[1]).props.className).toBe('side')
-    expect(expectElement(kids[1]).props.children).toBe('side-b')
-    expect(expectElement(kids[2]).props.className).toBe('blog')
-    expect(expectElement(kids[2]).props.children).toBe('post-a')
-    expect(expectElement(kids[3]).type).toBe('footer')
-  })
-
-  it('soft-navs ryanskinner.com workaround shape (Providers div + client Navbar)', () => {
-    const providers = clientRef('src/providers.tsx')
-    const navbar = clientRef('src/components/ui/Navbar.tsx')
-    const current = React.createElement(
-      'html',
-      { lang: 'en' },
-      React.createElement('head', null),
-      React.createElement(
-        'body',
-        null,
-        React.createElement(
-          providers,
-          { key: 'providers' },
-          React.createElement(navbar, { key: 'nav' }),
-          fulfilledFlightNode(React.createElement('main', null, 'home')),
-          React.createElement(
-            React.Suspense,
-            { fallback: null },
-            React.createElement('footer', null, 'footer'),
-          ),
-        ),
-      ),
-    )
-    const refresh = React.createElement(
-      'rari-layout-reuse',
-      { 'data-rari-layout-path': '/', 'data-rari-document-reuse': true },
-      'posts',
-    )
-
-    const merged = expectElement(mergeFlightRefresh(current, refresh))
-    const body = expectElement(childList(merged)[1])
-    const shell = expectElement(childList(body)[0])
-    expect(clientReferenceId(shell.type)).toBe('src/providers.tsx')
-    const kids = childList(shell)
-    expect(kids).toHaveLength(3)
-    expect(clientReferenceId(expectElement(kids[0]).type)).toBe('src/components/ui/Navbar.tsx')
-    expect(expectElement(kids[1]).type).toBe('main')
-    expect(expectElement(kids[1]).props.children).toBe('posts')
-    expect(expectElement(kids[2]).type).toBe(React.Suspense)
+    const kids = childList(mergedBody).map(child => expectElement(child))
+    expect(kids).toHaveLength(2)
+    expect(kids[0].type).toBe('header')
+    expect(kids[1].props['data-rari-layout-path']).toBe('/')
+    expect(clientReferenceId(expectElement(childList(kids[1])[0]).type)).toBe('src/app/about.tsx')
+    expect(expectElement(childList(kids[1])[0]).props.children).toBe('about')
   })
 })

@@ -33,7 +33,7 @@ describe('commitNavigationPayload', () => {
     vi.restoreAllMocks()
   })
 
-  it('applies pending history inside the transition before React state updates', () => {
+  it('commits resolved trees inside a typed transition for View Transitions', () => {
     const order: string[] = []
     const pushState = vi.fn(() => {
       order.push('pushState')
@@ -43,32 +43,31 @@ describe('commitNavigationPayload', () => {
       dispatchEvent: vi.fn(),
     })
 
-    const currentNavigationIdRef = { current: 7 }
-    const pendingScrollPayloadRef = { current: null }
-
-    const setRenderKey: Dispatch<SetStateAction<number>> = updater => {
-      order.push('setRenderKey')
-      applyNumberUpdater(updater, 0)
-    }
-    const setRscPayload: Dispatch<SetStateAction<Payload | undefined>> = () => {
-      order.push('setRscPayload')
-    }
-
     commitNavigationPayload({
       parsedPayload: { element: 'next' },
       shouldScrollToTop: true,
       navigationId: 7,
       transitionTypes: ['nav', 'nav-forward'],
+      maySuspend: false,
       pendingHistory: { url: '/about', state: { route: '/about' } },
+      routeLocation: { pathname: '/about', search: '' },
       startTransition: scope => {
         order.push('transition-start')
         void scope()
         order.push('transition-end')
       },
-      currentNavigationIdRef,
-      pendingScrollPayloadRef,
-      setRenderKey,
-      setRscPayload,
+      currentNavigationIdRef: { current: 7 },
+      pendingScrollPayloadRef: { current: null },
+      setRenderKey: updater => {
+        order.push('setRenderKey')
+        applyNumberUpdater(updater, 0)
+      },
+      setRscPayload: () => {
+        order.push('setRscPayload')
+      },
+      setRouteLocation: () => {
+        order.push('setRouteLocation')
+      },
       clearHmrError: () => {
         order.push('clearHmrError')
       },
@@ -78,16 +77,63 @@ describe('commitNavigationPayload', () => {
     expect(order).toEqual([
       'transition-start',
       'pushState',
+      'setRouteLocation',
       'setRenderKey',
       'setRscPayload',
       'clearHmrError',
       'transition-end',
     ])
-    expect(pushState).toHaveBeenCalledWith({ route: '/about' }, '', '/about')
-    expect(pendingScrollPayloadRef.current).toEqual({
-      payload: { element: 'next' },
-      commitKey: 1,
+  })
+
+  it('paints suspending routes sync then finishes in a typed transition', () => {
+    const order: string[] = []
+    const pushState = vi.fn(() => {
+      order.push('pushState')
     })
+    vi.stubGlobal('window', {
+      history: { pushState, replaceState: vi.fn() },
+      dispatchEvent: vi.fn(),
+    })
+
+    commitNavigationPayload({
+      parsedPayload: { element: 'next' },
+      shouldScrollToTop: false,
+      navigationId: 4,
+      transitionTypes: ['nav', 'nav-forward'],
+      maySuspend: true,
+      pendingHistory: { url: '/server-data', state: {} },
+      routeLocation: { pathname: '/server-data', search: '' },
+      startTransition: scope => {
+        order.push('transition-start')
+        void scope()
+        order.push('transition-end')
+      },
+      currentNavigationIdRef: { current: 4 },
+      pendingScrollPayloadRef: { current: null },
+      setRenderKey: () => {
+        order.push('setRenderKey')
+      },
+      setRscPayload: () => {
+        order.push('setRscPayload')
+      },
+      setRouteLocation: () => {
+        order.push('setRouteLocation')
+      },
+      clearHmrError: () => {
+        order.push('clearHmrError')
+      },
+      pendingNavigateCommittedIdRef: { current: null },
+    })
+
+    expect(order).toEqual([
+      'pushState',
+      'transition-start',
+      'setRouteLocation',
+      'setRenderKey',
+      'setRscPayload',
+      'clearHmrError',
+      'transition-end',
+    ])
   })
 
   it('skips commit when navigation id is stale', () => {
@@ -118,22 +164,21 @@ describe('commitNavigationPayload', () => {
     expect(pushState).not.toHaveBeenCalled()
   })
 
-  it('bumps view-transition generation inside the transition before RSC commit', () => {
-    const generationBefore = getNavigationTransitionSnapshot().generation
-    const generationsAtCommit: number[] = []
-
+  it('does not bump view-transition generation during the soft-nav transition', () => {
     vi.stubGlobal('window', {
       history: { pushState: vi.fn(), replaceState: vi.fn() },
       dispatchEvent: vi.fn(),
       location: { href: 'http://localhost/', pathname: '/', search: '' },
     })
 
+    const generationBefore = getNavigationTransitionSnapshot().generation
+    const generationsAtCommit: number[] = []
+
     commitNavigationPayload({
       parsedPayload: { element: 'next' },
       shouldScrollToTop: false,
       navigationId: 3,
       transitionTypes: ['nav', 'nav-forward'],
-      pendingHistory: { url: '/about', state: {} },
       startTransition: scope => {
         void scope()
       },
@@ -149,8 +194,8 @@ describe('commitNavigationPayload', () => {
       pendingNavigateCommittedIdRef: { current: null },
     })
 
-    expect(getNavigationTransitionSnapshot().generation).toBe(generationBefore + 1)
-    expect(generationsAtCommit).toEqual([generationBefore + 1, generationBefore + 1])
+    expect(getNavigationTransitionSnapshot().generation).toBe(generationBefore)
+    expect(generationsAtCommit).toEqual([generationBefore, generationBefore])
   })
 
   it('records navigation id for post-commit navigate-committed dispatch', () => {
@@ -159,10 +204,6 @@ describe('commitNavigationPayload', () => {
       dispatchEvent: vi.fn(),
     })
 
-    const setRenderKey: Dispatch<SetStateAction<number>> = updater => {
-      applyNumberUpdater(updater, 0)
-    }
-    const setRscPayload: Dispatch<SetStateAction<Payload | undefined>> = () => {}
     const pendingNavigateCommittedIdRef = { current: null as number | null }
 
     commitNavigationPayload({
@@ -174,8 +215,10 @@ describe('commitNavigationPayload', () => {
       },
       currentNavigationIdRef: { current: 9 },
       pendingScrollPayloadRef: { current: null },
-      setRenderKey,
-      setRscPayload,
+      setRenderKey: updater => {
+        applyNumberUpdater(updater, 0)
+      },
+      setRscPayload: () => {},
       clearHmrError: () => {},
       pendingNavigateCommittedIdRef,
     })

@@ -8,7 +8,7 @@ pub use core::{LayoutHtmlCache, LayoutRenderer, is_rari_page_not_found};
 
 pub use layout_reuse::{
     pathname_from_router_state_header, router_state_from_headers,
-    shared_layout_paths_for_navigation,
+    shared_layout_paths_for_navigation, tree_from_router_state_header,
 };
 pub use route_composer::{LayoutInfo, RouteComposer};
 pub use types::*;

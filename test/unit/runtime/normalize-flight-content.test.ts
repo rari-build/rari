@@ -1,26 +1,26 @@
 import { normalizeFlightContent } from '@rari/runtime/flight/normalize-flight-content'
-import * as React from 'react'
+import { createElement, Fragment, isValidElement } from 'react'
 import { describe, expect, it } from 'vite-plus/test'
 
 describe('normalizeFlightContent', () => {
   it('returns non-array content unchanged', () => {
-    const element = React.createElement('div', null, 'hello')
+    const element = createElement('div', null, 'hello')
     expect(normalizeFlightContent(element)).toBe(element)
     expect(normalizeFlightContent('text')).toBe('text')
   })
 
   it('unwraps a single-element flight array', () => {
-    const element = React.createElement('main', null, 'page')
+    const element = createElement('main', null, 'page')
     expect(normalizeFlightContent([element])).toBe(element)
   })
 
   it('wraps renderable multi-item flight arrays in a fragment', () => {
     const normalized = normalizeFlightContent([
-      React.createElement('div', { key: 'a' }, 'a'),
-      React.createElement('div', { key: 'b' }, 'b'),
+      createElement('div', { key: 'a' }, 'a'),
+      createElement('div', { key: 'b' }, 'b'),
     ])
 
-    const isFragment = React.isValidElement(normalized) && normalized.type === React.Fragment
+    const isFragment = isValidElement(normalized) && normalized.type === Fragment
     expect(isFragment).toBe(true)
   })
 

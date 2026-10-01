@@ -39,11 +39,11 @@ const ${bindingName} = (props) => {
     ) {
       throw new Error('Component ${registryKey}#${exportName} is not a component type symbol');
     }
-    const React = globalThis.React;
-    if (React == null || typeof React.createElement !== 'function') {
-      throw new Error('Component ${registryKey}#${exportName} needs React.createElement');
+    const createElement = globalThis.React?.createElement;
+    if (typeof createElement !== 'function') {
+      throw new Error('Component ${registryKey}#${exportName} needs createElement');
     }
-    return React.createElement(Component, props);
+    return createElement(Component, props);
   }
   if (typeof Component === 'object' && Component != null) {
     const type = Component.$$typeof;
@@ -55,11 +55,11 @@ const ${bindingName} = (props) => {
       throw new Error('Component ${registryKey}#${exportName} is a React element, not a component type');
     }
     if ('$$typeof' in Component || Component['~isClientComponent'] === true) {
-      const React = globalThis.React;
-      if (React == null || typeof React.createElement !== 'function') {
-        throw new Error('Component ${registryKey}#${exportName} needs React.createElement');
+      const createElement = globalThis.React?.createElement;
+      if (typeof createElement !== 'function') {
+        throw new Error('Component ${registryKey}#${exportName} needs createElement');
       }
-      return React.createElement(Component, props);
+      return createElement(Component, props);
     }
   }
 

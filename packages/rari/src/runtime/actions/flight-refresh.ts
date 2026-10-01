@@ -1,10 +1,6 @@
 import type { ActionRevalidationKind } from './revalidation-kind'
-import {
-  errorMessage,
-  isFlightThenable,
-  isLikelyReactElement,
-  isRecord,
-} from '@/shared/utils/type-guards'
+import { isValidElement } from 'react'
+import { errorMessage, isFlightThenable, isRecord } from '@/shared/utils/type-guards'
 import { ActionDidNotRevalidate, parseActionRevalidationKind } from './revalidation-kind'
 
 export interface ActionFlightRefreshDetail {
@@ -29,7 +25,7 @@ function shouldSkipRefreshForActionResult(result: unknown): boolean {
 }
 
 function isActionRefreshRoot(value: unknown): boolean {
-  return isLikelyReactElement(value) || isFlightThenable(value)
+  return isValidElement(value) || isFlightThenable(value)
 }
 
 function resolveRefreshElement(refreshFlight: ActionFlightResponseShape['f']): unknown {

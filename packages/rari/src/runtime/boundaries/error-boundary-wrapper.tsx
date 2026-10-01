@@ -1,7 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import * as React from 'react'
+import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { Component } from 'react'
 import { clearTimer } from '../../shared/utils/timer'
 import { isComponentType, isRecord } from '../../shared/utils/type-guards'
@@ -15,12 +14,12 @@ interface ErrorBoundaryWrapperProps {
 interface ErrorBoundaryWrapperState {
   hasError: boolean
   error: Error | null
-  ErrorComponent: React.ComponentType<{ error: Error; reset: () => void }> | null
+  ErrorComponent: ComponentType<{ error: Error; reset: () => void }> | null
 }
 
 function resolveErrorComponent(
   module: unknown,
-): React.ComponentType<{ error: Error; reset: () => void }> | null {
+): ComponentType<{ error: Error; reset: () => void }> | null {
   if (isComponentType(module)) return module
 
   if (isRecord(module)) {
@@ -56,7 +55,7 @@ export class ErrorBoundaryWrapper extends Component<
     this._pendingTimer = clearTimer(this._pendingTimer)
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('[rari] Error boundary caught error:', error, errorInfo)
 
     const errorComponentId = this.props.errorComponentId

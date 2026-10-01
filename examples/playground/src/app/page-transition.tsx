@@ -1,14 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useViewTransitionKey } from 'rari/router'
 import { ViewTransition } from 'react'
 
 const navEnterExit = {
   'nav-forward': 'rari-page-vt',
   'nav-traverse': 'rari-page-vt',
   'nav-replace': 'rari-page-vt',
-  'default': 'none',
+  'default': 'rari-page-vt',
 } as const
 
 const loadingExit = {
@@ -27,16 +26,14 @@ export function LoadingReveal({ children }: { readonly children: ReactNode }): R
 }
 
 export function PageTransition({ children }: { readonly children: ReactNode }): ReactNode {
-  const transitionKey = useViewTransitionKey()
-
   return (
     <ViewTransition
-      key={transitionKey}
       name="rari-page"
-      default="none"
+      default="rari-page-vt"
       enter={navEnterExit}
       exit={navEnterExit}
       share={navEnterExit}
+      update={navEnterExit}
     >
       <ViewTransition enter="rari-reveal-enter" default="none">
         <div className="rari-page-shell">{children}</div>

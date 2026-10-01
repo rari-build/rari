@@ -1,4 +1,6 @@
-import * as React from 'react'
+import type { ReactNode } from 'react'
+import type { FlightContent } from './flight/react-helpers'
+import { createElement } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { AppRouterProvider } from 'virtual:app-router-provider'
 import { ClientRouter } from 'virtual:client-router'
@@ -13,6 +15,7 @@ import {
 } from '@/shared/utils/type-guards'
 import { showHydrationFailureBanner } from './boundaries/runtime-error-banner'
 import { normalizeFlightContent } from './flight/normalize-flight-content'
+import { isDocumentRoot } from './flight/react-helpers'
 import {
   clearServerInjectedErrors,
   hasFizzMarkers,
@@ -29,35 +32,19 @@ import './shared/types'
 // @ts-expect-error - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
 
-function createElementWithChildren<P extends { readonly children?: React.ReactNode }>(
-  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types React.ComponentType is not a readonly object type
-  type: React.ComponentType<P>,
-  props: Readonly<Omit<P, 'children'>>,
-  children: React.ReactNode,
-): React.ReactElement {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return React.createElement(type, props as P, children)
-}
-
-async function resolveFlightElement(
-  element: React.ReactNode | PromiseLike<React.ReactNode>,
-): Promise<React.ReactNode> {
-  let current: React.ReactNode | PromiseLike<React.ReactNode> = normalizeFlightContent(element)
-  for (let i = 0; i < 10 && isFlightThenable<React.ReactNode>(current); i += 1) {
+async function resolveFlightElement(element: FlightContent): Promise<ReactNode> {
+  let current: FlightContent = normalizeFlightContent(element)
+  for (let i = 0; i < 10 && isFlightThenable<ReactNode>(current); i += 1) {
     current = normalizeFlightContent(await current)
   }
-  if (isFlightThenable<React.ReactNode>(current)) {
+  if (isFlightThenable<ReactNode>(current)) {
     throw new Error('[rari] Failed to resolve Flight element to a React node')
   }
   return current
 }
 
-function isDocumentRootElement(node: React.ReactNode): boolean {
-  return React.isValidElement(node) && (node.type === 'html' || node.type === 'HTML')
-}
-
-function mountAppRouterTree(resolvedElement: React.ReactNode): boolean {
-  if (!isDocumentRootElement(resolvedElement)) {
+function mountAppRouterTree(resolvedElement: ReactNode): boolean {
+  if (!isDocumentRoot(resolvedElement)) {
     showHydrationFailureBanner(
       document.body,
       'RSC payload did not resolve to an <html> document root. Try refreshing the page.',
@@ -66,17 +53,25 @@ function mountAppRouterTree(resolvedElement: React.ReactNode): boolean {
     return false
   }
 
-  let content: React.ReactNode = React.createElement(AppRouterProvider, {
+  let content: ReactNode = createElement(AppRouterProvider, {
     initialPayload: { element: resolvedElement },
   })
-  content = createElementWithChildren(
+  content = createElement(
     ClientRouter,
-    { initialRoute: window.location.pathname },
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    { initialRoute: window.location.pathname } as {
+      initialRoute: string
+      children: ReactNode
+    },
     content,
   )
-  content = createElementWithChildren(
+  content = createElement(
     RouterProvider,
-    { initialPathname: window.location.pathname },
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    { initialPathname: window.location.pathname } as {
+      initialPathname: string
+      children: ReactNode
+    },
     content,
   )
   mountApp(content)
@@ -101,7 +96,7 @@ function restoreDocumentTitle(ssrTitle: string) {
   })
 }
 
-function mountApp(content: React.ReactNode) {
+function mountApp(content: ReactNode) {
   const scanRoot = document.documentElement
   const ssrTitle = document.title.trim()
 
@@ -183,7 +178,7 @@ function decodeEmbeddedFlightPayload(): Uint8Array | null {
 async function createElementFromFlightBytes(
   payloadBytes: Uint8Array,
   options: Readonly<{ streaming: boolean }>,
-): Promise<React.ReactNode> {
+): Promise<ReactNode> {
   const payloadText = new TextDecoder().decode(payloadBytes)
   await preloadModulesFromFlightProtocol(payloadText)
 
@@ -244,7 +239,7 @@ async function hydrateFromEmbeddedPayload(
   embeddedPayloadBytes: Uint8Array,
 ): Promise<{ readonly ok: boolean; readonly errorMessage: string }> {
   let hydrationErrorMessage = 'Could not load interactive page data.'
-  let element: React.ReactNode | PromiseLike<React.ReactNode> | null | undefined
+  let element: FlightContent | null | undefined
 
   try {
     element = await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: false })
@@ -280,9 +275,7 @@ async function hydrateFromEmbeddedPayload(
   return { ok: false, errorMessage: hydrationErrorMessage }
 }
 
-async function fetchInitialRscElement(): Promise<
-  React.ReactNode | PromiseLike<React.ReactNode> | null
-> {
+async function fetchInitialRscElement(): Promise<FlightContent | null> {
   try {
     const currentPath = window.location.pathname + window.location.search
     const response = await fetch(currentPath, {
@@ -333,9 +326,7 @@ function createBufferedRscStream(): ReadableStream<Uint8Array> {
   })
 }
 
-async function loadElementFromBufferedRows(): Promise<
-  React.ReactNode | PromiseLike<React.ReactNode> | null
-> {
+async function loadElementFromBufferedRows(): Promise<FlightContent | null> {
   try {
     return await createFromReadableStream(createBufferedRscStream())
   } catch (e) {
@@ -346,7 +337,7 @@ async function loadElementFromBufferedRows(): Promise<
 
 async function loadElementFromEmbeddedStreaming(
   embeddedPayloadBytes: Uint8Array,
-): Promise<React.ReactNode | PromiseLike<React.ReactNode> | null> {
+): Promise<FlightContent | null> {
   try {
     return await createElementFromFlightBytes(embeddedPayloadBytes, { streaming: true })
   } catch (e) {
@@ -371,7 +362,7 @@ export async function renderApp(): Promise<void> {
     }
 
     const needsInitialFetch = !hasEmbeddedPayload && !hasBufferedRows && !hasServerRenderedContent
-    let element: React.ReactNode | PromiseLike<React.ReactNode> | null | undefined
+    let element: FlightContent | null | undefined
 
     if (needsInitialFetch) {
       element = await fetchInitialRscElement()

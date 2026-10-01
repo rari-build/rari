@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import type { NavigationOptions } from './types'
 import type { RouterContextValue } from './use-router'
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
@@ -20,7 +21,7 @@ function isRegisterNavigateDetail(
 }
 
 export interface RouterProviderProps {
-  readonly children: React.ReactNode
+  readonly children: ReactNode
   readonly initialPathname: string
 }
 

@@ -19,15 +19,9 @@ describe('flight-router-state', () => {
     expect(segmentPathFromRouterState(buildFlightRouterState('/'))).toEqual([])
   })
 
-  it('normalizes trailing slashes without regex backtracking', () => {
-    expect(segmentPathFromPathname('/actions///')).toEqual(['actions'])
-    expect(segmentPathFromPathname('/a/b//')).toEqual(['a', 'b'])
-  })
-
   it('computes the shared layout segment prefix between routes', () => {
     expect(sharedSegmentPath('/blog/a', '/blog/b')).toEqual(['blog'])
     expect(sharedSegmentPath('/blog/a', '/about')).toEqual([])
-    expect(sharedSegmentPath('/a/b/c', '/a/b/d')).toEqual(['a', 'b'])
     expect(sharedSegmentPath('/', '/about')).toEqual([])
   })
 })

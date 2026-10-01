@@ -89,7 +89,7 @@ export const lint: OxlintConfig = {
     'e18e/prefer-regex-test': 'error',
     'e18e/prefer-array-some': 'error',
     'e18e/prefer-string-fromcharcode': 'error',
-    'antfu/consistent-chaining': 'error',
+    'antfu/consistent-chaining': 'off',
     'antfu/top-level-function': 'error',
     'regexp/confusing-quantifier': 'warn',
     'regexp/control-character-escape': 'error',

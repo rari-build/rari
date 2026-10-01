@@ -1,8 +1,10 @@
-import * as React from 'react'
+import type { ReactNode } from 'react'
+import type { FlightContent } from './react-helpers'
+import { createElement, Fragment, isValidElement } from 'react'
 
 function isRenderableFlightItem(item: unknown): boolean {
   return (
-    React.isValidElement(item) ||
+    isValidElement(item) ||
     item == null ||
     typeof item === 'string' ||
     typeof item === 'number' ||
@@ -10,18 +12,16 @@ function isRenderableFlightItem(item: unknown): boolean {
   )
 }
 
-export function normalizeFlightContent(
-  content: React.ReactNode | PromiseLike<React.ReactNode>,
-): React.ReactNode | PromiseLike<React.ReactNode> {
+export function normalizeFlightContent(content: FlightContent): FlightContent {
   if (!Array.isArray(content)) return content
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion Array.isArray widens flight payload arrays to any[]
-  const items = content as React.ReactNode[]
-  if (items.length === 1 && React.isValidElement(items[0])) return items[0]
+  const items = content as ReactNode[]
+  if (items.length === 1 && isValidElement(items[0])) return items[0]
   if (items.length > 0 && items.every(isRenderableFlightItem)) {
-    return React.createElement(React.Fragment, null, ...items)
+    return createElement(Fragment, null, ...items)
   }
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion non-renderable flight arrays are returned unchanged
-  return content as React.ReactNode | PromiseLike<React.ReactNode>
+  return content as FlightContent
 }

@@ -55,7 +55,8 @@ pub const STREAMING_PIPELINE_READY_CHECK: &str = "typeof globalThis['~rari']?.re
         && typeof globalThis['~rari']?.renderStaticDocument === 'function' \
         && typeof globalThis['~rari']?.composeRoute === 'function' \
         && typeof globalThis['~rari']?.createPageElement === 'function' \
-        && typeof globalThis['~rari']?.wrapLayoutReuse === 'function'";
+        && typeof globalThis['~rari']?.wrapLayoutReuse === 'function' \
+        && typeof globalThis['~rari']?.stampLayoutPath === 'function'";
 
 pub const LOAD_FULL_REACT_VENDORS_SCRIPT: &str = r"
 (function() {

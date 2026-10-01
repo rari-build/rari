@@ -1,11 +1,9 @@
 /// <reference types="vite-plus/client" />
 
 declare module 'virtual:react-flight-client' {
-  export interface Thenable<T> extends Promise<T> {
-    readonly status?: 'pending' | 'fulfilled' | 'rejected'
-    readonly value?: T
-    readonly reason?: unknown
-  }
+  import type { ReactPromise } from 'react'
+
+  export type Thenable<T> = ReactPromise<T> & Promise<T>
 
   export function createServerReference<A extends unknown[] = unknown[], R = unknown>(
     id: string,
@@ -46,30 +44,29 @@ declare module 'virtual:react-flight-client' {
 }
 
 declare module 'virtual:client-router' {
-  import type * as React from 'react'
+  import type { ReactNode } from 'react'
 
   export interface ClientRouterProps {
-    readonly children: React.ReactNode
+    readonly children: ReactNode
     readonly initialRoute: string
   }
 
-  export function ClientRouter(props: ClientRouterProps): React.ReactNode
+  export function ClientRouter(props: ClientRouterProps): ReactNode
 }
 
 declare module 'virtual:app-router-provider' {
-  import type * as React from 'react'
+  import type { ReactNode } from 'react'
 
   export interface AppRouterProviderProps {
-    readonly children?: React.ReactNode
+    readonly children?: ReactNode
     readonly initialPayload?: {
       readonly element: unknown
-      readonly rawElement?: unknown
       readonly flightProtocol?: string
     }
     readonly onNavigate?: (detail: Readonly<Record<string, unknown>>) => void
   }
 
-  export function AppRouterProvider(props: AppRouterProviderProps): React.ReactNode
+  export function AppRouterProvider(props: AppRouterProviderProps): ReactNode
 }
 
 declare module 'react-server-dom-webpack/client' {

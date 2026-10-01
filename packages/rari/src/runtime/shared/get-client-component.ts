@@ -1,6 +1,6 @@
 // oxlint-disable typescript/prefer-readonly-parameter-types
 import type { ComponentInfo } from './types'
-import * as React from 'react'
+import { createElement } from 'react'
 import { toPosixPath } from '@/shared/utils/path'
 import { isComponentType, isFunction, isRecord, toError } from '@/shared/utils/type-guards'
 import {
@@ -349,7 +349,7 @@ function createSuspenseModule(
       if (!isComponentType(Component))
         throw new Error(`[rari] Lazy component "${id}" export "${exportKey}" is not a component`)
 
-      return React.createElement(Component, props)
+      return createElement(Component, props)
     }
     // oxlint-disable-next-line typescript/only-throw-error
     throw loadPromise

@@ -1,10 +1,20 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingScrollToTop } from './pending-scroll'
-import * as React from 'react'
-import { useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react'
+import type { FlightContent } from './react-helpers'
+import {
+  isValidElement,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { createFromFetch, createFromReadableStream } from 'virtual:react-flight-client'
+import { syncNavigationTransitionFromWindow } from '@/router/navigation/navigation-transition-store'
 import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-state'
 import {
   errorMessage,
@@ -17,23 +27,27 @@ import {
 import { ActionDidRevalidateStaticAndDynamic } from '../actions/revalidation-kind'
 import { HmrFailureBanner } from '../boundaries/hmr-failure-banner'
 import { preloadModulesFromFlightProtocol } from '../shared/preload-modules'
+import { applyActionFlightPatch, applySoftNavFlightPatch } from './apply-flight-patch'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
+  routeLocationFromPendingHistory,
 } from './commit-navigation-payload'
-import { isLayoutReuseMarker, mergeFlightRefresh } from './merge-refresh'
+import { FlightDocument } from './layout-router'
+import { isLayoutReuseMarker } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
+import { flightTreeMaySuspend, isDocumentRoot } from './react-helpers'
 import { resolvePreviousDocument } from './resolve-previous-document'
-import { currentRouteLocation, flightRouteCache } from './route-cache'
+import { containsLayoutSlot, currentRouteLocation, flightRouteCache } from './route-cache'
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
 
 interface RscPayload {
-  readonly element: React.ReactNode | PromiseLike<React.ReactNode>
-  readonly rawElement?: React.ReactNode | PromiseLike<React.ReactNode>
+  readonly element: FlightContent
   readonly flightProtocol?: string
+  readonly maySuspend?: boolean
 }
 
 interface NavigationOptions {
@@ -44,7 +58,7 @@ interface NavigationOptions {
 }
 
 interface AppRouterProviderProps {
-  readonly children: React.ReactNode
+  readonly children: ReactNode
   readonly initialPayload?: RscPayload
   readonly onNavigate?: (detail: Readonly<NavigationDetail>) => void
 }
@@ -66,14 +80,14 @@ interface NavigationDetail {
   }
 }
 
-function isReactNode(value: unknown): value is React.ReactNode {
+function isReactNode(value: unknown): value is ReactNode {
   return (
     value == null ||
     typeof value === 'string' ||
     typeof value === 'number' ||
     typeof value === 'boolean' ||
     typeof value === 'bigint' ||
-    React.isValidElement(value) ||
+    isValidElement(value) ||
     Array.isArray(value)
   )
 }
@@ -107,20 +121,26 @@ function isNavigationStartDetail(detail: unknown): detail is {
   )
 }
 
-function peekFulfilledFlightContent(
-  content: React.ReactNode | PromiseLike<React.ReactNode>,
-): React.ReactNode | undefined {
-  if (!isFlightThenable<React.ReactNode>(content)) return content
+function peekFulfilledFlightContent(content: FlightContent): ReactNode | undefined {
+  if (!isFlightThenable<ReactNode>(content)) return content
   if (!isRecord(content) || content.status !== 'fulfilled') return undefined
   return isReactNode(content.value) ? content.value : undefined
 }
 
-function isDocumentRoot(node: React.ReactNode): node is React.ReactElement {
-  return React.isValidElement(node) && (node.type === 'html' || node.type === 'HTML')
+function isMergeableFlightRoot(node: ReactNode): boolean {
+  return isDocumentRoot(node) || (isValidElement(node) && isLayoutReuseMarker(node))
 }
 
-function isMergeableFlightRoot(node: React.ReactNode): boolean {
-  return isDocumentRoot(node) || (React.isValidElement(node) && isLayoutReuseMarker(node))
+function searchFromNavigationDetail(detail: NavigationDetail): string {
+  const pendingUrl = detail.pendingHistory?.url
+  if (pendingUrl != null && pendingUrl !== '') {
+    try {
+      return new URL(pendingUrl, window.location.origin).search
+    } catch {
+      // fall through
+    }
+  }
+  return currentRouteLocation().search
 }
 
 function emitNavigateError(
@@ -159,11 +179,15 @@ function shouldScrollToTopForNavigation(detail: NavigationDetail): boolean {
 
 async function mergeNavigatedFlightPayload(
   parsedPayload: RscPayload,
-  previousElement: React.ReactNode | PromiseLike<React.ReactNode> | undefined,
+  previousElement: FlightContent | undefined,
   navigationId: number,
   currentNavigationId: number,
+  fromPathname: string,
+  toPathname: string,
+  search: string,
 ): Promise<
   | { readonly kind: 'payload'; readonly payload: RscPayload }
+  | { readonly kind: 'hard-nav' }
   | { readonly kind: 'error'; readonly error: Error }
   | { readonly kind: 'superseded' }
 > {
@@ -179,7 +203,7 @@ async function mergeNavigatedFlightPayload(
   }
   const previousDocument = resolvePreviousDocument(previousElement)
   if (
-    React.isValidElement(resolvedElement) &&
+    isValidElement(resolvedElement) &&
     isLayoutReuseMarker(resolvedElement) &&
     previousDocument == null
   ) {
@@ -190,41 +214,58 @@ async function mergeNavigatedFlightPayload(
       ),
     }
   }
-  const mergedElement =
-    previousDocument != null
-      ? mergeFlightRefresh(previousDocument, resolvedElement)
-      : resolvedElement
-  if (!isDocumentRoot(mergedElement)) {
+
+  if (previousDocument == null) {
+    if (!isDocumentRoot(resolvedElement)) {
+      return {
+        kind: 'error',
+        error: new Error(
+          '[rari] AppRouter: navigated Flight content did not resolve to an <html> document root',
+        ),
+      }
+    }
+    flightRouteCache.set(toPathname, search, resolvedElement)
     return {
-      kind: 'error',
-      error: new Error(
-        '[rari] AppRouter: layout-merged Flight content did not resolve to an <html> document root',
-      ),
+      kind: 'payload',
+      payload: {
+        ...parsedPayload,
+        element: resolvedElement,
+        maySuspend: flightTreeMaySuspend(resolvedElement),
+      },
     }
   }
+
+  const patched = applySoftNavFlightPatch({
+    previousDocument,
+    refresh: resolvedElement,
+    fromPathname,
+    toPathname,
+    search,
+  })
+  if (patched.kind === 'hard-nav') return { kind: 'hard-nav' }
+
   return {
     kind: 'payload',
     payload: {
       ...parsedPayload,
-      element: mergedElement,
-      rawElement: mergedElement,
+      element: patched.element,
+      maySuspend: patched.maySuspend,
     },
   }
 }
 
-async function unwrapFlightContent(
-  content: React.ReactNode | PromiseLike<React.ReactNode>,
-): Promise<React.ReactNode> {
-  let current: React.ReactNode | PromiseLike<React.ReactNode> = normalizeFlightContent(content)
-  for (let i = 0; i < 10 && isFlightThenable<React.ReactNode>(current); i += 1) {
+async function unwrapFlightContent(content: FlightContent): Promise<ReactNode> {
+  let current: FlightContent = normalizeFlightContent(content)
+  for (let i = 0; i < 10 && isFlightThenable<ReactNode>(current); i += 1) {
     current = normalizeFlightContent(await current)
   }
-  if (isFlightThenable<React.ReactNode>(current)) {
+  if (isFlightThenable<ReactNode>(current)) {
     throw new Error('[rari] AppRouter: Flight content did not resolve to a React node')
   }
   return current
 }
 
+// oxlint-disable-next-line sonarjs/cognitive-complexity
 export function AppRouterProvider({
   children,
   initialPayload,
@@ -233,8 +274,7 @@ export function AppRouterProvider({
   const [rscPayload, setRscPayload] = useState(initialPayload)
   const rscPayloadRef = useRef(initialPayload)
   const [renderKey, setRenderKey] = useState(0)
-  const [, startNavTransition] = useTransition()
-  const startNavTransitionRef = useRef(startNavTransition)
+  const [routeLocation, setRouteLocation] = useState(() => currentRouteLocation())
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const pendingScrollPayloadRef = useRef<PendingScrollToTop<RscPayload> | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -256,10 +296,6 @@ export function AppRouterProvider({
     onNavigateRef.current = onNavigate
   }, [onNavigate])
 
-  useEffect(() => {
-    startNavTransitionRef.current = startNavTransition
-  }, [startNavTransition])
-
   useLayoutEffect(() => {
     const { shouldScroll, nextPending } = resolvePendingScrollToTop(
       pendingScrollPayloadRef.current,
@@ -279,17 +315,34 @@ export function AppRouterProvider({
     )
   }, [rscPayload, renderKey])
 
-  const rememberRouteCache = (element: React.ReactNode | PromiseLike<React.ReactNode>) => {
-    if (element == null || isFlightThenable(element)) return
+  useEffect(() => {
+    syncNavigationTransitionFromWindow()
+  }, [renderKey])
 
-    const { pathname, search } = currentRouteLocation()
-    flightRouteCache.set(pathname, search, element)
-  }
+  const rememberRouteCache = useCallback(
+    (element: FlightContent) => {
+      if (element == null || isFlightThenable(element)) return
+      if (!isValidElement(element)) return
+      if (element.type !== 'html' && element.type !== 'HTML') return
+      if (containsLayoutSlot(element)) return
+
+      const { pathname, search } = routeLocation
+      if (flightRouteCache.hasRoute(pathname, search)) return
+      flightRouteCache.set(pathname, search, element)
+    },
+    [routeLocation],
+  )
+
+  const rememberRouteCacheRef = useRef(rememberRouteCache)
+  useEffect(() => {
+    rememberRouteCacheRef.current = rememberRouteCache
+  }, [rememberRouteCache])
 
   useEffect(() => {
     rscPayloadRef.current = rscPayload
-    if (rscPayload?.element != null) rememberRouteCache(rscPayload.element)
-  }, [rscPayload])
+    if (rscPayload?.element == null) return
+    rememberRouteCache(rscPayload.element)
+  }, [rscPayload, rememberRouteCache])
 
   useEffect(() => {
     if (rscPayload?.element != null) {
@@ -389,11 +442,10 @@ export function AppRouterProvider({
       },
     })
 
-    const element = createFromReadableStream<React.ReactNode>(stream)
+    const element = createFromReadableStream<ReactNode>(stream)
 
     return {
       element,
-      rawElement: element,
       flightProtocol,
     }
   }
@@ -404,7 +456,7 @@ export function AppRouterProvider({
     if (!response.body) throw new Error('Response has no body stream')
 
     const protocolClone = response.clone()
-    const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
+    const element = createFromFetch<ReactNode>(Promise.resolve(response))
 
     void protocolClone
       .text()
@@ -416,7 +468,6 @@ export function AppRouterProvider({
 
     return {
       element,
-      rawElement: element,
       flightProtocol: '',
     }
   }
@@ -436,7 +487,7 @@ export function AppRouterProvider({
 
       await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
 
-      const element = createFromFetch<React.ReactNode>(Promise.resolve(response))
+      const element = createFromFetch<ReactNode>(Promise.resolve(response))
       const resolvedElement = await unwrapFlightContent(element)
       if (!isDocumentRoot(resolvedElement)) {
         throw new Error(
@@ -445,7 +496,6 @@ export function AppRouterProvider({
       }
       return {
         element: resolvedElement,
-        rawElement: resolvedElement,
         flightProtocol: rscFlightProtocol,
       }
     } catch (parseError) {
@@ -592,8 +642,24 @@ export function AppRouterProvider({
           rscPayloadRef.current?.element,
           detail.navigationId,
           currentNavigationIdRef.current,
+          detail.from,
+          detail.to,
+          searchFromNavigationDetail(detail),
         )
         if (merged.kind === 'superseded') return null
+        if (merged.kind === 'hard-nav') {
+          const href =
+            detail.pendingHistory?.url != null && detail.pendingHistory.url !== ''
+              ? detail.pendingHistory.url
+              : detail.to
+          window.dispatchEvent(
+            new CustomEvent('rari:navigate-committed', {
+              detail: { navigationId: detail.navigationId },
+            }),
+          )
+          window.location.assign(href)
+          return null
+        }
         if (merged.kind === 'error') {
           emitNavigateError(detail, merged.error)
           return null
@@ -610,6 +676,10 @@ export function AppRouterProvider({
       detail: NavigationDetail,
       resolvedPayload: RscPayload,
     ): void => {
+      const nextLocation = routeLocationFromPendingHistory(detail.pendingHistory, {
+        pathname: detail.to,
+        search: searchFromNavigationDetail(detail),
+      })
       commitNavigationPayload({
         parsedPayload: resolvedPayload,
         shouldScrollToTop: shouldScrollToTopForNavigation(detail),
@@ -618,12 +688,15 @@ export function AppRouterProvider({
           historyKey: detail.options.historyKey,
           replace: detail.options.replace,
         }),
+        maySuspend: resolvedPayload.maySuspend === true,
         pendingHistory: detail.pendingHistory,
-        startTransition: startNavTransitionRef.current,
+        routeLocation: nextLocation,
+        startTransition,
         currentNavigationIdRef,
         pendingScrollPayloadRef,
         setRenderKey,
         setRscPayload,
+        setRouteLocation,
         clearHmrError: () => {
           setHmrError(null)
         },
@@ -718,7 +791,7 @@ export function AppRouterProvider({
       const detail = getCustomEventDetail(event, isActionFlightRefreshDetail)
       if (
         detail?.element == null ||
-        (!isReactNode(detail.element) && !isFlightThenable<React.ReactNode>(detail.element))
+        (!isReactNode(detail.element) && !isFlightThenable<ReactNode>(detail.element))
       )
         return
 
@@ -744,7 +817,7 @@ export function AppRouterProvider({
         const fallbackElement = currentPayload?.element
         const cachedElement =
           flightRouteCache.getElement(pathname, search) ??
-          (fallbackElement != null && isFlightThenable<React.ReactNode>(fallbackElement)
+          (fallbackElement != null && isFlightThenable<ReactNode>(fallbackElement)
             ? null
             : (fallbackElement ?? null))
         const refreshElement = detail.element
@@ -760,8 +833,17 @@ export function AppRouterProvider({
             const { pathname: currentPath, search: currentSearch } = currentRouteLocation()
             if (`${currentPath}${currentSearch}` !== expectedRoute) return
 
-            const merged = mergeFlightRefresh(cachedElement, resolvedRefresh)
-            const resolved = await unwrapFlightContent(merged)
+            const patched = applyActionFlightPatch({
+              previousDocument: cachedElement ?? null,
+              refresh: resolvedRefresh,
+              pathname,
+              search,
+            })
+            if (patched.kind === 'hard-nav') {
+              window.location.reload()
+              return
+            }
+            const resolved = patched.element
             if (
               refreshGeneration !== actionRefreshGenerationRef.current ||
               currentNavigationIdRef.current !== expectedNavigationId
@@ -771,30 +853,15 @@ export function AppRouterProvider({
             if (`${afterMergeLocation.pathname}${afterMergeLocation.search}` !== expectedRoute)
               return
 
-            if (!isDocumentRoot(resolved)) {
-              const refreshError = new Error(
-                '[rari] AppRouter: action flight refresh did not resolve to an <html> document root',
-              )
-              trackHMRFailure(
-                refreshError,
-                'parse',
-                `Action flight refresh failed: ${refreshError.message}`,
-                window.location.pathname,
-              )
-              if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
-              return
-            }
-
             const nextPayload: RscPayload = {
               element: resolved,
-              rawElement: resolved,
             }
             pendingFormScrollRestoreRef.current = nextPayload
-            React.startTransition(() => {
+            startTransition(() => {
               setRscPayload(nextPayload)
               setHmrError(null)
             })
-            rememberRouteCache(resolved)
+            rememberRouteCacheRef.current(resolved)
             resetFailureTracking()
           } catch (error: unknown) {
             if (
@@ -904,7 +971,7 @@ export function AppRouterProvider({
 
   const rawContent = rscPayload?.element ?? children
   const contentToRender = normalizeFlightContent(rawContent)
-  const [committedDocument, setCommittedDocument] = useState<React.ReactNode | null>(null)
+  const [committedDocument, setCommittedDocument] = useState<ReactNode | null>(null)
   const fulfilledContent = peekFulfilledFlightContent(contentToRender)
   const isPendingFlight = isFlightThenable(contentToRender) && fulfilledContent === undefined
   const resolvedContent =
@@ -918,19 +985,34 @@ export function AppRouterProvider({
       ? resolvedContent
       : null
 
-  if (resolvedDocument != null && !Object.is(resolvedDocument, committedDocument)) {
+  if (
+    resolvedDocument != null &&
+    !Object.is(resolvedDocument, committedDocument) &&
+    !containsLayoutSlot(resolvedDocument)
+  ) {
     setCommittedDocument(resolvedDocument)
   }
 
-  if (isPendingFlight) {
-    if (committedDocument == null) {
-      throw new Error('[rari] AppRouter: expected a resolved <html> document root')
-    }
-  } else if (resolvedDocument == null) {
+  const resolvedOrCommitted = isPendingFlight ? committedDocument : resolvedDocument
+  const usableFallback =
+    resolvedOrCommitted != null &&
+    isDocumentRoot(resolvedOrCommitted) &&
+    !containsLayoutSlot(resolvedOrCommitted)
+      ? resolvedOrCommitted
+      : committedDocument != null &&
+          isDocumentRoot(committedDocument) &&
+          !containsLayoutSlot(committedDocument)
+        ? committedDocument
+        : null
+
+  if (
+    usableFallback == null &&
+    !flightRouteCache.hasRoute(routeLocation.pathname, routeLocation.search)
+  ) {
     throw new Error('[rari] AppRouter: expected a resolved <html> document root')
   }
 
-  const documentToRender = isPendingFlight ? committedDocument : resolvedDocument
+  const documentFallback = usableFallback
 
   return (
     <>
@@ -946,7 +1028,12 @@ export function AppRouterProvider({
           }}
         />
       )}
-      {documentToRender}
+      <FlightDocument
+        fallback={documentFallback}
+        revision={renderKey}
+        pathname={routeLocation.pathname}
+        search={routeLocation.search}
+      />
     </>
   )
 }
