@@ -281,7 +281,6 @@ export function AppRouterProvider({
   const [renderKey, setRenderKey] = useState(0)
   const [routeLocation, setRouteLocation] = useState(() => currentRouteLocation())
   const routeLocationRef = useRef(routeLocation)
-  routeLocationRef.current = routeLocation
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const pendingScrollPayloadRef = useRef<PendingScrollToTop<RscPayload> | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -298,6 +297,10 @@ export function AppRouterProvider({
   const consecutiveFailuresRef = useRef<number>(0)
   const [hmrError, setHmrError] = useState<HmrFailure | null>(null)
   const MAX_RETRIES = 3
+
+  useEffect(() => {
+    routeLocationRef.current = routeLocation
+  }, [routeLocation])
 
   useEffect(() => {
     onNavigateRef.current = onNavigate

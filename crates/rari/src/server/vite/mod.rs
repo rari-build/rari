@@ -10,7 +10,7 @@ use axum::{
         Request,
         ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderName, HeaderValue, Uri},
+    http::{HeaderMap, HeaderName, Uri, header},
     response::{IntoResponse, Response},
 };
 use futures::StreamExt as FuturesStreamExt;
@@ -24,6 +24,17 @@ use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 use crate::server::{config::Config, error_response};
 
 const VITE_WS_PROTOCOL: &str = "vite-hmr";
+
+const HOP_BY_HOP_HEADERS: &[&str] = &[
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+];
 
 fn create_client() -> Client {
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
@@ -39,6 +50,40 @@ fn vite_error(err: &RariError) -> Response {
     error_response::json_response(err, is_dev)
 }
 
+fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_host: bool) {
+    let mut extra_hop: Vec<HeaderName> = Vec::new();
+    if let Some(connection) = headers.get(header::CONNECTION)
+        && let Ok(value) = connection.to_str()
+    {
+        for token in value.split(',') {
+            let name = token.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if let Ok(header_name) = HeaderName::try_from(name) {
+                extra_hop.push(header_name);
+            }
+        }
+    }
+
+    for name in HOP_BY_HOP_HEADERS {
+        if let Ok(header_name) = HeaderName::try_from(*name) {
+            headers.remove(header_name);
+        }
+    }
+    for header_name in extra_hop {
+        headers.remove(header_name);
+    }
+    if strip_host {
+        headers.remove(header::HOST);
+    }
+}
+
+fn vite_proxy_prefix(path_and_query: &str) -> &'static str {
+    let path = path_and_query.split_once('?').map_or(path_and_query, |(path, _)| path);
+    if path == "/src" || path.starts_with("/src/") { "/src" } else { "/vite-server" }
+}
+
 pub async fn vite_proxy(req: Request) -> impl IntoResponse {
     let Some(config) = Config::get() else {
         tracing::error!("Failed to get global configuration for Vite proxy");
@@ -51,12 +96,13 @@ pub async fn vite_proxy(req: Request) -> impl IntoResponse {
     let path_and_query =
         req.uri().path_and_query().map(PathAndQuery::as_str).unwrap_or(req.uri().path());
 
-    let prefix = if path_and_query.starts_with("/src") { "/src" } else { "/vite-server" };
+    let prefix = vite_proxy_prefix(path_and_query);
     let path_without_prefix = path_and_query.strip_prefix(prefix).unwrap_or(path_and_query);
     let target_url = format!("{vite_base_url}{prefix}{path_without_prefix}");
 
     let method = req.method().clone();
-    let headers = req.headers().clone();
+    let mut headers = req.headers().clone();
+    sanitize_proxy_headers(&mut headers, true);
 
     let body_bytes = match body::to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,
@@ -69,16 +115,13 @@ pub async fn vite_proxy(req: Request) -> impl IntoResponse {
     match client.request(method, &target_url).headers(headers).body(body_bytes).send().await {
         Ok(response) => {
             let status = response.status();
-            let mut response_builder = Response::builder().status(status);
+            let mut upstream_headers = response.headers().clone();
+            sanitize_proxy_headers(&mut upstream_headers, false);
 
+            let mut response_builder = Response::builder().status(status);
             if let Some(headers) = response_builder.headers_mut() {
-                for (name, value) in response.headers() {
-                    if let (Ok(name), Ok(value)) = (
-                        HeaderName::from_bytes(name.as_ref()),
-                        HeaderValue::from_bytes(value.as_ref()),
-                    ) {
-                        headers.insert(name, value);
-                    }
+                for (name, value) in &upstream_headers {
+                    headers.insert(name.clone(), value.clone());
                 }
             }
 

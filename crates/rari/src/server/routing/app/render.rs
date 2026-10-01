@@ -251,11 +251,16 @@ fn get_base_url_from_context(context: &LayoutRenderContext, config: &Config) -> 
     Some(format!("{protocol}://{host}"))
 }
 
+fn layout_cookie_header(context: &LayoutRenderContext) -> Option<&str> {
+    context.headers.get("cookie").map(String::as_str).filter(|value| !value.is_empty())
+}
+
 pub async fn render_with_fallback(
     state: Arc<ServerState>,
     route_match: AppRouteMatch,
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
+    request_context: Arc<RequestContext>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
@@ -268,13 +273,14 @@ pub async fn render_with_fallback(
         context.clone(),
         &layout_renderer,
         accept_encoding,
+        Arc::clone(&request_context),
     )
     .await
     {
         Ok(response) => Ok(response),
         Err(e) => {
             tracing::error!("Streaming render failed, falling back to synchronous: {}", e);
-            render_synchronous(state, route_match, context, accept_encoding).await
+            render_synchronous(state, route_match, context, accept_encoding, request_context).await
         }
     }
 }
@@ -284,15 +290,11 @@ pub async fn render_rsc_navigation_streaming(
     mut route_match: AppRouteMatch,
     mut context: LayoutRenderContext,
     accept_encoding: Option<&str>,
+    request_context: Arc<RequestContext>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
-    );
-
-    let request_context = Arc::new(
-        RequestContext::new(route_match.route.path.clone())
-            .with_http_headers(context.headers.clone()),
     );
 
     let render_result = match layout_renderer
@@ -379,7 +381,7 @@ pub async fn render_rsc_navigation_streaming(
 
             let router_state_sensitive =
                 context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty();
-            let vary = rsc_vary_header(None, router_state_sensitive);
+            let vary = rsc_vary_header(layout_cookie_header(&context), router_state_sensitive);
 
             let mut response_builder = Response::builder()
                 .status(status_code)
@@ -405,7 +407,7 @@ pub async fn render_rsc_navigation_streaming(
 
             let router_state_sensitive =
                 context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty();
-            let vary = rsc_vary_header(None, router_state_sensitive);
+            let vary = rsc_vary_header(layout_cookie_header(&context), router_state_sensitive);
 
             let mut response_builder = Response::builder()
                 .status(status_code)
@@ -599,19 +601,25 @@ fn render_chunked_response(
         ChunkedContentType::RscFlight => CompressionEncoding::from_accept_encoding(accept_encoding),
     };
     let compressed_stream = compress_stream(byte_stream, encoding);
-    let router_state_sensitive = matches!(content_type, ChunkedContentType::RscFlight)
-        && (context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty());
-    let vary = {
-        let mut parts: Vec<&str> = Vec::new();
-        if encoding.as_header_value().is_some() {
-            parts.push("Accept-Encoding");
+    let cookie_header = layout_cookie_header(context);
+    let vary = match content_type {
+        ChunkedContentType::RscFlight => {
+            let router_state_sensitive =
+                context.template_navigation_id.is_some() || !context.reuse_layout_paths.is_empty();
+            rsc_vary_header(cookie_header, router_state_sensitive)
         }
-        if router_state_sensitive {
-            parts.push("rari-router-state");
+        ChunkedContentType::Html => {
+            let mut parts: Vec<&str> = Vec::new();
+            if encoding.as_header_value().is_some() {
+                parts.push("Accept-Encoding");
+            }
+            if cookie_header.is_some() {
+                parts.push("Cookie");
+            }
+            let existing =
+                if parts.is_empty() { None } else { HeaderValue::from_str(&parts.join(", ")).ok() };
+            merge_vary_with_accept(existing.as_ref())
         }
-        let existing =
-            if parts.is_empty() { None } else { HeaderValue::from_str(&parts.join(", ")).ok() };
-        merge_vary_with_accept(existing.as_ref())
     };
 
     let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
@@ -674,14 +682,11 @@ pub async fn render_synchronous(
     mut route_match: AppRouteMatch,
     mut context: LayoutRenderContext,
     accept_encoding: Option<&str>,
+    request_context: Arc<RequestContext>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
         Arc::clone(&state.layout_html_cache),
-    );
-    let request_context = Arc::new(
-        RequestContext::new(route_match.route.path.clone())
-            .with_http_headers(context.headers.clone()),
     );
 
     let render_result = match layout_renderer
@@ -809,17 +814,19 @@ pub async fn render_streaming_with_layout(
     context: LayoutRenderContext,
     layout_renderer: &LayoutRenderer,
     accept_encoding: Option<&str>,
+    request_context: Arc<RequestContext>,
 ) -> Result<Response, StatusCode> {
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
 
-    let request_context = Arc::new(
-        RequestContext::new(route_match.route.path.clone())
-            .with_http_headers(context.headers.clone()),
-    );
-
     let render_result = match layout_renderer
-        .render_route_with_streaming(&route_match, &context, Some(request_context), false, None)
+        .render_route_with_streaming(
+            &route_match,
+            &context,
+            Some(Arc::clone(&request_context)),
+            false,
+            None,
+        )
         .await
     {
         Ok(result) => result,
@@ -845,7 +852,14 @@ pub async fn render_streaming_with_layout(
                 );
             }
 
-            return render_synchronous(state, route_match, context, accept_encoding).await;
+            return render_synchronous(
+                state,
+                route_match,
+                context,
+                accept_encoding,
+                request_context,
+            )
+            .await;
         }
     };
 

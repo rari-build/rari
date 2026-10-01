@@ -21,6 +21,7 @@
 
   const previousCookies = rari.cookies
   rari.cookies = () => {
+    markDynamic()
     if (typeof previousCookies === 'function') return previousCookies()
     throw new Error('[rari] cookies() is not available in this runtime context.')
   }

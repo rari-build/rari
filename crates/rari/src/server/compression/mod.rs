@@ -34,9 +34,11 @@ pub async fn compress_body(
 }
 
 pub async fn compress_all_encodings(body: Bytes) -> (Option<Bytes>, Option<Bytes>, Option<Bytes>) {
-    let (gz, gz_enc) = compress_body(body.clone(), CompressionEncoding::Gzip).await;
-    let (zs, zs_enc) = compress_body(body.clone(), CompressionEncoding::Zstd).await;
-    let (br, br_enc) = compress_body(body, CompressionEncoding::Brotli).await;
+    let ((gz, gz_enc), (zs, zs_enc), (br, br_enc)) = tokio::join!(
+        compress_body(body.clone(), CompressionEncoding::Gzip),
+        compress_body(body.clone(), CompressionEncoding::Zstd),
+        compress_body(body, CompressionEncoding::Brotli),
+    );
     (
         matches!(gz_enc, CompressionEncoding::Gzip).then_some(gz),
         matches!(zs_enc, CompressionEncoding::Zstd).then_some(zs),
