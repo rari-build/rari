@@ -12,13 +12,10 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 
-use crate::{
-    server::{
-        cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
-        compression::CompressionEncoding,
-        config::CacheLayerConfig,
-    },
-    utils::float,
+use crate::server::{
+    cache::handler::{CacheHandler, MemoryCacheHandler, MemoryConfig},
+    compression::CompressionEncoding,
+    config::CacheLayerConfig,
 };
 
 #[derive(Clone)]
@@ -348,21 +345,9 @@ impl Default for CacheConfig {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-#[non_exhaustive]
-pub struct CacheMetrics {
-    pub total_entries: usize,
-    pub cache_hits: u64,
-    pub cache_misses: u64,
-    pub evictions: u64,
-    pub hit_rate: f64,
-    pub memory_usage_bytes: usize,
-}
-
 pub struct ResponseCache {
     handler: Arc<dyn CacheHandler>,
     pub config: CacheConfig,
-    metrics: Arc<Mutex<CacheMetrics>>,
     entry_count: Arc<AtomicUsize>,
     payload_bytes: Arc<AtomicUsize>,
 }
@@ -384,7 +369,6 @@ impl ResponseCache {
         Self {
             handler,
             config,
-            metrics: Arc::new(Mutex::new(CacheMetrics::default())),
             entry_count: Arc::new(AtomicUsize::new(0)),
             payload_bytes: Arc::new(AtomicUsize::new(0)),
         }
@@ -487,12 +471,10 @@ impl ResponseCache {
         let bytes = match self.handler.get(&Self::ns(key)).await {
             Ok(Some(b)) => b,
             Ok(None) => {
-                self.record_miss();
                 return None;
             }
             Err(e) => {
                 tracing::debug!(error = %e, key = %key, "cache get failed");
-                self.record_miss();
                 return None;
             }
         };
@@ -503,7 +485,6 @@ impl ResponseCache {
                 tracing::warn!(error = %e, key = %key, "cache deserialize failed; evicting");
                 let _ = self.handler.invalidate(&Self::ns(key)).await;
                 self.resync_entry_count();
-                self.record_miss();
                 return None;
             }
         };
@@ -511,11 +492,9 @@ impl ResponseCache {
         if !response.is_valid() {
             let _ = self.handler.invalidate(&Self::ns(key)).await;
             self.resync_entry_count();
-            self.record_miss();
             return None;
         }
 
-        self.record_hit();
         Some(response)
     }
 
@@ -622,13 +601,15 @@ impl ResponseCache {
             .filter(|k| k.starts_with(Self::KEY_PREFIX))
             .collect();
         for key in keys.into_iter().take(entries_to_remove) {
-            if self.handler.invalidate(&key).await.is_ok() {
-                let mut metrics = self.metrics.lock();
-                metrics.evictions += 1;
-            }
+            let _ = self.handler.invalidate(&key).await;
         }
 
         self.resync_entry_count();
+    }
+
+    #[cfg(test)]
+    pub fn test_entry_count(&self) -> usize {
+        self.entry_count.load(Ordering::Relaxed)
     }
 
     #[cfg(test)]
@@ -636,11 +617,6 @@ impl ResponseCache {
         let current_size = self.entry_count.load(Ordering::Relaxed);
         let threshold = self.config.max_entries * 9 / 10;
         current_size >= threshold
-    }
-
-    pub fn get_metrics(&self) -> CacheMetrics {
-        let metrics = self.metrics.lock();
-        metrics.clone()
     }
 
     pub fn get_all_keys(&self) -> Vec<String> {
@@ -652,39 +628,11 @@ impl ResponseCache {
             .collect()
     }
 
-    fn record_hit(&self) {
-        let mut metrics = self.metrics.lock();
-        metrics.cache_hits += 1;
-        Self::update_hit_rate(&mut metrics);
-    }
-
-    fn record_miss(&self) {
-        let mut metrics = self.metrics.lock();
-        metrics.cache_misses += 1;
-        Self::update_hit_rate(&mut metrics);
-    }
-
-    fn update_hit_rate(metrics: &mut CacheMetrics) {
-        let total = metrics.cache_hits + metrics.cache_misses;
-        if total > 0 {
-            metrics.hit_rate = float::u64_ratio(metrics.cache_hits, total);
-        }
-    }
-
-    fn update_entry_count_metrics(&self) {
-        let n = self.entry_count.load(Ordering::Relaxed);
-        let usage = self.payload_bytes.load(Ordering::Relaxed);
-        let mut metrics = self.metrics.lock();
-        metrics.total_entries = n;
-        metrics.memory_usage_bytes = usage;
-    }
-
     fn resync_entry_count(&self) {
         let (live, exact_bytes) = self.handler.prefix_stats(Self::KEY_PREFIX);
         let usage = exact_bytes.unwrap_or(live.saturating_mul(10_000));
         self.entry_count.store(live, Ordering::Relaxed);
         self.payload_bytes.store(usage, Ordering::Relaxed);
-        self.update_entry_count_metrics();
     }
 }
 
@@ -831,10 +779,7 @@ mod tests {
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().body, Bytes::from("test body"));
 
-        let metrics = cache.get_metrics();
-        assert_eq!(metrics.total_entries, 1);
-        assert_eq!(metrics.cache_hits, 1);
-        assert_eq!(metrics.cache_misses, 1);
+        assert_eq!(cache.test_entry_count(), 1);
     }
 
     #[tokio::test]
@@ -931,11 +876,11 @@ mod tests {
         cache.set("key1".to_string(), create_test_response("body1", 60)).await;
         cache.set("key2".to_string(), create_test_response("body2", 60)).await;
 
-        assert_eq!(cache.get_metrics().total_entries, 2);
+        assert_eq!(cache.test_entry_count(), 2);
 
         cache.clear().await;
 
-        assert_eq!(cache.get_metrics().total_entries, 0);
+        assert_eq!(cache.test_entry_count(), 0);
         assert!(cache.get("key1").await.is_none());
         assert!(cache.get("key2").await.is_none());
     }
@@ -950,13 +895,11 @@ mod tests {
             cache.set(format!("key{i}"), create_test_response(&format!("body{i}"), 60)).await;
         }
 
-        assert_eq!(cache.get_metrics().total_entries, 10);
+        assert_eq!(cache.test_entry_count(), 10);
 
         cache.clear_percentage(0.5).await;
 
-        let metrics = cache.get_metrics();
-        assert_eq!(metrics.total_entries, 5);
-        assert_eq!(metrics.evictions, 5);
+        assert_eq!(cache.test_entry_count(), 5);
     }
 
     #[tokio::test]
@@ -1139,7 +1082,7 @@ mod tests {
         cache.set("c".to_string(), create_test_response("body-c", 60)).await;
 
         assert_eq!(cache.get_all_keys().len(), 2, "MemoryCacheHandler must cap at max_entries");
-        assert_eq!(cache.get_metrics().total_entries, 2);
+        assert_eq!(cache.test_entry_count(), 2);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

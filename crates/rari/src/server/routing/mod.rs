@@ -4,6 +4,7 @@ pub mod api_routes;
 pub mod app;
 pub mod app_icons;
 pub mod app_router;
+pub mod match_path;
 pub mod routes_manifest;
 pub mod types;
 
@@ -11,5 +12,6 @@ pub use api_routes::{ApiRouteEntry, ApiRouteHandler, ApiRouteManifest, ApiRouteM
 pub use app_router::{
     AppRouteEntry, AppRouteMatch, AppRouter, ErrorEntry, LayoutEntry, LoadingEntry, NotFoundEntry,
 };
+pub use match_path::{match_route_pattern, match_route_pattern_as_strings};
 pub use routes_manifest::{AppIconEntry, RoutesManifest};
 pub use types::{RouteSegment, RouteSegmentType};

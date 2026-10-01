@@ -21,8 +21,10 @@ use super::{
 use crate::{
     runtime::JsExecutionRuntime,
     server::{
-        cache::handler::CacheError, core::utils::component::extract_component_id,
-        loader::SERVER_MANIFEST_PATH, routing::types::ParamValue,
+        cache::handler::CacheError,
+        host::utils::component::extract_component_id,
+        loader::SERVER_MANIFEST_PATH,
+        routing::{match_path::match_route_pattern, types::ParamValue},
     },
     utils::{float, path::path_to_file_url},
 };
@@ -231,64 +233,9 @@ impl OgImageGenerator {
             return Some((entry, FxHashMap::default()));
         }
 
-        let path_segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
-
         for (pattern, entry) in manifest {
-            let pattern_segments: Vec<&str> =
-                pattern.split('/').filter(|s| !s.is_empty()).collect();
-
-            let has_catch_all =
-                pattern_segments.iter().any(|seg| seg.starts_with("[...") && seg.ends_with(']'));
-
-            if has_catch_all {
-                let mut params = FxHashMap::default();
-                let mut matches = true;
-                let mut path_idx = 0;
-
-                #[expect(clippy::explicit_counter_loop)]
-                for pattern_seg in &pattern_segments {
-                    if pattern_seg.starts_with("[...") && pattern_seg.ends_with(']') {
-                        let param_name = &pattern_seg[4..pattern_seg.len() - 1];
-                        let remaining: Vec<String> =
-                            path_segments[path_idx..].iter().map(ToString::to_string).collect();
-                        params.insert(param_name.to_string(), ParamValue::Multiple(remaining));
-                        break;
-                    } else if path_idx >= path_segments.len()
-                        || pattern_seg != &path_segments[path_idx]
-                    {
-                        matches = false;
-                        break;
-                    }
-                    path_idx += 1;
-                }
-
-                if matches {
-                    return Some((entry, params));
-                }
-            } else {
-                if pattern_segments.len() != path_segments.len() {
-                    continue;
-                }
-
-                let mut params = FxHashMap::default();
-                let mut matches = true;
-
-                for (pattern_seg, path_seg) in pattern_segments.iter().zip(path_segments.iter()) {
-                    if pattern_seg.starts_with('[') && pattern_seg.ends_with(']') {
-                        let param_name = &pattern_seg[1..pattern_seg.len() - 1];
-                        params.insert(
-                            param_name.to_string(),
-                            ParamValue::Single(path_seg.to_string()),
-                        );
-                    } else if pattern_seg != path_seg {
-                        matches = false;
-                        break;
-                    }
-                }
-
-                if matches {
-                    return Some((entry, params));
-                }
+            if let Some(params) = match_route_pattern(pattern, route_path) {
+                return Some((entry, params));
             }
         }
 
@@ -431,7 +378,7 @@ mod tests {
     use std::env;
 
     use super::*;
-    use crate::server::core::utils::component::extract_component_id;
+    use crate::server::host::utils::component::extract_component_id;
 
     #[test]
     fn test_og_component_id_matches_hashed_manifest_keys() {

@@ -7,25 +7,15 @@ pub enum RenderMode {
     RscNavigation,
 }
 
-#[non_exhaustive]
-pub struct RequestTypeDetector;
-
-impl RequestTypeDetector {
-    pub fn detect_render_mode(headers: &HeaderMap) -> RenderMode {
-        if let Some(accept) = headers.get("accept")
-            && let Ok(accept_str) = accept.to_str()
-            && accept_str.contains("text/x-component")
-        {
-            return RenderMode::RscNavigation;
-        }
-
-        RenderMode::Ssr
+pub fn detect_render_mode(headers: &HeaderMap) -> RenderMode {
+    if let Some(accept) = headers.get("accept")
+        && let Ok(accept_str) = accept.to_str()
+        && accept_str.contains("text/x-component")
+    {
+        return RenderMode::RscNavigation;
     }
 
-    #[cfg(test)]
-    pub fn needs_rsc_flight_protocol(mode: RenderMode) -> bool {
-        matches!(mode, RenderMode::RscNavigation)
-    }
+    RenderMode::Ssr
 }
 
 #[cfg(test)]
@@ -39,8 +29,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("accept", HeaderValue::from_static("text/html"));
 
-        let mode = RequestTypeDetector::detect_render_mode(&headers);
-        assert_eq!(mode, RenderMode::Ssr);
+        assert_eq!(detect_render_mode(&headers), RenderMode::Ssr);
     }
 
     #[test]
@@ -48,8 +37,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("accept", HeaderValue::from_static("text/x-component"));
 
-        let mode = RequestTypeDetector::detect_render_mode(&headers);
-        assert_eq!(mode, RenderMode::RscNavigation);
+        assert_eq!(detect_render_mode(&headers), RenderMode::RscNavigation);
     }
 
     #[test]
@@ -57,16 +45,12 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("accept", HeaderValue::from_static("text/x-component, application/json"));
 
-        let mode = RequestTypeDetector::detect_render_mode(&headers);
-        assert_eq!(mode, RenderMode::RscNavigation);
+        assert_eq!(detect_render_mode(&headers), RenderMode::RscNavigation);
     }
 
     #[test]
     fn test_default_to_ssr_when_no_accept_header() {
-        let headers = HeaderMap::new();
-
-        let mode = RequestTypeDetector::detect_render_mode(&headers);
-        assert_eq!(mode, RenderMode::Ssr);
+        assert_eq!(detect_render_mode(&HeaderMap::new()), RenderMode::Ssr);
     }
 
     #[test]
@@ -74,18 +58,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("accept", HeaderValue::from_static("application/json"));
 
-        let mode = RequestTypeDetector::detect_render_mode(&headers);
-        assert_eq!(mode, RenderMode::Ssr);
-    }
-
-    #[test]
-    fn test_needs_rsc_flight_protocol_for_ssr() {
-        assert!(!RequestTypeDetector::needs_rsc_flight_protocol(RenderMode::Ssr));
-    }
-
-    #[test]
-    fn test_needs_rsc_flight_protocol_for_rsc_navigation() {
-        assert!(RequestTypeDetector::needs_rsc_flight_protocol(RenderMode::RscNavigation));
+        assert_eq!(detect_render_mode(&headers), RenderMode::Ssr);
     }
 
     #[test]

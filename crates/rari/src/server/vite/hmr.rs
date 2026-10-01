@@ -19,7 +19,7 @@ use crate::{
         ServerState,
         cache::response::ResponseCache,
         config::Config,
-        core::utils::{
+        host::utils::{
             component::extract_component_id,
             path_validation::{
                 build_vite_dev_module_url, normalize_component_path, validate_component_path,

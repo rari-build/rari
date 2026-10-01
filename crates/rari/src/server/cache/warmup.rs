@@ -20,6 +20,7 @@ use crate::{
     server::{
         ServerState,
         cache::response,
+        compression::compress_all_encodings,
         middleware::request_context::RequestContext,
         routing::{
             AppRouteMatch, AppRouter,
@@ -55,17 +56,6 @@ static WARMUP_RENDER_LOCK: OnceCell<Arc<Mutex<()>>> = OnceCell::const_new();
 
 async fn warmup_render_lock() -> Arc<Mutex<()>> {
     Arc::clone(WARMUP_RENDER_LOCK.get_or_init(|| async { Arc::new(Mutex::new(())) }).await)
-}
-
-async fn merge_warmup_cache_tags(state: &ServerState, base_tags: Vec<String>) -> Vec<String> {
-    let page_cache_tags = {
-        let renderer = state.renderer.lock().await;
-        let runtime = Arc::clone(&renderer.runtime);
-        drop(renderer);
-        runtime.collect_page_cache_tags().await.unwrap_or_default()
-    };
-
-    response::RouteCachePolicy::merge_cache_tags(base_tags, &page_cache_tags)
 }
 
 pub async fn warm_cache(state: &ServerState) {
@@ -186,29 +176,11 @@ async fn warm_route(
     let etag = response::ResponseCache::generate_etag(html.as_bytes());
 
     if for_response_cache {
-        let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;
+        let merged_tags = super::merge_page_cache_tags(state, cache_policy.tags.clone()).await;
         let body_bytes = bytes::Bytes::from(html);
 
-        let compressed_gzip = {
-            use crate::server::compression::{CompressionEncoding, compress_body};
-            let (compressed, enc) =
-                compress_body(body_bytes.clone(), CompressionEncoding::Gzip).await;
-            if matches!(enc, CompressionEncoding::Gzip) { Some(compressed) } else { None }
-        };
-
-        let compressed_zstd = {
-            use crate::server::compression::{CompressionEncoding, compress_body};
-            let (compressed, enc) =
-                compress_body(body_bytes.clone(), CompressionEncoding::Zstd).await;
-            if matches!(enc, CompressionEncoding::Zstd) { Some(compressed) } else { None }
-        };
-
-        let compressed_br = {
-            use crate::server::compression::{CompressionEncoding, compress_body};
-            let (compressed, enc) =
-                compress_body(body_bytes.clone(), CompressionEncoding::Brotli).await;
-            if matches!(enc, CompressionEncoding::Brotli) { Some(compressed) } else { None }
-        };
+        let (compressed_gzip, compressed_zstd, compressed_br) =
+            compress_all_encodings(body_bytes.clone()).await;
 
         response::insert_static_fast_cache(
             &state.static_fast_cache,
@@ -252,7 +224,7 @@ async fn warm_route(
             response::ResponseCache::generate_cache_key_with_mode(path, None, Some("rsc"), None);
 
         if for_response_cache {
-            let merged_tags = merge_warmup_cache_tags(state, cache_policy.tags.clone()).await;
+            let merged_tags = super::merge_page_cache_tags(state, cache_policy.tags.clone()).await;
             let mut cache_headers = HeaderMap::new();
 
             if let Some(ref metadata) = context.metadata

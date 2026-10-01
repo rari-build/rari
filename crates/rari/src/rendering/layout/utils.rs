@@ -13,7 +13,7 @@ use tokio::sync::mpsc::Receiver;
 
 use super::LayoutRenderContext;
 use crate::server::{
-    core::utils::component::{readable_component_id, short_hash},
+    host::utils::component::{readable_component_id, short_hash},
     routing::{app_router::AppRouteMatch, types::ParamValue},
 };
 

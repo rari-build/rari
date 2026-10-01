@@ -95,32 +95,6 @@ async fn inject_content_into_template(
     ))
 }
 
-pub fn inject_vite_client(html: &str, vite_host: &str, vite_port: u16) -> String {
-    if html.contains("/@vite/client") || html.contains("@vite/client") {
-        return html.to_string();
-    }
-
-    let client_head = RscHtmlRenderer::generate_dev_client_head(vite_host, vite_port);
-
-    if let Some(head_end) = html.find("</head>") {
-        let mut result = String::with_capacity(html.len() + client_head.len());
-        result.push_str(&html[..head_end]);
-        result.push_str(&client_head);
-        result.push_str(&html[head_end..]);
-        return result;
-    }
-
-    if let Some(body_end) = html.find("</body>") {
-        let mut result = String::with_capacity(html.len() + client_head.len());
-        result.push_str(&html[..body_end]);
-        result.push_str(&client_head);
-        result.push_str(&html[body_end..]);
-        return result;
-    }
-
-    format!("{client_head}{html}")
-}
-
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {

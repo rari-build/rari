@@ -18,7 +18,6 @@ use futures_util::SinkExt;
 use http::uri::PathAndQuery;
 use rari_error::RariError;
 use reqwest::Client;
-use tokio::time;
 use tokio_tungstenite::tungstenite::Message;
 use tungstenite::{client::IntoClientRequest, http::Request as HttpRequest};
 
@@ -40,7 +39,7 @@ fn vite_error(err: &RariError) -> Response {
     error_response::json_response(err, is_dev)
 }
 
-pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
+pub async fn vite_proxy(req: Request) -> impl IntoResponse {
     let Some(config) = Config::get() else {
         tracing::error!("Failed to get global configuration for Vite proxy");
         return vite_error(&RariError::configuration("Configuration not available"));
@@ -52,70 +51,9 @@ pub async fn vite_src_proxy(req: Request) -> impl IntoResponse {
     let path_and_query =
         req.uri().path_and_query().map(PathAndQuery::as_str).unwrap_or(req.uri().path());
 
-    let path_without_prefix = path_and_query.strip_prefix("/src").unwrap_or(path_and_query);
-    let target_url = format!("{vite_base_url}/src{path_without_prefix}");
-
-    let method = req.method().clone();
-    let headers = req.headers().clone();
-
-    let body_bytes = match body::to_bytes(req.into_body(), usize::MAX).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            tracing::error!("Failed to read request body: {}", e);
-            return vite_error(&RariError::bad_request("Failed to read request body"));
-        }
-    };
-
-    match client.request(method, &target_url).headers(headers).body(body_bytes).send().await {
-        Ok(response) => {
-            let status = response.status();
-            let mut response_builder = Response::builder().status(status);
-
-            if let Some(headers) = response_builder.headers_mut() {
-                for (name, value) in response.headers() {
-                    if let (Ok(name), Ok(value)) = (
-                        HeaderName::from_bytes(name.as_ref()),
-                        HeaderValue::from_bytes(value.as_ref()),
-                    ) {
-                        headers.insert(name, value);
-                    }
-                }
-            }
-
-            match response_builder.body(Body::from_stream(response.bytes_stream())) {
-                Ok(response) => response,
-                Err(e) => {
-                    tracing::error!("Failed to build proxy response: {}", e);
-                    vite_error(&RariError::internal("Failed to build response"))
-                }
-            }
-        }
-        Err(e) => {
-            if e.is_connect() {
-                vite_error(&RariError::network(format!(
-                    "Vite development server is not running on {vite_base_url}. Please start your Vite dev server."
-                )))
-            } else {
-                vite_error(&RariError::network(format!("Proxy error: {e}")))
-            }
-        }
-    }
-}
-
-pub async fn vite_reverse_proxy(req: Request) -> impl IntoResponse {
-    let Some(config) = Config::get() else {
-        tracing::error!("Failed to get global configuration for Vite proxy");
-        return vite_error(&RariError::configuration("Configuration not available"));
-    };
-
-    let client = create_client();
-    let vite_base_url = format!("http://{}", config.vite_address());
-
-    let path_and_query =
-        req.uri().path_and_query().map(PathAndQuery::as_str).unwrap_or(req.uri().path());
-
-    let path_without_prefix = path_and_query.strip_prefix("/vite-server").unwrap_or(path_and_query);
-    let target_url = format!("{vite_base_url}/vite-server{path_without_prefix}");
+    let prefix = if path_and_query.starts_with("/src") { "/src" } else { "/vite-server" };
+    let path_without_prefix = path_and_query.strip_prefix(prefix).unwrap_or(path_and_query);
+    let target_url = format!("{vite_base_url}{prefix}{path_without_prefix}");
 
     let method = req.method().clone();
     let headers = req.headers().clone();
@@ -284,53 +222,6 @@ fn convert_tungstenite_to_axum_message(msg: Message) -> Option<WsMessage> {
         Message::Close(_) => Some(WsMessage::Close(None)),
         Message::Frame(_) => None,
     }
-}
-
-#[expect(clippy::missing_errors_doc)]
-pub async fn check_vite_server_health() -> Result<(), RariError> {
-    let config = Config::get().ok_or_else(|| {
-        RariError::configuration("Global configuration not available".to_string())
-    })?;
-
-    let client = Client::new();
-    let health_url = format!("http://{}/vite-server/", config.vite_address());
-
-    let mut last_error: Option<String> = None;
-    let mut last_status: Option<reqwest::StatusCode> = None;
-
-    for attempt in 1..=60 {
-        match client.get(&health_url).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    return Ok(());
-                }
-                last_status = Some(response.status());
-                last_error = None;
-            }
-            Err(e) => {
-                last_error = Some(e.to_string());
-                last_status = None;
-            }
-        }
-
-        if attempt < 60 {
-            time::sleep(time::Duration::from_millis(100)).await;
-        }
-    }
-
-    let error_detail = if let Some(status) = last_status {
-        format!("health check failed with status {status}")
-    } else if let Some(error) = last_error {
-        format!("connection error: {error}")
-    } else {
-        "health check failed".to_string()
-    };
-
-    Err(RariError::network(format!(
-        "Failed to connect to Vite server at {} after 60 attempts ({})",
-        config.vite_address(),
-        error_detail
-    )))
 }
 
 #[cfg(test)]

@@ -20,7 +20,6 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use cow_utils::CowUtils;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
-use serde::Serialize;
 use serde_json::Value;
 
 use crate::{
@@ -36,20 +35,11 @@ use crate::{
         ServerState,
         cache::revalidate::{invalidate_route_caches, invalidate_route_caches_on},
         config::RedirectConfig,
-        core::utils::http::{extract_headers, extract_search_params, is_origin_allowed},
         error_response,
+        host::utils::http::{extract_headers, extract_search_params, is_origin_allowed},
         middleware::request_context::{PendingCookie, PendingCookieKey, RequestContext},
     },
 };
-
-#[derive(Debug, Serialize)]
-#[non_exhaustive]
-pub struct ServerActionResponse {
-    pub success: bool,
-    pub result: Option<Value>,
-    pub error: Option<String>,
-    pub redirect: Option<String>,
-}
 
 fn effective_port(url: &url::Url) -> u16 {
     url.port().unwrap_or_else(|| match url.scheme() {
@@ -373,29 +363,6 @@ pub fn stage_action_form_state_cookie(
             domain: None,
             expires: None,
             max_age: Some(60),
-            http_only: true,
-            secure,
-            same_site: Some("Lax".to_string()),
-            priority: None,
-            partitioned: false,
-        },
-    );
-}
-
-pub fn clear_action_form_state_cookie(
-    pending_cookies: &dashmap::DashMap<PendingCookieKey, PendingCookie>,
-) {
-    let secure = action_form_state_cookie_secure();
-
-    pending_cookies.insert(
-        PendingCookieKey::new(ACTION_FORM_STATE_COOKIE, Some("/"), None),
-        PendingCookie {
-            name: ACTION_FORM_STATE_COOKIE.to_string(),
-            value: String::new(),
-            path: Some("/".to_string()),
-            domain: None,
-            expires: None,
-            max_age: Some(0),
             http_only: true,
             secure,
             same_site: Some("Lax".to_string()),

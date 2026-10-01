@@ -15,9 +15,7 @@ use axum::{
 pub use cache::ImageCache;
 pub use config::{ImageConfig, ImageVariant, LocalPattern, RemotePattern};
 pub use optimizer::{ImageOptimizer, PreloadImage};
-pub use prewarm::{
-    extract_optimize_params_from_html, schedule_image_prewarm, schedule_prewarm_from_html,
-};
+pub use prewarm::{extract_optimize_params_from_html, schedule_image_prewarm};
 use rari_error::RariError;
 pub use scanner::{ImageUsageManifest, ScanError, scan_for_image_usage};
 pub use types::{

@@ -22,7 +22,7 @@ use crate::server::{
         MemoryConfig,
         handler::{CacheHandler, MemoryCacheHandler},
     },
-    core::utils::path_validation::{canonicalize_or_create_dir, resolve_under_base},
+    host::utils::path_validation::{canonicalize_or_create_dir, resolve_under_base},
 };
 
 #[derive(Debug, Clone, Archive, RkyvDeserialize, RkyvSerialize)]

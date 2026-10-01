@@ -1,9 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { applySoftNavFlightPatch } from '@rari/runtime/flight/apply-flight-patch'
-import {
-  renderFlightDocument,
-  renderFlightLayoutRouter,
-} from '@rari/runtime/flight/layout-router'
+import { renderFlightDocument, renderFlightLayoutRouter } from '@rari/runtime/flight/layout-router'
 import {
   flightRouteCache,
   isLayoutSlot,

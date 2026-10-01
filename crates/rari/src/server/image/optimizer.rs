@@ -28,7 +28,7 @@ use super::{
     },
 };
 use crate::{
-    server::core::utils::path_validation::validate_safe_path,
+    server::host::utils::path_validation::validate_safe_path,
     utils::{cast, float},
 };
 

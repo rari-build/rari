@@ -14,7 +14,7 @@ pub mod transpile;
 use factory::{JsRuntimePool, PooledRuntime};
 
 use crate::server::{
-    middleware::request_context::RequestContext, rendering::metadata, routing::types::ParamValue,
+    document::metadata, middleware::request_context::RequestContext, routing::types::ParamValue,
 };
 
 pub const DEFAULT_JS_POOL_SIZE: usize = 1;
