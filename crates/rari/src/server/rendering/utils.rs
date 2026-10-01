@@ -2,7 +2,10 @@ use axum::http::StatusCode;
 use cow_utils::CowUtils;
 use tokio::fs;
 
-use crate::{rendering::r#static::RscHtmlRenderer, server::config::Config};
+use crate::{
+    rendering::html_shell::{RscHtmlRenderer, inject_head_tags},
+    server::config::Config,
+};
 
 async fn load_client_head(config: &Config) -> Option<String> {
     if config.is_development() {
@@ -61,7 +64,7 @@ async fn inject_assets_into_complete_document(
         return Ok(format!("<!DOCTYPE html>\n{html}"));
     };
 
-    let mut final_html = RscHtmlRenderer::inject_head_tags(html, &client_head);
+    let mut final_html = inject_head_tags(html, &client_head);
 
     let trimmed_lower = final_html.trim_start().cow_to_lowercase();
     if !trimmed_lower.starts_with("<!doctype") {

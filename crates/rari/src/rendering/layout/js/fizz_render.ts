@@ -10,24 +10,8 @@
 
   const { renderToReadableStream } = ReactDOMServer
 
-  async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
-    const reader = stream.getReader()
-    const decoder = new TextDecoder()
-    let html = ''
-
-    for (;;) {
-      const { done, value } = await reader.read()
-
-      if (done) break
-
-      html += decoder.decode(value, { stream: true })
-    }
-    html += decoder.decode()
-    return html
-  }
-
   const rari = (g['~rari'] ??= {})
-  rari.readStream = readStream
+  rari.readStream = readStreamToText
 
   async function renderToHtmlFizz(element: unknown): Promise<string> {
     if (element === null || element === undefined) return ''
@@ -42,7 +26,7 @@
       })) as ReadableStream<Uint8Array> & { allReady?: Promise<void> }
 
       await stream.allReady
-      return await readStream(stream)
+      return await readStreamToText(stream)
     } catch (error) {
       console.error('[rari] Fizz renderToReadableStream failed:', error)
       return ''

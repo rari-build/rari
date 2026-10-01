@@ -21,13 +21,12 @@ use tokio::{fs, sync::OnceCell, time};
 use super::{
     constants::{
         BATCH_ERROR_COLLECTION, CACHE_CLEANUP_INTERVAL, EXTENSION_CHECKS, FIZZ_RENDER_SCRIPT,
-        LOAD_FULL_REACT_VENDORS_SCRIPT, LOAD_RSC_VENDORS_SCRIPT,
-        MEMORY_PRESSURE_RENDER_THRESHOLD_DEN, MEMORY_PRESSURE_RENDER_THRESHOLD_NUM,
-        ROUTE_COMPOSER_SCRIPT, RSC_RENDERER_SCRIPT, SERVER_FUNCTION_RESOLVER,
-        STREAMING_FIZZ_SCRIPT, STREAMING_PIPELINE_READY_CHECK,
-        module_registration_script_from_import, resolve_server_functions_for_component,
+        LOAD_FULL_REACT_VENDORS_SCRIPT, LOAD_RSC_VENDORS_SCRIPT, ROUTE_COMPOSER_SCRIPT,
+        RSC_RENDERER_SCRIPT, SERVER_FUNCTION_RESOLVER, STREAMING_FIZZ_SCRIPT,
+        STREAMING_PIPELINE_READY_CHECK, module_registration_script_from_import,
+        resolve_server_functions_for_component,
     },
-    types::{ResourceLimits, ResourceMetrics, ResourceTracker},
+    types::{ResourceLimits, ResourceTracker},
     utils::transform_imports_for_hmr,
 };
 use crate::{
@@ -35,8 +34,13 @@ use crate::{
     rsc::{self, ComponentRegistry},
     runtime::{JsExecutionRuntime, factory::JsRuntimeInterface},
     server::middleware::request_context::RequestContext,
-    utils::cast,
 };
+
+#[derive(Clone, Copy)]
+enum PipelineScripts {
+    Rsc,
+    Streaming,
+}
 
 pub struct RscRenderer {
     pub(crate) runtime: Arc<JsExecutionRuntime>,
@@ -72,10 +76,6 @@ impl RscRenderer {
         }
     }
 
-    pub fn get_resource_metrics(&self) -> ResourceMetrics {
-        self.resource_tracker.get_metrics()
-    }
-
     pub async fn shutdown(&self) -> Result<(), RariError> {
         let shutdown_timeout = Duration::from_millis(self.resource_limits.max_render_time_ms * 2);
         let start_time = Instant::now();
@@ -90,22 +90,6 @@ impl RscRenderer {
         self.clear_script_cache();
 
         Ok(())
-    }
-
-    pub fn is_under_memory_pressure(&self) -> bool {
-        let metrics = self.get_resource_metrics();
-        let current_renders = metrics.active_renders;
-        let max_renders = self.resource_limits.max_concurrent_renders;
-
-        current_renders * MEMORY_PRESSURE_RENDER_THRESHOLD_DEN
-            > max_renders * MEMORY_PRESSURE_RENDER_THRESHOLD_NUM
-            || metrics.memory_pressure_events > 0
-    }
-
-    pub fn force_cleanup(&self) -> impl Future<Output = Result<(), RariError>> {
-        self.clear_script_cache();
-        self.resource_tracker.memory_pressure_events.store(0, Ordering::Relaxed);
-        future::ready(Ok(()))
     }
 
     #[must_use]
@@ -270,19 +254,26 @@ globalThis['~errors'].batch.push({{
         Ok(())
     }
 
-    async fn load_fizz_and_rsc_scripts(&self) -> Result<(), RariError> {
-        self.load_js_script("fizz_render.ts", FIZZ_RENDER_SCRIPT).await?;
-        self.load_js_script("rsc_renderer.ts", RSC_RENDERER_SCRIPT).await?;
-        self.load_js_script("route_composer.ts", ROUTE_COMPOSER_SCRIPT).await
+    fn pipeline_scripts(mode: PipelineScripts) -> &'static [(&'static str, &'static str)] {
+        match mode {
+            PipelineScripts::Rsc => &[
+                ("rsc_renderer.ts", RSC_RENDERER_SCRIPT),
+                ("route_composer.ts", ROUTE_COMPOSER_SCRIPT),
+            ],
+            PipelineScripts::Streaming => &[
+                ("fizz_render.ts", FIZZ_RENDER_SCRIPT),
+                ("rsc_renderer.ts", RSC_RENDERER_SCRIPT),
+                ("route_composer.ts", ROUTE_COMPOSER_SCRIPT),
+                ("streaming_fizz.ts", STREAMING_FIZZ_SCRIPT),
+            ],
+        }
     }
 
-    async fn load_streaming_fizz_script(&self) -> Result<(), RariError> {
-        self.load_js_script("streaming_fizz.ts", STREAMING_FIZZ_SCRIPT).await
-    }
-
-    async fn load_all_layout_scripts(&self) -> Result<(), RariError> {
-        self.load_fizz_and_rsc_scripts().await?;
-        self.load_streaming_fizz_script().await
+    async fn load_pipeline_scripts(&self, mode: PipelineScripts) -> Result<(), RariError> {
+        for (name, script) in Self::pipeline_scripts(mode) {
+            self.load_js_script(name, script).await?;
+        }
+        Ok(())
     }
 
     async fn verify_streaming_pipeline_ready(&self) -> Result<(), RariError> {
@@ -322,7 +313,7 @@ globalThis['~errors'].batch.push({{
 
         match self.try_load_full_react_vendors().await {
             Ok(true) => {
-                self.load_all_layout_scripts().await?;
+                self.load_pipeline_scripts(PipelineScripts::Streaming).await?;
                 let _ = self.streaming_pipeline.set(());
                 let _ = self.rsc_pipeline.set(());
             }
@@ -356,8 +347,7 @@ globalThis['~errors'].batch.push({{
                 RariError::internal(format!("Failed to load React Server renderer: {e}"))
             })?;
 
-        self.load_js_script("load_rsc_renderer.ts", RSC_RENDERER_SCRIPT).await?;
-        self.load_js_script("route_composer.ts", ROUTE_COMPOSER_SCRIPT).await?;
+        self.load_pipeline_scripts(PipelineScripts::Rsc).await?;
 
         let ready = self
             .runtime
@@ -379,10 +369,7 @@ globalThis['~errors'].batch.push({{
 
     async fn ensure_streaming_pipeline_uncached(&self) -> Result<(), RariError> {
         self.load_full_react_vendors().await?;
-        self.load_js_script("fizz_render.ts", FIZZ_RENDER_SCRIPT).await?;
-        self.load_js_script("rsc_renderer.ts", RSC_RENDERER_SCRIPT).await?;
-        self.load_js_script("route_composer.ts", ROUTE_COMPOSER_SCRIPT).await?;
-        self.load_js_script("streaming_fizz.ts", STREAMING_FIZZ_SCRIPT).await?;
+        self.load_pipeline_scripts(PipelineScripts::Streaming).await?;
         self.verify_streaming_pipeline_ready().await
     }
 
@@ -410,29 +397,12 @@ globalThis['~errors'].batch.push({{
                 .await?;
         }
 
-        runtime
-            .execute_script("resync_rsc_renderer.ts".to_string(), RSC_RENDERER_SCRIPT.to_string())
-            .await
-            .map_err(|e| RariError::internal(format!("resync: RSC renderer failed: {e}")))?;
-
-        runtime
-            .execute_script(
-                "resync_route_composer.ts".to_string(),
-                ROUTE_COMPOSER_SCRIPT.to_string(),
-            )
-            .await
-            .map_err(|e| RariError::internal(format!("resync: route composer failed: {e}")))?;
-        runtime
-            .execute_script("resync_fizz_render.ts".to_string(), FIZZ_RENDER_SCRIPT.to_string())
-            .await
-            .map_err(|e| RariError::internal(format!("resync: fizz render failed: {e}")))?;
-        runtime
-            .execute_script(
-                "resync_streaming_fizz.ts".to_string(),
-                STREAMING_FIZZ_SCRIPT.to_string(),
-            )
-            .await
-            .map_err(|e| RariError::internal(format!("resync: streaming fizz failed: {e}")))?;
+        for (name, script) in Self::pipeline_scripts(PipelineScripts::Streaming) {
+            runtime
+                .execute_script(format!("resync_{name}"), script.to_string())
+                .await
+                .map_err(|e| RariError::internal(format!("resync: {name} failed: {e}")))?;
+        }
 
         let components: Vec<(String, String, Vec<String>)> = {
             let registry = self.component_registry.lock();
@@ -864,10 +834,6 @@ globalThis['~errors'].batch.push({{
         component_id: &str,
         props: Option<&str>,
     ) -> Result<String, RariError> {
-        let render_start = Instant::now();
-
-        self.resource_tracker.total_renders.fetch_add(1, Ordering::Relaxed);
-
         if !self.initialized {
             return Err(RariError::internal("RSC renderer not initialized"));
         }
@@ -968,12 +934,6 @@ globalThis['~errors'].batch.push({{
             Ok(value) => {
                 let html =
                     value.get("html").and_then(|h| h.as_str()).unwrap_or_default().to_string();
-
-                let render_duration = render_start.elapsed();
-
-                self.resource_tracker
-                    .total_render_time_ms
-                    .fetch_add(cast::duration_millis_u64(render_duration), Ordering::Relaxed);
 
                 if html == "<div></div>" || html.trim() == "" || html == "<div/>" {
                     return Ok(format!(

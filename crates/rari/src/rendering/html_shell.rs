@@ -1,5 +1,4 @@
 #![expect(clippy::missing_errors_doc)]
-
 use std::{env, fmt::Write, path::PathBuf, sync::Arc};
 
 use cow_utils::CowUtils;
@@ -150,6 +149,103 @@ pub struct RscHtmlRenderer {
     public_dir: PathBuf,
 }
 
+pub(crate) fn inject_head_tags(template: &str, tags: &str) -> String {
+    let tags = tags.trim();
+    if tags.is_empty() {
+        return template.to_string();
+    }
+
+    let tag_block = split_head_inject_units(tags)
+        .into_iter()
+        .filter(|unit| !template.contains(unit.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if tag_block.is_empty() {
+        return template.to_string();
+    }
+
+    let tag_block = format!("{tag_block}\n");
+    if let Some(head_end) = find_closing_head_tag(template) {
+        let mut result = String::with_capacity(template.len() + tag_block.len());
+        result.push_str(&template[..head_end]);
+        result.push_str(&tag_block);
+        result.push_str(&template[head_end..]);
+        result
+    } else {
+        format!("{tag_block}{template}")
+    }
+}
+
+pub(crate) fn inject_css_links(template: &str, css_links: &[String]) -> String {
+    if css_links.is_empty() {
+        return template.to_string();
+    }
+
+    let mut stylesheet_links = Vec::new();
+    let mut preload_links = Vec::new();
+
+    for href in css_links {
+        if let Some(font_url) = href.strip_prefix("preload:") {
+            if RscHtmlRenderer::template_has_href(template, font_url) {
+                continue;
+            }
+            let type_attr = if font_url.ends_with(".woff") {
+                "font/woff"
+            } else if font_url.ends_with(".ttf") {
+                "font/ttf"
+            } else if font_url.ends_with(".otf") {
+                "font/otf"
+            } else {
+                "font/woff2"
+            };
+            preload_links.push(format!(
+                r#"<link rel="preload" href="{}" as="font" type="{}" crossorigin>"#,
+                RscHtmlRenderer::escape_html_attribute(font_url),
+                type_attr
+            ));
+        } else if !RscHtmlRenderer::template_has_href(template, href) {
+            stylesheet_links.push(format!(
+                r#"<link rel="stylesheet" href="{}">"#,
+                RscHtmlRenderer::escape_html_attribute(href)
+            ));
+        }
+    }
+
+    if preload_links.is_empty() && stylesheet_links.is_empty() {
+        return template.to_string();
+    }
+
+    let mut result = template.to_string();
+    let has_head = find_closing_head_tag(&result).is_some();
+
+    if !has_head {
+        let mut combined = Vec::with_capacity(preload_links.len() + stylesheet_links.len());
+        combined.extend(preload_links);
+        combined.extend(stylesheet_links);
+        let block = format!("{}\n", combined.join("\n"));
+        return format!("{block}{result}");
+    }
+
+    if !preload_links.is_empty() {
+        let preload_block = format!("{}\n", preload_links.join("\n"));
+        let insert_at = RscHtmlRenderer::first_stylesheet_link_offset(&result)
+            .or_else(|| find_closing_head_tag(&result));
+        if let Some(pos) = insert_at {
+            result.insert_str(pos, &preload_block);
+        }
+    }
+
+    if !stylesheet_links.is_empty() {
+        let stylesheet_block = format!("{}\n", stylesheet_links.join("\n"));
+        if let Some(head_end) = find_closing_head_tag(&result) {
+            result.insert_str(head_end, &stylesheet_block);
+        }
+    }
+
+    result
+}
+
 impl RscHtmlRenderer {
     pub fn new(runtime: Arc<JsExecutionRuntime>) -> Self {
         Self::with_public_dir(runtime, PathBuf::from("dist/client"))
@@ -157,34 +253,6 @@ impl RscHtmlRenderer {
 
     pub fn with_public_dir(runtime: Arc<JsExecutionRuntime>, public_dir: PathBuf) -> Self {
         Self { runtime, template_cache: parking_lot::Mutex::new(None), public_dir }
-    }
-
-    pub(crate) fn inject_head_tags(template: &str, tags: &str) -> String {
-        let tags = tags.trim();
-        if tags.is_empty() {
-            return template.to_string();
-        }
-
-        let tag_block = split_head_inject_units(tags)
-            .into_iter()
-            .filter(|unit| !template.contains(unit.as_str()))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        if tag_block.is_empty() {
-            return template.to_string();
-        }
-
-        let tag_block = format!("{tag_block}\n");
-        if let Some(head_end) = find_closing_head_tag(template) {
-            let mut result = String::with_capacity(template.len() + tag_block.len());
-            result.push_str(&template[..head_end]);
-            result.push_str(&tag_block);
-            result.push_str(&template[head_end..]);
-            result
-        } else {
-            format!("{tag_block}{template}")
-        }
     }
 
     pub fn runtime(&self) -> &Arc<JsExecutionRuntime> {
@@ -579,75 +647,6 @@ import 'http://{host}:{vite_port}/@id/virtual:rari-entry-client';
         found
     }
 
-    pub(crate) fn inject_css_links(template: &str, css_links: &[String]) -> String {
-        if css_links.is_empty() {
-            return template.to_string();
-        }
-
-        let mut stylesheet_links = Vec::new();
-        let mut preload_links = Vec::new();
-
-        for href in css_links {
-            if let Some(font_url) = href.strip_prefix("preload:") {
-                if Self::template_has_href(template, font_url) {
-                    continue;
-                }
-                let type_attr = if font_url.ends_with(".woff") {
-                    "font/woff"
-                } else if font_url.ends_with(".ttf") {
-                    "font/ttf"
-                } else if font_url.ends_with(".otf") {
-                    "font/otf"
-                } else {
-                    "font/woff2"
-                };
-                preload_links.push(format!(
-                    r#"<link rel="preload" href="{}" as="font" type="{}" crossorigin>"#,
-                    Self::escape_html_attribute(font_url),
-                    type_attr
-                ));
-            } else if !Self::template_has_href(template, href) {
-                stylesheet_links.push(format!(
-                    r#"<link rel="stylesheet" href="{}">"#,
-                    Self::escape_html_attribute(href)
-                ));
-            }
-        }
-
-        if preload_links.is_empty() && stylesheet_links.is_empty() {
-            return template.to_string();
-        }
-
-        let mut result = template.to_string();
-        let has_head = find_closing_head_tag(&result).is_some();
-
-        if !has_head {
-            let mut combined = Vec::with_capacity(preload_links.len() + stylesheet_links.len());
-            combined.extend(preload_links);
-            combined.extend(stylesheet_links);
-            let block = format!("{}\n", combined.join("\n"));
-            return format!("{block}{result}");
-        }
-
-        if !preload_links.is_empty() {
-            let preload_block = format!("{}\n", preload_links.join("\n"));
-            let insert_at = Self::first_stylesheet_link_offset(&result)
-                .or_else(|| find_closing_head_tag(&result));
-            if let Some(pos) = insert_at {
-                result.insert_str(pos, &preload_block);
-            }
-        }
-
-        if !stylesheet_links.is_empty() {
-            let stylesheet_block = format!("{}\n", stylesheet_links.join("\n"));
-            if let Some(head_end) = find_closing_head_tag(&result) {
-                result.insert_str(head_end, &stylesheet_block);
-            }
-        }
-
-        result
-    }
-
     fn first_stylesheet_link_offset(template: &str) -> Option<usize> {
         let mut found = None;
         Self::for_each_link_tag(template, |tag, start| {
@@ -688,8 +687,8 @@ import 'http://{host}:{vite_port}/@id/virtual:rari-entry-client';
         };
 
         let mut final_html = html_content;
-        final_html = Self::inject_head_tags(&final_html, &client_head);
-        final_html = Self::inject_css_links(&final_html, css_links);
+        final_html = inject_head_tags(&final_html, &client_head);
+        final_html = inject_css_links(&final_html, css_links);
 
         let trimmed_lower = final_html.trim_start().cow_to_lowercase();
         if !trimmed_lower.starts_with("<!doctype") {
@@ -844,7 +843,7 @@ mod tests {
     fn test_inject_css_links() {
         let template = "<html><head></head><body></body></html>";
         let css_links = vec!["/styles/app.css".to_string()];
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(r#"<link rel="stylesheet" href="/styles/app.css">"#));
     }
 
@@ -852,7 +851,7 @@ mod tests {
     fn test_inject_css_links_uppercase_closing_head() {
         let template = "<html><HEAD></HEAD><body></body></html>";
         let css_links = vec!["/styles/app.css".to_string()];
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         let head_close = result.find("</HEAD>").expect("preserves casing");
         let link_pos = result.find(r#"href="/styles/app.css""#).expect("css link");
         assert!(link_pos < head_close);
@@ -865,7 +864,7 @@ mod tests {
             "preload:/assets/Geist-abcd1234.woff2".to_string(),
             "/assets/server/comp.css".to_string(),
         ];
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(
             r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
         ));
@@ -884,7 +883,7 @@ mod tests {
             "preload:/assets/Geist-abcd1234.woff2".to_string(),
             "/assets/server/comp.css".to_string(),
         ];
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         let preload_pos = result.find("rel=\"preload\"").expect("preload");
         let existing_pos = result.find("/existing.css").expect("existing stylesheet");
         let generated_pos = result.find("/assets/server/comp.css").expect("generated stylesheet");
@@ -899,7 +898,7 @@ mod tests {
             "preload:/assets/Geist-abcd1234.woff2".to_string(),
             "/assets/server/comp.css".to_string(),
         ];
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         let preload_pos = result.find("rel=\"preload\"").expect("preload");
         let style_pos = result.find("rel=\"stylesheet\"").expect("stylesheet");
         assert!(preload_pos < style_pos);
@@ -914,7 +913,7 @@ mod tests {
         let tags = r#"<link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.webmanifest">"#;
 
-        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        let result = inject_head_tags(html, tags);
         assert_eq!(result.matches("/favicon.ico").count(), 1);
         assert!(result.contains("/manifest.webmanifest"));
     }
@@ -928,7 +927,7 @@ mod tests {
 import '/entry.js';
 </script>"#;
 
-        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        let result = inject_head_tags(html, tags);
         assert!(result.contains("import '/entry.js';"));
         assert!(
             result.contains("</script>\n</head>")
@@ -945,7 +944,7 @@ import '/entry.js';
 </script>"#;
         let html = format!("<!DOCTYPE html><html><head>\n{script}\n</head><body></body></html>");
 
-        let result = RscHtmlRenderer::inject_head_tags(&html, script);
+        let result = inject_head_tags(&html, script);
         assert_eq!(result.matches("import '/entry.js';").count(), 1);
         assert_eq!(result.matches("</script>").count(), 1);
     }
@@ -955,7 +954,7 @@ import '/entry.js';
         let html = "<!DOCTYPE html><html><HEAD></HEAD><body></body></html>";
         let tags = r#"<script type="module" src="/entry.js"></script>"#;
 
-        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        let result = inject_head_tags(html, tags);
         assert!(result.contains("</HEAD>"));
         assert!(result.contains(r#"src="/entry.js""#));
         let head_close = result.find("</HEAD>").expect("preserves original closing tag");
@@ -972,7 +971,7 @@ import '/entry.js';
 </head><body></body></html>"#;
         let tags = r#"<script type="module" src="/entry.js"></script>"#;
 
-        let result = RscHtmlRenderer::inject_head_tags(html, tags);
+        let result = inject_head_tags(html, tags);
         let real_close = result.rfind("</head>").expect("real closing head");
         let script_pos = result.find(r#"src="/entry.js""#).expect("injected script");
         assert!(script_pos < real_close);
@@ -1020,7 +1019,7 @@ import '/entry.js';
             r#"<html><head><link rel="stylesheet" href="/styles/app.css"></head></html>"#;
         let css_links = vec!["/styles/app.css".to_string(), "/styles/new.css".to_string()];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert_eq!(result.matches("/styles/app.css").count(), 1);
         assert!(result.contains("/styles/new.css"));
     }
@@ -1032,7 +1031,7 @@ import '/entry.js';
         let css_links =
             vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(
             r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
         ));
@@ -1053,7 +1052,7 @@ import '/entry.js';
         let css_links =
             vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(
             r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
         ));
@@ -1072,7 +1071,7 @@ import '/entry.js';
         let css_links =
             vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(
             r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
         ));
@@ -1091,7 +1090,7 @@ import '/entry.js';
         let css_links =
             vec!["preload:/assets/Geist-abcd1234.woff2".to_string(), "/styles/app.css".to_string()];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(
             r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
         ));
@@ -1111,7 +1110,7 @@ import '/entry.js';
             "/styles/app.css".to_string(),
         ];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert!(result.contains(
             r#"<link rel="preload" href="/assets/Geist-abcd1234.woff2" as="font" type="font/woff2" crossorigin>"#
         ));
@@ -1130,7 +1129,7 @@ import '/entry.js';
 </head><body></body></html>"#;
         let css_links = vec!["/styles/app.css?v=42".to_string()];
 
-        let result = RscHtmlRenderer::inject_css_links(template, &css_links);
+        let result = inject_css_links(template, &css_links);
         assert_eq!(result.matches("href=/styles/app.css?v=42").count(), 1);
         assert_eq!(result.matches(r#"href="/styles/app.css?v=42""#).count(), 0);
         assert!(!result.contains(r#"rel="stylesheet" href="/styles/app.css?v=42""#));

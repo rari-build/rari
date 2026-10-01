@@ -25,12 +25,12 @@ pub struct ErrorBoundaryInfo {
 pub struct RouteComposer;
 
 impl RouteComposer {
-    pub fn build_composition_script(
+    pub fn format_compose_route_basic(
         page_render_script: &str,
         layouts: &[LayoutInfo],
         pathname_json: &str,
     ) -> String {
-        Self::build_composition_script_with_error(
+        Self::format_compose_route_with_error(
             page_render_script,
             layouts,
             pathname_json,
@@ -39,14 +39,14 @@ impl RouteComposer {
         )
     }
 
-    pub fn build_composition_script_with_error(
+    pub fn format_compose_route_with_error(
         page_render_script: &str,
         layouts: &[LayoutInfo],
         pathname_json: &str,
         error_boundary: Option<&ErrorBoundaryInfo>,
         metadata_json: &str,
     ) -> String {
-        Self::build_composition_script_with_templates(
+        Self::format_compose_route(
             page_render_script,
             layouts,
             &[],
@@ -66,7 +66,7 @@ impl RouteComposer {
         clippy::too_many_arguments,
         reason = "composition script needs all route render inputs"
     )]
-    pub fn build_composition_script_with_templates(
+    pub fn format_compose_route(
         page_render_script: &str,
         layouts: &[LayoutInfo],
         templates: &[TemplateInfo],
@@ -203,9 +203,9 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_no_layouts() {
+    fn test_format_compose_route_basic_no_layouts() {
         let script =
-            RouteComposer::build_composition_script("const pageElement = Page();", &[], "\"/\"");
+            RouteComposer::format_compose_route_basic("const pageElement = Page();", &[], "\"/\"");
 
         assert!(script.contains("const pageElement = Page();"));
         assert!(script.contains("composeRoute"));
@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_single_layout() {
+    fn test_format_compose_route_basic_single_layout() {
         let layouts = vec![LayoutInfo {
             component_id: "RootLayout".to_string(),
             is_root: true,
@@ -226,7 +226,7 @@ mod tests {
             path: "/".to_string(),
         }];
 
-        let script = RouteComposer::build_composition_script(
+        let script = RouteComposer::format_compose_route_basic(
             "const pageElement = Page();",
             &layouts,
             "\"/\"",
@@ -248,7 +248,7 @@ mod tests {
             path: "/".to_string(),
         }];
 
-        let script = RouteComposer::build_composition_script_with_templates(
+        let script = RouteComposer::format_compose_route(
             "const pageElement = Page();",
             &layouts,
             &[],
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_multiple_layouts() {
+    fn test_format_compose_route_basic_multiple_layouts() {
         let layouts = vec![
             LayoutInfo {
                 component_id: "RootLayout".to_string(),
@@ -286,7 +286,7 @@ mod tests {
             },
         ];
 
-        let script = RouteComposer::build_composition_script(
+        let script = RouteComposer::format_compose_route_basic(
             "const pageElement = Page();",
             &layouts,
             "\"/dashboard\"",
@@ -302,16 +302,11 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_with_templates_empty_matches_no_templates_output() {
+    fn test_format_compose_route_empty_matches_no_templates_output() {
         let page_script = "const pageElement = Page();";
-        let no_tpl = RouteComposer::build_composition_script_with_error(
-            page_script,
-            &[],
-            "\"/\"",
-            None,
-            "{}",
-        );
-        let empty_tpl = RouteComposer::build_composition_script_with_templates(
+        let no_tpl =
+            RouteComposer::format_compose_route_with_error(page_script, &[], "\"/\"", None, "{}");
+        let empty_tpl = RouteComposer::format_compose_route(
             page_script,
             &[],
             &[],
@@ -336,8 +331,8 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_with_templates_single() {
-        let script = RouteComposer::build_composition_script_with_templates(
+    fn test_format_compose_route_single() {
+        let script = RouteComposer::format_compose_route(
             "const pageElement = Page();",
             &[],
             &[template_info("template.tsx")],
@@ -502,8 +497,8 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_with_templates_and_layouts() {
-        let script = RouteComposer::build_composition_script_with_templates(
+    fn test_format_compose_route_and_layouts() {
+        let script = RouteComposer::format_compose_route(
             "const pageElement = Page();",
             &[LayoutInfo {
                 component_id: "layout:blog".to_string(),
@@ -530,8 +525,8 @@ mod tests {
     }
 
     #[test]
-    fn test_build_composition_script_with_templates_multiple() {
-        let script = RouteComposer::build_composition_script_with_templates(
+    fn test_format_compose_route_multiple() {
+        let script = RouteComposer::format_compose_route(
             "const pageElement = Page();",
             &[],
             &[template_info("template.tsx"), template_info("about/template.tsx")],
@@ -560,7 +555,7 @@ mod tests {
             path: "/".to_string(),
         }];
 
-        let script = RouteComposer::build_composition_script_with_templates(
+        let script = RouteComposer::format_compose_route(
             "const pageElement = Page();",
             &layouts,
             &[],
@@ -580,13 +575,18 @@ mod tests {
         assert!(script.contains("RootLayout"));
         assert!(script.contains("deferRsc: true"));
         assert!(
-            ROUTE_COMPOSER_SCRIPT.contains("wrapLayoutReuse"),
-            "layout reuse tree must live in TS helper, not Rust format!"
+            ROUTE_COMPOSER_SCRIPT.contains("wrapLayoutReuse")
+                && ROUTE_COMPOSER_SCRIPT.contains("stampLayoutPath")
+                && ROUTE_COMPOSER_SCRIPT.contains("rari-layout-stamp"),
+            "layout reuse helpers must live in TS helper, not Rust format!"
         );
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("stampLayoutPath"));
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("rari-layout-reuse"));
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("rari-layout-stamp"));
-        assert!(ROUTE_COMPOSER_SCRIPT.contains("data-rari-layout-path"));
+    }
+
+    #[test]
+    fn test_route_composer_script_streaming_markers() {
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("rsc_data: rscData"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("pending_promises: pendingPromises"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("boundaries,"));
     }
 
     #[test]
@@ -595,7 +595,7 @@ mod tests {
             component_id: "src/app/test/error.tsx".to_string(),
             file_path: "test/error.tsx".to_string(),
         };
-        let script = RouteComposer::build_composition_script_with_error(
+        let script = RouteComposer::format_compose_route_with_error(
             "const pageElement = Page();",
             &[],
             "\"/\"",
@@ -609,7 +609,7 @@ mod tests {
     #[test]
     fn test_metadata_passed_through() {
         let metadata_json = r#"{"title":"Test Page","description":"A test"}"#;
-        let script = RouteComposer::build_composition_script_with_error(
+        let script = RouteComposer::format_compose_route_with_error(
             "const pageElement = Page();",
             &[],
             "\"/\"",
