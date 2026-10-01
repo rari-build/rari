@@ -280,6 +280,8 @@ export function AppRouterProvider({
   const rscPayloadRef = useRef(initialPayload)
   const [renderKey, setRenderKey] = useState(0)
   const [routeLocation, setRouteLocation] = useState(() => currentRouteLocation())
+  const routeLocationRef = useRef(routeLocation)
+  routeLocationRef.current = routeLocation
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const pendingScrollPayloadRef = useRef<PendingScrollToTop<RscPayload> | null>(null)
   const formDataRef = useRef<Map<string, FormData>>(new Map())
@@ -650,7 +652,7 @@ export function AppRouterProvider({
           detail.from,
           detail.to,
           searchFromNavigationDetail(detail),
-          currentRouteLocation().search,
+          routeLocationRef.current.search,
         )
         if (merged.kind === 'superseded') return null
         if (merged.kind === 'hard-nav') {
