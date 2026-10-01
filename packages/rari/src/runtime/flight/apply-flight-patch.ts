@@ -4,14 +4,41 @@ import { isLayoutReuseMarker, mergeFlightRefresh } from './merge-refresh'
 import { flightTreeMaySuspend, isDocumentRoot } from './react-helpers'
 import { flightRouteCache } from './route-cache'
 
+export interface PendingLeafEviction {
+  readonly pathname: string
+  readonly search: string
+}
+
 export type SoftNavFlightPatchResult =
-  | { readonly kind: 'merged'; readonly element: ReactElement; readonly maySuspend: boolean }
+  | {
+      readonly kind: 'merged'
+      readonly element: ReactElement
+      readonly maySuspend: boolean
+      readonly pendingEvictLeaf?: PendingLeafEviction
+    }
   | { readonly kind: 'hard-nav' }
 
-function ensureShell(previousDocument: ReactElement, fromPathname: string, search: string): void {
+function ensureShell(
+  previousDocument: ReactElement,
+  fromPathname: string,
+  fromSearch: string,
+): void {
   if (flightRouteCache.getShell() == null) {
-    flightRouteCache.ingest(previousDocument, fromPathname, search)
+    flightRouteCache.ingest(previousDocument, fromPathname, fromSearch)
   }
+}
+
+function pendingEvictForSoftNav(options: {
+  readonly fromPathname: string
+  readonly toPathname: string
+  readonly fromSearch: string
+  readonly search: string
+}): PendingLeafEviction | undefined {
+  if (options.fromPathname === '/') return undefined
+  if (options.fromPathname === options.toPathname && options.fromSearch === options.search) {
+    return undefined
+  }
+  return { pathname: options.fromPathname, search: options.fromSearch }
 }
 
 export function applySoftNavFlightPatch(options: {
@@ -19,21 +46,20 @@ export function applySoftNavFlightPatch(options: {
   readonly refresh: ReactNode
   readonly fromPathname: string
   readonly toPathname: string
+  readonly fromSearch: string
   readonly search: string
 }): SoftNavFlightPatchResult {
-  ensureShell(options.previousDocument, options.fromPathname, options.search)
+  ensureShell(options.previousDocument, options.fromPathname, options.fromSearch)
 
   if (isDocumentRoot(options.refresh)) {
-    flightRouteCache.ingest(options.refresh, options.toPathname, options.search)
+    if (!flightRouteCache.ingest(options.refresh, options.toPathname, options.search)) {
+      return { kind: 'hard-nav' }
+    }
   } else if (isValidElement(options.refresh)) {
     const ok = flightRouteCache.ingestSegment(options.refresh, options.toPathname, options.search)
     if (!ok) return { kind: 'hard-nav' }
   } else {
     return { kind: 'hard-nav' }
-  }
-
-  if (options.fromPathname !== options.toPathname && options.fromPathname !== '/') {
-    flightRouteCache.evictLeaf(options.fromPathname, options.search)
   }
 
   if (
@@ -44,10 +70,11 @@ export function applySoftNavFlightPatch(options: {
   }
 
   const maySuspend = flightTreeMaySuspend(options.refresh)
+  const pendingEvictLeaf = pendingEvictForSoftNav(options)
   if (isDocumentRoot(options.refresh)) {
-    return { kind: 'merged', element: options.refresh, maySuspend }
+    return { kind: 'merged', element: options.refresh, maySuspend, pendingEvictLeaf }
   }
-  return { kind: 'merged', element: options.previousDocument, maySuspend }
+  return { kind: 'merged', element: options.previousDocument, maySuspend, pendingEvictLeaf }
 }
 
 function ingestActionRefresh(
@@ -57,8 +84,7 @@ function ingestActionRefresh(
   search: string,
 ): boolean {
   if (isDocumentRoot(refresh)) {
-    flightRouteCache.ingest(refresh, pathname, search)
-    return true
+    return flightRouteCache.ingest(refresh, pathname, search)
   }
 
   if (
@@ -74,8 +100,7 @@ function ingestActionRefresh(
     return false
   }
   if (!isDocumentRoot(merged)) return false
-  flightRouteCache.ingest(merged, pathname, search)
-  return true
+  return flightRouteCache.ingest(merged, pathname, search)
 }
 
 function actionPatchElement(
@@ -96,8 +121,12 @@ export function applyActionFlightPatch(options: {
   readonly pathname: string
   readonly search: string
 }): SoftNavFlightPatchResult {
-  if (isDocumentRoot(options.previousDocument) && flightRouteCache.getShell() == null) {
-    flightRouteCache.ingest(options.previousDocument, options.pathname, options.search)
+  if (
+    isDocumentRoot(options.previousDocument) &&
+    flightRouteCache.getShell() == null &&
+    !flightRouteCache.ingest(options.previousDocument, options.pathname, options.search)
+  ) {
+    return { kind: 'hard-nav' }
   }
 
   if (

@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { applySoftNavFlightPatch } from '@rari/runtime/flight/apply-flight-patch'
-import { FlightLayoutRouter } from '@rari/runtime/flight/layout-router'
+import { renderFlightLayoutRouter } from '@rari/runtime/flight/layout-router'
 import { containsLayoutSlot, flightRouteCache } from '@rari/runtime/flight/route-cache'
 import { createElement, isValidElement } from 'react'
 import { beforeEach, describe, expect, it } from 'vite-plus/test'
@@ -53,6 +53,7 @@ describe('soft-nav hollow-shell paint', () => {
       refresh: reuse('/', page('about')),
       fromPathname: '/',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
 
@@ -74,25 +75,20 @@ describe('soft-nav hollow-shell paint', () => {
       refresh: reuse('/', page('about')),
       fromPathname: '/',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
 
-    const rendered = FlightLayoutRouter({
+    const rendered = renderFlightLayoutRouter({
       layoutPath: '/',
       pathname: '/about',
       search: '',
-      revision: 1,
     })
     expect(isValidElement(rendered)).toBe(true)
     if (!isValidElement(rendered)) return
+    expect(rendered.key).toBe('/about')
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const props = rendered.props as { children?: ReactNode }
-    expect(isValidElement(props.children)).toBe(true)
-    if (!isValidElement(props.children)) return
-    expect(props.children.key).toBe('/about')
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const keyed = props.children.props as { children?: ReactNode }
-    expect(keyed.children).toEqual(page('about'))
+    expect(rendered.props).toEqual({ children: page('about') })
   })
 
   it('marks maySuspend only when a thenable remains, not a resolved Suspense', async () => {

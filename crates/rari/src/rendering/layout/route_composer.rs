@@ -585,6 +585,7 @@ mod tests {
         );
         assert!(ROUTE_COMPOSER_SCRIPT.contains("stampLayoutPath"));
         assert!(ROUTE_COMPOSER_SCRIPT.contains("rari-layout-reuse"));
+        assert!(ROUTE_COMPOSER_SCRIPT.contains("rari-layout-stamp"));
         assert!(ROUTE_COMPOSER_SCRIPT.contains("data-rari-layout-path"));
     }
 
@@ -743,7 +744,7 @@ mod tests {
               throw new Error('expected nav, stamp, footer');
             }
             const stamp = kids[1];
-            if (stamp?.type !== 'div') throw new Error('expected stamp host');
+            if (stamp?.type !== 'rari-layout-stamp') throw new Error('expected stamp host');
             if (stamp.props['data-rari-layout-path'] !== '/') {
               throw new Error('expected stamped path');
             }

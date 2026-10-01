@@ -1,6 +1,10 @@
 import type { ReactElement, ReactNode } from 'react'
 import { applySoftNavFlightPatch } from '@rari/runtime/flight/apply-flight-patch'
-import { FlightLayoutRouter } from '@rari/runtime/flight/layout-router'
+import {
+  FlightLayoutRouter,
+  renderFlightDocument,
+  renderFlightLayoutRouter,
+} from '@rari/runtime/flight/layout-router'
 import {
   flightRouteCache,
   isLayoutSlot,
@@ -48,6 +52,7 @@ describe('flightDocument soft-nav fill', () => {
       refresh: reuse('/', createElement('section', null, 'about')),
       fromPathname: '/',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
 
@@ -83,31 +88,21 @@ describe('flightDocument soft-nav fill', () => {
       refresh: reuse('/', createElement('section', null, 'about')),
       fromPathname: '/',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
 
-    const node = createElement(FlightLayoutRouter, {
+    const rendered = renderFlightLayoutRouter({
       layoutPath: '/',
       pathname: '/about',
       search: '',
-      revision: 1,
-    })
-    const rendered = FlightLayoutRouter({
-      layoutPath: '/',
-      pathname: '/about',
-      search: '',
-      revision: 1,
     })
     expect(isValidElement(rendered)).toBe(true)
     if (!isValidElement(rendered)) return
+    expect(rendered.key).toBe('/about')
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const props = rendered.props as { children?: ReactNode }
-    expect(isValidElement(props.children)).toBe(true)
-    if (!isValidElement(props.children)) return
-    expect(props.children.key).toBe('/about')
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    expect(props.children.props).toEqual({ children: createElement('section', null, 'about') })
-    expect(String(node.type)).not.toBe(LAYOUT_SLOT_ELEMENT)
+    expect(rendered.props).toEqual({ children: createElement('section', null, 'about') })
+    expect(String(FlightLayoutRouter)).not.toBe(LAYOUT_SLOT_ELEMENT)
   })
 
   it('flightDocument returns filled tree when ok', () => {
@@ -118,6 +113,7 @@ describe('flightDocument soft-nav fill', () => {
       refresh: reuse('/', createElement('section', null, 'about')),
       fromPathname: '/',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
     expect(patched.kind).toBe('merged')
@@ -128,15 +124,13 @@ describe('flightDocument soft-nav fill', () => {
     expect(ok).toBe(true)
   })
 
-  it('flightDocument does not paint a previous-route fallback when shell exists', async () => {
-    const { FlightDocument } = await import('@rari/runtime/flight/layout-router')
+  it('flightDocument does not paint a previous-route fallback when shell exists', () => {
     const previous = htmlDoc(stamp('/', createElement('section', { 'data-page': 'home' }, 'home')))
     flightRouteCache.set('/', '', previous)
 
     const homeFallback = previous
-    const rendered = FlightDocument({
+    const rendered = renderFlightDocument({
       fallback: homeFallback,
-      revision: 1,
       pathname: '/missing',
       search: '',
     })

@@ -344,9 +344,9 @@ class FlightRouteCache {
     })
   }
 
-  ingest(document: ReactElement, pathname: string, search: string): void {
-    if (!isDocumentRoot(document)) return
-    if (containsLayoutSlot(document)) return
+  ingest(document: ReactElement, pathname: string, search: string): boolean {
+    if (!isDocumentRoot(document)) return false
+    if (containsLayoutSlot(document)) return false
 
     const { shell, entries } = splitDocumentStamps(document)
     this.shell = shell
@@ -355,13 +355,14 @@ class FlightRouteCache {
       const leaf = getNodeAtSegmentPath(this.root, segmentPathFromPathname(pathname))
       leaf.data.set(search, document)
       this.bump()
-      return
+      return true
     }
 
     for (const entry of entries) {
       this.writeStampContent(entry.path, entry.content, pathname, search)
     }
     this.bump()
+    return true
   }
 
   ingestSegment(refresh: ReactNode, pathname: string, search: string): boolean {

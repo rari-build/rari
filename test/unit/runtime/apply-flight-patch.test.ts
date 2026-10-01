@@ -42,14 +42,43 @@ describe('applySoftNavFlightPatch', () => {
       refresh: reuse('/', 'about'),
       fromPathname: '/home',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
 
     expect(patched.kind).toBe('merged')
     expect(flightRouteCache.getShell()).toBe(shellBefore)
     expect(flightRouteCache.hasRoute('/about', '')).toBe(true)
-    expect(flightRouteCache.hasRoute('/home', '')).toBe(false)
-    expect(patched).toEqual({ kind: 'merged', element: previous, maySuspend: false })
+    expect(flightRouteCache.hasRoute('/home', '')).toBe(true)
+    expect(patched).toEqual({
+      kind: 'merged',
+      element: previous,
+      maySuspend: false,
+      pendingEvictLeaf: { pathname: '/home', search: '' },
+    })
+  })
+
+  it('evicts source leaf using fromSearch, not destination search', () => {
+    const previous = htmlDoc(stamp('/', 'home'))
+    flightRouteCache.set('/page1', '?foo=1', previous)
+
+    const patched = applySoftNavFlightPatch({
+      previousDocument: previous,
+      refresh: reuse('/', 'next'),
+      fromPathname: '/page1',
+      toPathname: '/page2',
+      fromSearch: '?foo=1',
+      search: '?bar=2',
+    })
+
+    expect(patched.kind).toBe('merged')
+    if (patched.kind !== 'merged') return
+    expect(patched.pendingEvictLeaf).toEqual({ pathname: '/page1', search: '?foo=1' })
+    expect(flightRouteCache.hasRoute('/page1', '?foo=1')).toBe(true)
+
+    flightRouteCache.evictLeaf(patched.pendingEvictLeaf!.pathname, patched.pendingEvictLeaf!.search)
+    expect(flightRouteCache.hasRoute('/page1', '?foo=1')).toBe(false)
+    expect(flightRouteCache.hasRoute('/page2', '?bar=2')).toBe(true)
   })
 
   it('signals hard-nav when the layout path stamp is missing', () => {
@@ -60,6 +89,7 @@ describe('applySoftNavFlightPatch', () => {
       refresh: reuse('/', 'about'),
       fromPathname: '/',
       toPathname: '/about',
+      fromSearch: '',
       search: '',
     })
     expect(patched).toEqual({ kind: 'hard-nav' })
@@ -76,13 +106,38 @@ describe('applySoftNavFlightPatch', () => {
       refresh: reuse('/blog', 'b-next'),
       fromPathname: '/blog/a',
       toPathname: '/blog/b',
+      fromSearch: '',
       search: '',
     })
 
     expect(patched.kind).toBe('merged')
-    expect(flightRouteCache.hasRoute('/blog/a', '')).toBe(false)
+    if (patched.kind !== 'merged') return
+    expect(patched.pendingEvictLeaf).toEqual({ pathname: '/blog/a', search: '' })
+    expect(flightRouteCache.hasRoute('/blog/a', '')).toBe(true)
     expect(flightRouteCache.hasRoute('/blog/b', '')).toBe(true)
     expect(flightRouteCache.readLeaf('/blog/b', '')).toBe('b-next')
     expect(flightRouteCache.readChrome('/')).toBe(chrome)
+
+    flightRouteCache.evictLeaf(patched.pendingEvictLeaf!.pathname, patched.pendingEvictLeaf!.search)
+    expect(flightRouteCache.hasRoute('/blog/a', '')).toBe(false)
+  })
+
+  it('does not schedule eviction when leaving the root route', () => {
+    const previous = htmlDoc(stamp('/', 'home'))
+    flightRouteCache.set('/', '', previous)
+
+    const patched = applySoftNavFlightPatch({
+      previousDocument: previous,
+      refresh: reuse('/', 'about'),
+      fromPathname: '/',
+      toPathname: '/about',
+      fromSearch: '',
+      search: '',
+    })
+
+    expect(patched.kind).toBe('merged')
+    if (patched.kind !== 'merged') return
+    expect(patched.pendingEvictLeaf).toBeUndefined()
+    expect(flightRouteCache.hasRoute('/', '')).toBe(true)
   })
 })
