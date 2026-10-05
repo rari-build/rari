@@ -52,15 +52,17 @@ impl Display for Mode {
 pub enum Framework {
     #[default]
     React,
+    Qwik,
 }
 
 impl Framework {
-    pub const ALL: &'static [Self] = &[Self::React];
+    pub const ALL: &'static [Self] = &[Self::React, Self::Qwik];
 
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::React => "react",
+            Self::Qwik => "qwik",
         }
     }
 }
@@ -80,6 +82,7 @@ impl FromStr for Framework {
     fn from_str(name: &str) -> Result<Self, Self::Err> {
         match name.trim().cow_to_lowercase().as_ref() {
             "react" => Ok(Self::React),
+            "qwik" => Ok(Self::Qwik),
             _ => Err(ConfigError::Framework(name.to_string())),
         }
     }
@@ -1200,7 +1203,7 @@ pub enum ConfigError {
     Timeout(String),
     #[error("Invalid config value for {0}")]
     Config(String),
-    #[error("Unknown framework '{0}' (expected one of: react)")]
+    #[error("Unknown framework '{0}' (expected one of: react, qwik)")]
     Framework(String),
 }
 

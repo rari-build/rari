@@ -16,6 +16,7 @@
 //! - the guest renders the page inside V8 and streams `status + headers` then
 //!   body bytes back through the pool's streaming ops.
 
+pub mod qwik;
 pub mod stream;
 
 use std::{
@@ -107,11 +108,10 @@ pub async fn load(
     project_root: &Path,
 ) -> Result<Option<Arc<dyn GuestRenderer>>, RariError> {
     match config.framework {
-        Framework::React => {
-            // React renders through the host's built-in RSC pipeline; guest
-            // frameworks register here and receive the runtime and project root.
-            let _ = (runtime, project_root);
-            Ok(None)
+        Framework::React => Ok(None),
+        Framework::Qwik => {
+            let guest = qwik::QwikGuest::load(runtime, project_root).await?;
+            Ok(Some(Arc::new(guest)))
         }
     }
 }
