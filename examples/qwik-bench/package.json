@@ -1,0 +1,23 @@
+{
+  "name": "qwik-bench",
+  "type": "module",
+  "private": true,
+  "description": "Benchmark homepage (same components as the rari-vs-Next suite) on Qwik hosted by rari",
+  "scripts": {
+    "build": "vite build",
+    "start": "../../target/release/rari --mode production --port 3004"
+  },
+  "dependencies": {
+    "@qwik.dev/core": "catalog:qwik",
+    "@qwik.dev/router": "catalog:qwik",
+    "@rari/qwik": "workspace:*",
+    "markdown-it": "^14.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:tailwind",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "catalog:typescript",
+    "tailwindcss": "catalog:tailwind",
+    "vite": "catalog:build"
+  }
+}
