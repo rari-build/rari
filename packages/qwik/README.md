@@ -41,9 +41,16 @@ rariQwik({
 
 ## How a request flows
 
-1. rari matches the URL against `dist/server/routes.json` (emitted from your `src/routes` by `@rari/core`'s scanner), serves `/build/*` and `/assets/*` directly, and answers anonymous page GETs from its response cache.
-2. On a miss it calls the bundle's handler on a pooled V8 runtime with the request (URL, method, headers, body, client IP).
-3. The handler (`@rari/qwik/platform`) builds a `ServerRequestEvent` and hands it to Qwik Router's `requestHandler`.
-4. Qwik writes status and headers, then HTML chunks, which the host streams to the client as they are produced. Cacheable pages are stored for the next hit.
+rari owns routing. Where rari has a feature Qwik also has, rari's wins; Qwik does what makes Qwik Qwik: resumable rendering, loaders, actions, `server$`.
 
-Qwik owns its own `/api` routes, form actions (`POST ?qaction=…`) and `server$` RPC endpoints; rari routes every method on every page path to the handler.
+1. rari serves `/build/*`, `/assets/*` and other files from `dist/client` directly.
+2. rari matches the URL against `dist/server/routes.json` (emitted from your `src/routes` by `@rari/core`'s scanner, Qwik's trailing slash and `q-loader-*.json` data requests normalised away). No match and no `404` page in the app means a host 404 (`x-rari-route: miss`) and the runtime is never touched.
+3. Anonymous page GETs are answered from the host's response cache (precompressed, ETag/304, cookie-partitioned).
+4. On a miss the bundle's handler runs on a pooled V8 runtime with the request (URL, method, headers, body, client IP) and the host's route decision. `@rari/qwik/platform` builds a `ServerRequestEvent` with `platform.rari.route` set and hands it to Qwik Router's `requestHandler`.
+5. Qwik writes status and headers, then HTML chunks, which the host streams out as they are produced; every response carries `x-rari-route` with the matched pattern. Cacheable pages are stored for the next hit.
+
+Form actions (`POST ?qaction=…`) and `server$` RPC endpoints are Qwik's; the host routes every method on a matched page path to the handler.
+
+```ts
+export const useHostRoute = routeLoader$(({ platform }) => (platform as RariPlatform).rari.route)
+```

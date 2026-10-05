@@ -24,8 +24,25 @@ test.describe('SSR + routing', () => {
     await expect(page).toHaveTitle('Blog: hello-world')
   })
 
-  test('unknown route is 404', async ({ page }) => {
-    expect((await page.goto('/no-such-route'))?.status()).toBe(404)
+  test('unknown route is a host 404 without rendering', async ({ request }) => {
+    // rari owns routing: no manifest match and no 404 page means the host
+    // answers directly; the guest never runs.
+    const response = await request.get('/no-such-route')
+    expect(response.status()).toBe(404)
+    expect(response.headers()['x-rari-route']).toBe('miss')
+  })
+
+  test('rari resolves the route before Qwik renders', async ({ request }) => {
+    const home = await request.get('/')
+    expect(home.headers()['x-rari-route']).toBe('/')
+    const post = await request.get('/blog/hello-world/')
+    expect(post.headers()['x-rari-route']).toBe('/blog/[slug]')
+    expect(await post.text()).toContain('blog post: hello-world')
+  })
+
+  test('route params come from the host match', async ({ page }) => {
+    await page.goto('/blog/host-routed/')
+    await expect(page.getByTestId('host-route')).toHaveText('/blog/[slug] host-routed')
   })
 
   test('trailing slash redirects like Qwik Router', async ({ request }) => {

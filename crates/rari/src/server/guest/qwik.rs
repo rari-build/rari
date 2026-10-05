@@ -29,6 +29,7 @@ use axum::{
 use base64::prelude::*;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
+use serde::Serialize;
 use tokio::{fs, time};
 use url::form_urlencoded;
 
@@ -46,9 +47,13 @@ use crate::{
         config::Framework,
         error_response,
         host::utils::http::merge_vary_with_accept,
-        routing::app::cache::{
-            insert_response_cache_vary_header, request_cookie_header, response_cache_key,
-            route_query_params_for_cache,
+        routing::{
+            AppRouter,
+            app::cache::{
+                insert_response_cache_vary_header, request_cookie_header, response_cache_key,
+                route_query_params_for_cache,
+            },
+            types::ParamValue,
         },
     },
 };
@@ -157,6 +162,90 @@ impl QwikGuest {
         serve_mounted_file(&self.client_dir, relative, false, &state.config.caching.static_files)
             .await
     }
+}
+
+/// Route decision the host hands to the guest: rari matched the URL against
+/// `dist/server/routes.json`, so the framework does not have to decide what a
+/// URL *is*; it only renders what the host resolved. Exposed to the app as
+/// `platform.rari.route` on Qwik's request event.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct HostRoute {
+    /// Matched route pattern (`/blog/[slug]`), or the request path for a 404 page.
+    pub path: String,
+    /// Route params as plain values (strings, or arrays for catch-alls).
+    pub params: serde_json::Map<String, serde_json::Value>,
+    /// Layout chain, outermost first, as manifest file paths.
+    pub layouts: Vec<String>,
+    /// The host matched nothing and resolved the app's `404` page instead.
+    pub not_found: bool,
+}
+
+/// Qwik Router fetches loader data for a page at `<page>/q-loader-<id>.<hash>.json`;
+/// everything else is a page URL. Strip that suffix (and Qwik's trailing slash)
+/// so the host matches the page the request belongs to.
+fn qwik_route_pathname(path: &str) -> String {
+    let (page, last) = match path.rsplit_once('/') {
+        Some((page, last)) => (page, last),
+        None => (path, ""),
+    };
+    let page_path =
+        if last.starts_with("q-loader-") && last.ends_with(".json") { page } else { path };
+    let trimmed = page_path.trim_end_matches('/');
+    if trimmed.is_empty() { "/".to_string() } else { trimmed.to_string() }
+}
+
+fn is_well_known(path: &str) -> bool {
+    path == "/.well-known" || path.starts_with("/.well-known/")
+}
+
+fn param_value_json(value: &ParamValue) -> serde_json::Value {
+    match value {
+        ParamValue::Single(value) => serde_json::Value::String(value.clone()),
+        ParamValue::Multiple(values) => serde_json::Value::Array(
+            values.iter().cloned().map(serde_json::Value::String).collect(),
+        ),
+    }
+}
+
+/// Resolve the host's route decision for a request path: the matched route,
+/// the app's `404` page when nothing matched, or `None` when the host has no
+/// page to offer (a host-level 404).
+fn host_route_for(router: &AppRouter, path: &str) -> Option<HostRoute> {
+    let pathname = qwik_route_pathname(path);
+    if let Ok(matched) = router.match_route(&pathname) {
+        let params = matched
+            .params
+            .iter()
+            .map(|(name, value)| (name.clone(), param_value_json(value)))
+            .collect();
+        return Some(HostRoute {
+            path: matched.route.path,
+            params,
+            layouts: matched.layouts.into_iter().map(|layout| layout.file_path).collect(),
+            not_found: false,
+        });
+    }
+    let not_found = router.create_not_found_match(&pathname)?;
+    Some(HostRoute {
+        path: not_found.pathname,
+        params: serde_json::Map::new(),
+        layouts: not_found.layouts.into_iter().map(|layout| layout.file_path).collect(),
+        not_found: true,
+    })
+}
+
+const ROUTE_HEADER: &str = "x-rari-route";
+
+/// The host answered without the guest: nothing in the manifest matches and
+/// the app ships no `404` page.
+fn host_not_found() -> Response {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("text/plain; charset=utf-8"));
+    headers.insert(ROUTE_HEADER, HeaderValue::from_static("miss"));
+    headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response_with_headers(StatusCode::NOT_FOUND, &headers, Body::from("Not Found"))
 }
 
 /// `Cache-Control` directives in a guest response that forbid the host from
@@ -293,6 +382,21 @@ impl GuestRenderer for QwikGuest {
             return response;
         }
 
+        // Host-first routing: rari decides what the URL is before the guest
+        // runs. No manifest at all means the guest decides everything.
+        let host_route = match state.app_router.as_ref() {
+            None => None,
+            Some(router) => match host_route_for(router, &path) {
+                Some(route) => Some(route),
+                None if is_well_known(&path) => None,
+                None => return host_not_found(),
+            },
+        };
+        let route_label = host_route.as_ref().map_or_else(
+            || HeaderValue::from_static("miss"),
+            |route| HeaderValue::from_str(&route.path).unwrap_or(HeaderValue::from_static("miss")),
+        );
+
         let is_get = parts.method == Method::GET;
         let path_and_query = parts.uri.path_and_query().map_or("/", |pq| pq.as_str());
         let url = format!("{}{}", request_origin(state, &parts.headers), path_and_query);
@@ -341,6 +445,7 @@ impl GuestRenderer for QwikGuest {
             "headers": headers,
             "bodyBase64": body_base64,
             "clientIp": client_addr.map(|addr| addr.ip().to_string()),
+            "route": host_route,
         });
         let script = format!("globalThis.{HANDLER_GLOBAL}({req_init})");
 
@@ -356,6 +461,7 @@ impl GuestRenderer for QwikGuest {
         let status =
             StatusCode::from_u16(stream.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         let mut headers = frame_headers(&stream.headers);
+        headers.insert(ROUTE_HEADER, route_label);
         let is_html = headers
             .get(CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
@@ -456,6 +562,7 @@ impl GuestRenderer for QwikGuest {
 #[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::server::routing::app_router::AppRouteManifest;
 
     #[test]
     fn hop_by_hop_headers_are_dropped() {
@@ -527,6 +634,48 @@ mod tests {
             cached_hit_response(&cached, &request_headers).status(),
             StatusCode::NOT_MODIFIED
         );
+    }
+
+    #[test]
+    fn qwik_internal_suffixes_and_trailing_slashes_map_to_the_page() {
+        assert_eq!(qwik_route_pathname("/"), "/");
+        assert_eq!(qwik_route_pathname("/about/"), "/about");
+        assert_eq!(qwik_route_pathname("/blog/hello/"), "/blog/hello");
+        assert_eq!(qwik_route_pathname("/blog/hello/q-loader-abc.4vn0l9.json"), "/blog/hello");
+        assert_eq!(qwik_route_pathname("/q-loader-abc.4vn0l9.json"), "/");
+        assert_eq!(qwik_route_pathname("/q-loader-not-json"), "/q-loader-not-json");
+    }
+
+    #[test]
+    fn host_routes_pages_params_and_not_found_pages() {
+        let manifest: AppRouteManifest = serde_json::from_value(serde_json::json!({
+            "routes": [
+                { "path": "/", "filePath": "index.tsx", "segments": [], "params": [], "isDynamic": false },
+                { "path": "/blog/[slug]", "filePath": "blog/[slug]/index.tsx",
+                  "segments": [
+                    { "type": "static", "value": "blog" },
+                    { "type": "dynamic", "value": "[slug]", "param": "slug" }
+                  ],
+                  "params": ["slug"], "isDynamic": true }
+            ],
+            "layouts": [{ "path": "/", "filePath": "layout.tsx" }],
+            "loading": [], "errors": [], "templates": [], "apiRoutes": [], "ogImages": [], "appIcons": [],
+            "notFound": [],
+            "generated": "test"
+        }))
+        .unwrap();
+        let router = AppRouter::new(manifest);
+
+        let home = host_route_for(&router, "/").unwrap();
+        assert_eq!(home.path, "/");
+        assert_eq!(home.layouts, vec!["layout.tsx".to_string()]);
+        assert!(!home.not_found);
+
+        let post = host_route_for(&router, "/blog/hello-world/q-loader-x.y.json").unwrap();
+        assert_eq!(post.path, "/blog/[slug]");
+        assert_eq!(post.params.get("slug").and_then(|v| v.as_str()), Some("hello-world"));
+
+        assert!(host_route_for(&router, "/nope").is_none(), "no 404 page: host answers");
     }
 
     #[test]

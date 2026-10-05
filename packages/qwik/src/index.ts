@@ -14,5 +14,6 @@
 // the request/response transport and everything around it is rari's.
 export { buildQwik, buildQwikServer } from './build'
 export type { BuildQwikOptions, BuildQwikResult, BuildQwikServerOptions } from './build'
+export type { RariHostRequest, RariPlatform, RariRoute } from './platform'
 export { rariQwik } from './vite'
 export type { RariQwikOptions } from './vite'

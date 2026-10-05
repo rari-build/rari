@@ -30,6 +30,33 @@ export interface RariHostRequest {
   /** Base64-encoded body for methods that carry one. */
   readonly bodyBase64?: string | null
   readonly clientIp?: string | null
+  /** The host's route decision (see {@link RariRoute}); absent when rari has no manifest. */
+  readonly route?: RariRoute | null
+}
+
+/**
+ * The route rari resolved for the request from `dist/server/routes.json`,
+ * before Qwik ran. rari owns routing: unmatched URLs never reach Qwik unless
+ * the app ships a `404` page, and the match is exposed on the request event as
+ * `platform.rari.route` so server code can rely on the host's decision.
+ */
+export interface RariRoute {
+  /** Matched route pattern (`/blog/[slug]`), or the request path for a 404 page. */
+  readonly path: string
+  /** Route params as the host parsed them (arrays for catch-all segments). */
+  readonly params: Readonly<Record<string, string | readonly string[]>>
+  /** Layout chain, outermost first, as paths relative to the routes dir. */
+  readonly layouts: readonly string[]
+  /** The host matched nothing and resolved the app's `404` page. */
+  readonly notFound: boolean
+}
+
+/** `platform` on Qwik's request event when the app runs on rari. */
+export interface RariPlatform {
+  readonly ssr: true
+  readonly rari: {
+    readonly route: RariRoute | null
+  }
 }
 
 export interface RariQwikHandlerOptions extends ServerRenderOptions {
@@ -176,7 +203,7 @@ function toServerRequestEvent(
     mode: 'server',
     url: new URL(request.url),
     locale: undefined,
-    platform: { ssr: true, rari: true },
+    platform: { ssr: true, rari: { route: request.route ?? null } } satisfies RariPlatform,
     request: new Request(request.url, init),
     // The rari runtime injects the server's environment as `process.env`.
     env: { get: key => (typeof process === 'undefined' ? undefined : process.env[key]) },
