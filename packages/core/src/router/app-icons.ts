@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { toPosixPath } from '@/shared/utils/path'
-import { escapeRegExp } from '@/shared/utils/regexp'
-import { isRecord } from '@/shared/utils/type-guards'
+import { toPosixPath } from '../utils/path'
+import { escapeRegExp } from '../utils/regexp'
+import { isRecord } from '../utils/type-guards'
 
 export type AppIconKind = 'favicon' | 'icon' | 'apple-icon'
 

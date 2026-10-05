@@ -411,7 +411,7 @@ async function writeImageConfig(
   outDir?: string,
 ): Promise<void> {
   const srcDir = path.join(projectRoot, 'src')
-  const { getBinaryPath } = await import('@/cli/platform')
+  const { getBinaryPath } = await import('@rari/core/platform')
   const binaryPath = getBinaryPath()
 
   const scanImagesTimeoutMs = 60_000
@@ -2184,7 +2184,7 @@ ${clientTransformedCode}`
       const startRustServer = async () => {
         if (rustServerProcess) return
 
-        const { getBinaryPath, getInstallationInstructions } = await import('@/cli/platform')
+        const { getBinaryPath, getInstallationInstructions } = await import('@rari/core/platform')
 
         let binaryPath: string
         try {

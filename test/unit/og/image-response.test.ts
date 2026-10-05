@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { describe, expect, it } from 'vite-plus/test'
-import { ImageResponse } from '../../../packages/rari/src/og/image-response'
+import { ImageResponse } from '../../../packages/react/src/og/image-response'
 
 describe('image response', () => {
   it('serializes style objects into toJSON props', () => {

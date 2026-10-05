@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { contentHash } from '../../../packages/rari/src/shared/utils/content-hash'
-import { hashedFontFileName } from '../../../packages/rari/src/vite/font/assets'
+import { contentHash } from '../../../packages/react/src/shared/utils/content-hash'
+import { hashedFontFileName } from '../../../packages/react/src/vite/font/assets'
 import {
   buildFontFamilyStack,
   fontFormatFromPath,
@@ -12,7 +12,7 @@ import {
   generateFontFaceCss,
   normalizeDisplay,
   preloadLinksForFaces,
-} from '../../../packages/rari/src/vite/font/css'
+} from '../../../packages/react/src/vite/font/css'
 import {
   assertGoogleFontAssetUrl,
   buildGoogleCssUrl,
@@ -20,18 +20,18 @@ import {
   fontPreloadMarker,
   googleExportNameToFamily,
   parseCssFontFaces,
-} from '../../../packages/rari/src/vite/font/google-loader'
-import { warnGoogleFontOptions } from '../../../packages/rari/src/vite/font/google-metadata'
+} from '../../../packages/react/src/vite/font/google-loader'
+import { warnGoogleFontOptions } from '../../../packages/react/src/vite/font/google-metadata'
 import {
   categoryFallback,
   computeFallbackOverrides,
   cssGenericFromCategory,
-} from '../../../packages/rari/src/vite/font/metrics'
-import { extractObjectLiteral } from '../../../packages/rari/src/vite/font/parse-options'
+} from '../../../packages/react/src/vite/font/metrics'
+import { extractObjectLiteral } from '../../../packages/react/src/vite/font/parse-options'
 import {
   createFontRolldownPlugin,
   transformFontSource,
-} from '../../../packages/rari/src/vite/font/plugin'
+} from '../../../packages/react/src/vite/font/plugin'
 
 describe('font parse-options', () => {
   it('parses a static options object', () => {

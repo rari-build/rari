@@ -1,0 +1,12 @@
+{
+  "extends": "../../.config/typescript/package.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "rari/mdx/registry": ["./src/mdx/registry.ts"],
+      "rari/mdx/define": ["./src/mdx/define.ts"]
+    }
+  },
+  "include": ["scripts", "src"]
+}

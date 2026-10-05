@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { DEFAULT_DEVICE_SIZES } from '../../../packages/rari/src/image/constants'
-import { resolveOptimizedSizePlan } from '../../../packages/rari/src/image/size-plan'
+import { DEFAULT_DEVICE_SIZES } from '../../../packages/react/src/image/constants'
+import { resolveOptimizedSizePlan } from '../../../packages/react/src/image/size-plan'
 
 describe('resolveOptimizedSizePlan', () => {
   it('uses device sizes for fill mode instead of intrinsic width', () => {

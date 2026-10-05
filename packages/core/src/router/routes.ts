@@ -1,5 +1,5 @@
 // oxlint-disable typescript/prefer-readonly-parameter-types
-import type { AppIconEntry } from '../metadata/app-icons'
+import type { AppIconEntry } from './app-icons'
 import type {
   ApiRouteEntry,
   AppRouteEntry,
@@ -14,30 +14,47 @@ import type {
 } from './types'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { PATH_SEPARATOR_REGEX } from '@/shared/regex-constants'
-import { toPosixPath } from '@/shared/utils/path'
-import { discoverAppIconsInDir } from '../metadata/app-icons'
+import { PATH_SEPARATOR_REGEX } from '../regex-constants'
+import { toPosixPath } from '../utils/path'
+import { discoverAppIconsInDir } from './app-icons'
+
+/**
+ * Base names of the special files a framework's router recognises inside the
+ * app directory. The scanner only cares about *which* file plays which role;
+ * what each role means at render time is the framework adapter's business.
+ */
+export interface RouteConventions {
+  /** Page component for the directory's route (`page` in React, `index` in Qwik). */
+  readonly page: string
+  readonly layout: string
+  readonly loading: string
+  readonly error: string
+  readonly notFound: string
+  readonly template: string
+  /** API route handler module. */
+  readonly route: string
+  readonly ogImage: string
+}
+
+/** Next-style conventions: rari's default and the React adapter's. */
+export const DEFAULT_ROUTE_CONVENTIONS: RouteConventions = {
+  page: 'page',
+  layout: 'layout',
+  loading: 'loading',
+  error: 'error',
+  notFound: 'not-found',
+  template: 'template',
+  route: 'route',
+  ogImage: 'opengraph-image',
+}
 
 export interface AppRouteGeneratorOptions {
   readonly appDir: string
   readonly extensions?: readonly string[]
   readonly verbose?: boolean
+  /** Override any of the special-file names; unspecified ones keep the defaults. */
+  readonly conventions?: Partial<RouteConventions>
 }
-
-const SPECIAL_FILES = {
-  PAGE: 'page',
-  LAYOUT: 'layout',
-  LOADING: 'loading',
-  ERROR: 'error',
-  NOT_FOUND: 'not-found',
-  TEMPLATE: 'template',
-  DEFAULT: 'default',
-  ROUTE: 'route',
-  OG_IMAGE: 'opengraph-image',
-  TWITTER_IMAGE: 'twitter-image',
-  ICON: 'icon',
-  APPLE_ICON: 'apple-icon',
-} as const
 
 const SEGMENT_PATTERNS = {
   DYNAMIC: /^\[([^\]]+)\]$/,
@@ -124,11 +141,13 @@ class AppRouteGenerator {
   private readonly appDir: string
   private readonly extensions: string[]
   private readonly verbose: boolean
+  private readonly conventions: RouteConventions
 
   constructor(options: AppRouteGeneratorOptions) {
     this.appDir = path.resolve(options.appDir)
     this.extensions = [...(options.extensions ?? ['.tsx', '.jsx', '.ts', '.js'])]
     this.verbose = options.verbose ?? false
+    this.conventions = { ...DEFAULT_ROUTE_CONVENTIONS, ...options.conventions }
   }
 
   async generateManifest(): Promise<AppRouteManifest> {
@@ -319,9 +338,9 @@ class AppRouteGenerator {
 
     this.pushPageRoute(relativePath, files, routePath, routes)
     this.pushLayoutEntry(relativePath, files, routePath, layouts)
-    this.pushNamedSpecial(relativePath, files, routePath, SPECIAL_FILES.LOADING, loading)
-    this.pushNamedSpecial(relativePath, files, routePath, SPECIAL_FILES.ERROR, errors)
-    this.pushNamedSpecial(relativePath, files, routePath, SPECIAL_FILES.NOT_FOUND, notFound)
+    this.pushNamedSpecial(relativePath, files, routePath, this.conventions.loading, loading)
+    this.pushNamedSpecial(relativePath, files, routePath, this.conventions.error, errors)
+    this.pushNamedSpecial(relativePath, files, routePath, this.conventions.notFound, notFound)
     this.pushTemplateEntry(relativePath, files, routePath, templates)
     await this.pushOgImageEntry(relativePath, files, routePath, ogImages)
 
@@ -333,7 +352,7 @@ class AppRouteGenerator {
     })
     appIcons.push(...discoveredIcons)
 
-    const routeFile = this.findFile(files, SPECIAL_FILES.ROUTE)
+    const routeFile = this.findFile(files, this.conventions.route)
     if (routeFile != null && routeFile !== '') {
       const apiRoute = await this.processApiRouteFile(relativePath, routeFile)
       apiRoutes.push(apiRoute)
@@ -346,7 +365,7 @@ class AppRouteGenerator {
     routePath: string,
     routes: AppRouteEntry[],
   ): void {
-    const pageFile = this.findFile(files, SPECIAL_FILES.PAGE)
+    const pageFile = this.findFile(files, this.conventions.page)
     if (pageFile == null || pageFile === '') return
     const segments = this.parseRouteSegments(relativePath)
     const params = this.extractParams(segments)
@@ -365,7 +384,7 @@ class AppRouteGenerator {
     routePath: string,
     layouts: LayoutEntry[],
   ): void {
-    const layoutFile = this.findFile(files, SPECIAL_FILES.LAYOUT)
+    const layoutFile = this.findFile(files, this.conventions.layout)
     if (layoutFile == null || layoutFile === '') return
     const parentPath = this.getParentPath(relativePath)
     layouts.push({
@@ -396,7 +415,7 @@ class AppRouteGenerator {
     routePath: string,
     templates: TemplateEntry[],
   ): void {
-    const templateFile = this.findFile(files, SPECIAL_FILES.TEMPLATE)
+    const templateFile = this.findFile(files, this.conventions.template)
     if (templateFile == null || templateFile === '') return
     const parentPath = this.getParentPath(relativePath)
     templates.push({
@@ -412,7 +431,7 @@ class AppRouteGenerator {
     routePath: string,
     ogImages: OgImageEntry[],
   ): Promise<void> {
-    const ogImageFile = this.findFile(files, SPECIAL_FILES.OG_IMAGE)
+    const ogImageFile = this.findFile(files, this.conventions.ogImage)
     if (ogImageFile == null || ogImageFile === '') return
 
     const filePath = toPosixPath(path.join(relativePath, ogImageFile))
@@ -445,6 +464,8 @@ class AppRouteGenerator {
   }
 
   private findFile(files: string[], baseName: string): string | undefined {
+    // An empty convention name disables that role for the framework.
+    if (baseName === '') return undefined
     for (const ext of this.extensions) {
       const fileName = `${baseName}${ext}`
       if (files.includes(fileName)) return fileName

@@ -1,10 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { getNavigationTransitionSnapshot } from '../../../packages/rari/src/router/navigation/navigation-transition-store'
+import { getNavigationTransitionSnapshot } from '../../../packages/react/src/router/navigation/navigation-transition-store'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
-} from '../../../packages/rari/src/runtime/flight/commit-navigation-payload'
+} from '../../../packages/react/src/runtime/flight/commit-navigation-payload'
 
 interface Payload {
   readonly element: string

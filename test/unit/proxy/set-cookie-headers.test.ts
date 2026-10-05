@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { RariResponse } from '../../../packages/rari/src/proxy/http/response'
+import { RariResponse } from '../../../packages/react/src/proxy/http/response'
 import {
   applyResponseCookies,
   collectAllHeaders,
   extractProxyHeaders,
-} from '../../../packages/rari/src/proxy/runtime/shared/headers'
+} from '../../../packages/react/src/proxy/runtime/shared/headers'
 import {
   handleContinueWithHeaders,
   handleDirectResponse,
-} from '../../../packages/rari/src/proxy/runtime/shared/process-result'
+} from '../../../packages/react/src/proxy/runtime/shared/process-result'
 
 describe('proxy response Set-Cookie serialization', () => {
   it('collects multiple Set-Cookie headers via getSetCookie', () => {

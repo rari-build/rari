@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react'
-import type { AppIconEntry } from '../metadata/app-icons'
-
-export type { AppIconEntry } from '../metadata/app-icons'
+// The route manifest the Rust host reads from `dist/server/routes.json`.
+//
+// Every framework adapter's build emits this shape (via `generateAppRouteManifest`
+// with its own file conventions), so the host can match routes, resolve layout
+// chains, key its response cache, and answer 404s without knowing the framework.
+import type { AppIconEntry } from './app-icons'
 
 export type RouteSegmentType = 'static' | 'dynamic' | 'catch-all' | 'optional-catch-all'
 
@@ -96,6 +98,11 @@ export interface AppRouteManifest {
   generated: string
 }
 
+/**
+ * Page metadata the host merges into the document `<head>`. A plain data
+ * schema (no framework types), so any adapter can produce it from its own
+ * head/metadata conventions.
+ */
 export interface RouteMetadata {
   title?: string | { default?: string; template?: string; absolute?: string }
   description?: string
@@ -165,57 +172,3 @@ export interface RouteMetadata {
     types?: Record<string, string>
   }
 }
-
-export type Metadata = RouteMetadata
-
-export interface RouteParams {
-  readonly [key: string]: string | readonly string[]
-}
-
-export interface SearchParams {
-  readonly [key: string]: string | readonly string[] | undefined
-}
-
-export interface PageProps<
-  TParams extends RouteParams = RouteParams,
-  TSearchParams extends SearchParams = SearchParams,
-> {
-  readonly params: TParams
-  readonly searchParams: TSearchParams
-}
-
-export interface LayoutProps<TParams extends RouteParams = RouteParams> {
-  readonly children: ReactNode
-  readonly params?: TParams
-  readonly pathname?: string
-}
-
-export interface ErrorProps {
-  readonly error: Error
-  readonly reset: () => void
-}
-
-export interface AppRouteMatch {
-  readonly route: AppRouteEntry
-  readonly params: RouteParams
-  readonly searchParams: SearchParams
-  readonly layouts: readonly LayoutEntry[]
-  readonly loading?: LoadingEntry
-  readonly error?: ErrorEntry
-  readonly templates: readonly TemplateEntry[]
-  readonly pathname: string
-}
-
-export type GenerateMetadata<
-  TParams extends RouteParams = RouteParams,
-  TSearchParams extends SearchParams = SearchParams,
-> = (
-  props: Readonly<{
-    params: TParams
-    searchParams: TSearchParams
-  }>,
-) => RouteMetadata | Promise<RouteMetadata>
-
-export type GenerateStaticParams<TParams extends RouteParams = RouteParams> = () =>
-  | TParams[]
-  | Promise<TParams[]>

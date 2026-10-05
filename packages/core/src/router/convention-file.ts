@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { getErrnoCode } from '@/shared/utils/type-guards'
+import { getErrnoCode } from '../utils/type-guards'
 
 const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs'] as const
 
