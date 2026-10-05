@@ -42,7 +42,10 @@ use crate::{
     runtime::{JsExecutionRuntime, factory::JsRuntimeInterface},
     server::{
         ServerState,
-        cache::response::{CacheMetadata, CachedResponse, ResponseCache, RouteCachePolicy},
+        cache::response::{
+            CacheMetadata, CachedResponse, PrebuiltResponse, ResponseCache, RouteCachePolicy,
+            insert_static_fast_cache,
+        },
         compression::{CompressionEncoding, compress_all_encodings},
         config::Framework,
         error_response,
@@ -50,8 +53,9 @@ use crate::{
         routing::{
             AppRouter,
             app::cache::{
-                insert_response_cache_vary_header, request_cookie_header, response_cache_key,
-                route_query_params_for_cache,
+                can_use_static_fast_cache, insert_response_cache_vary_header,
+                request_cookie_header, response_cache_key, route_query_params_for_cache,
+                static_html_vary_header,
             },
             types::ParamValue,
         },
@@ -294,6 +298,52 @@ fn frame_headers(frame: &[(String, String)]) -> HeaderMap {
     headers
 }
 
+/// Serve a page from the static fast tier: an `Arc` clone of a prebuilt,
+/// per-encoding compressed response, no deserialisation. Same tier the React
+/// SSR path answers cookie-less GETs from.
+fn fast_hit_response(
+    prebuilt: &PrebuiltResponse,
+    request_headers: &HeaderMap,
+    route_label: &HeaderValue,
+) -> Response {
+    let vary = static_html_vary_header(None);
+    if request_headers.get(IF_NONE_MATCH).and_then(|v| v.to_str().ok()) == Some(&prebuilt.etag) {
+        let mut headers = HeaderMap::new();
+        if let Ok(value) = HeaderValue::from_str(&prebuilt.etag) {
+            headers.insert(ETAG, value);
+        }
+        if let Ok(value) = HeaderValue::from_str(&vary) {
+            headers.insert(VARY, value);
+        }
+        return response_with_headers(StatusCode::NOT_MODIFIED, &headers, Body::empty());
+    }
+
+    let accept_encoding = request_headers.get(ACCEPT_ENCODING).and_then(|v| v.to_str().ok());
+    let (body, encoding) =
+        prebuilt.body_for(CompressionEncoding::from_accept_encoding(accept_encoding));
+
+    let mut headers = HeaderMap::new();
+    if let Ok(value) = HeaderValue::from_str(&prebuilt.content_type) {
+        headers.insert(CONTENT_TYPE, value);
+    }
+    if let Ok(value) = HeaderValue::from_str(&prebuilt.cache_control) {
+        headers.insert(CACHE_CONTROL, value);
+    }
+    if let Ok(value) = HeaderValue::from_str(&prebuilt.etag) {
+        headers.insert(ETAG, value);
+    }
+    if let Ok(value) = HeaderValue::from_str(&vary) {
+        headers.insert(VARY, value);
+    }
+    if let Some(value) = encoding {
+        headers.insert(CONTENT_ENCODING, HeaderValue::from_static(value));
+    }
+    headers.insert(ROUTE_HEADER, route_label.clone());
+    headers.insert("x-cache", HeaderValue::from_static("HIT"));
+    let status = if prebuilt.is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
+    response_with_headers(status, &headers, Body::from(body))
+}
+
 /// Serve a stored page: `304` on a matching `If-None-Match`, otherwise the
 /// precompressed variant matching `Accept-Encoding` (identity if none).
 fn cached_hit_response(cached: &CachedResponse, request_headers: &HeaderMap) -> Response {
@@ -433,6 +483,17 @@ impl GuestRenderer for QwikGuest {
         let cache_key =
             response_cache_key(&path, query_for_cache.as_ref(), Some("guest"), cookie_header);
 
+        // Cookie-less GETs are answered from the static fast tier first: the same
+        // `Arc<PrebuiltResponse>` tier the React path uses, with no cache-entry
+        // deserialisation per hit. Only cookie-independent renders are stored.
+        let fast_key =
+            ResponseCache::generate_static_fast_cache_key(&path, query_for_cache.as_ref(), None);
+        let use_fast_tier = cacheable_request && can_use_static_fast_cache(cookie_header);
+
+        if use_fast_tier && let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
+            return fast_hit_response(&prebuilt, &parts.headers, &route_label);
+        }
+
         if cacheable_request && let Some(cached) = state.response_cache.get(&cache_key).await {
             return cached_hit_response(&cached, &parts.headers);
         }
@@ -501,6 +562,37 @@ impl GuestRenderer for QwikGuest {
                     // instead of paying for compression per request (RSC parity).
                     let (compressed_gzip, compressed_zstd, compressed_br) =
                         compress_all_encodings(body.clone()).await;
+                    let etag = ResponseCache::generate_etag(&body);
+
+                    if use_fast_tier {
+                        let cache_control = headers
+                            .get(CACHE_CONTROL)
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or_else(|| state.config.get_cache_control_for_route(&path))
+                            .to_string();
+                        let content_type = headers
+                            .get(CONTENT_TYPE)
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("text/html; charset=utf-8")
+                            .to_string();
+                        insert_static_fast_cache(
+                            &state.static_fast_cache,
+                            &fast_key,
+                            Arc::new(PrebuiltResponse {
+                                identity: body.clone(),
+                                gzip: compressed_gzip.clone(),
+                                br: compressed_br.clone(),
+                                zstd: compressed_zstd.clone(),
+                                etag: etag.clone(),
+                                content_type,
+                                cache_control,
+                                is_not_found: false,
+                                cached_at: Instant::now(),
+                            }),
+                            state.response_cache.config.max_entries,
+                        );
+                    }
+
                     state
                         .response_cache
                         .set(
@@ -511,7 +603,7 @@ impl GuestRenderer for QwikGuest {
                                 metadata: CacheMetadata {
                                     cached_at: Instant::now(),
                                     ttl: policy.ttl,
-                                    etag: Some(ResponseCache::generate_etag(&body)),
+                                    etag: Some(etag),
                                     tags: policy.tags,
                                 },
                                 compressed_zstd,
