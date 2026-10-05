@@ -35,8 +35,9 @@ use crate::{
         cache::{handler::CacheHandlerRegistry, response, warmup},
         config::{
             CACHE_LAYER_FETCH, CACHE_LAYER_IMAGE, CACHE_LAYER_LAYOUT, CACHE_LAYER_MODULE,
-            CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config,
+            CACHE_LAYER_OG, CACHE_LAYER_RESPONSE, Config, Framework,
         },
+        guest::{self, handle_guest_route},
         image::{ImageCache, ImageConfig, ImageOptimizer, ImageState, handle_image_request},
         loader::ComponentLoader,
         middleware::{
@@ -125,27 +126,41 @@ impl Server {
             config.server.js_pool_size,
         ));
         js_runtime.set_setup_mode(true);
+        let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        // React is the host's built-in renderer: its RSC pipeline, component
+        // registry and client manifest live in the runtime. Any other framework
+        // ships those inside its own server bundle, loaded as a guest below.
+        let is_react = config.framework == Framework::React;
         let mut renderer =
             RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
-        renderer.initialize().await?;
 
-        let server_manifest = if config.is_production() {
+        let server_manifest = if is_react && config.is_production() {
             ComponentLoader::load_server_manifest_file().await?
         } else {
             None
         };
 
-        if config.is_production() {
-            if let Some(ref manifest) = server_manifest {
-                ComponentLoader::load_production_components(&mut renderer, manifest).await?;
+        if is_react {
+            renderer.initialize().await?;
+
+            if config.is_production() {
+                if let Some(ref manifest) = server_manifest {
+                    ComponentLoader::load_production_components(&mut renderer, manifest).await?;
+                }
+            } else {
+                ComponentLoader::load_server_actions_from_source(&mut renderer).await?;
+                ComponentLoader::load_app_router_components(&mut renderer).await?;
             }
-        } else {
-            ComponentLoader::load_server_actions_from_source(&mut renderer).await?;
-            ComponentLoader::load_app_router_components(&mut renderer).await?;
+
+            ComponentLoader::load_ssr_client_components(&renderer.runtime).await?;
+            ComponentLoader::load_client_reference_manifest(&renderer.runtime).await?;
         }
 
-        ComponentLoader::load_ssr_client_components(&renderer.runtime).await?;
-        ComponentLoader::load_client_reference_manifest(&renderer.runtime).await?;
+        let guest = guest::load(&config, Arc::clone(&js_runtime), &project_root).await?;
+        if let Some(guest) = &guest {
+            tracing::info!(framework = %guest.framework(), "[rari] guest renderer loaded");
+        }
         js_runtime.set_setup_mode(false);
 
         let routes_manifest = RoutesManifest::load_from_file(ROUTES_MANIFEST_PATH).await;
@@ -180,16 +195,21 @@ impl Server {
 
         {
             let renderer_for_hook = Arc::clone(&renderer_arc);
+            let guest_for_hook = guest.clone();
             js_runtime.set_post_rebuild_hook(Arc::new(move |_idx, slot_runtime| {
                 let renderer_for_hook = Arc::clone(&renderer_for_hook);
+                let guest_for_hook = guest_for_hook.clone();
                 Box::pin(async move {
-                    let renderer = renderer_for_hook.lock().await;
-                    renderer.resync_slot(slot_runtime).await
+                    match guest_for_hook {
+                        Some(guest) => guest.resync_slot(&slot_runtime).await,
+                        None => {
+                            let renderer = renderer_for_hook.lock().await;
+                            renderer.resync_slot(slot_runtime).await
+                        }
+                    }
                 })
             }));
         }
-
-        let project_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
         let cache_registry = Arc::new(CacheHandlerRegistry::from_env());
 
@@ -260,9 +280,12 @@ impl Server {
             image_optimizer: Some(Arc::clone(&image_optimizer)),
             cache_registry: Arc::clone(&cache_registry),
             image_handler,
+            guest,
         };
 
-        if config.is_production() {
+        // Cache warmup renders routes through the RSC pipeline; a guest has its
+        // own render path and warms lazily on first hit.
+        if config.is_production() && is_react {
             let warmup_state = state.clone();
             tokio::spawn(async move {
                 warmup::warm_cache(&warmup_state).await;
@@ -362,8 +385,11 @@ impl Server {
         }
 
         let has_app_router = state.app_router.is_some();
+        let is_react = config.framework == Framework::React;
 
-        if has_app_router {
+        // `/api/*` handlers are built by the React Vite plugin; a guest framework
+        // owns its own `/api` routes (Qwik endpoints under `src/routes/api/`).
+        if has_app_router && is_react {
             let medium_body_limit = DefaultBodyLimit::max(1024 * 1024);
             router = router
                 .route("/api/{*path}", routing::options(api_cors_preflight))
@@ -371,7 +397,19 @@ impl Server {
                 .layer(medium_body_limit);
         }
 
-        if has_app_router {
+        if let Some(guest) = state.guest.as_ref() {
+            for mount in guest.static_mounts() {
+                router = router.route(
+                    &format!("{}/{{*path}}", mount.route_prefix),
+                    routing::get(guest::static_mount_handler(&mount)),
+                );
+            }
+
+            // Every method: guests run their own form actions and RPC endpoints.
+            router = router
+                .route("/", routing::any(handle_guest_route))
+                .route("/{*path}", routing::any(handle_guest_route));
+        } else if has_app_router {
             router = router.route("/assets/{*path}", routing::get(serve_static_asset));
 
             router = router
@@ -402,7 +440,8 @@ impl Server {
 
         let mut router = router.with_state(state.clone());
 
-        if has_app_router {
+        // `proxy.ts` is a React-app convention compiled by the React Vite plugin.
+        if has_app_router && is_react {
             router = router.layer(ProxyLayer::new(state));
         }
 

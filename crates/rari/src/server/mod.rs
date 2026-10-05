@@ -4,6 +4,7 @@ pub mod compression;
 pub mod config;
 pub mod document;
 pub mod error_response;
+pub mod guest;
 pub mod host;
 pub mod image;
 pub mod loader;
