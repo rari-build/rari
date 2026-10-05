@@ -126,6 +126,17 @@ fn cli() -> Command {
                 .default_value("3000"),
         )
         .arg(
+            Arg::new("framework")
+                .short('f')
+                .long("framework")
+                .value_name("FRAMEWORK")
+                .help(
+                    "Guest framework to host (overrides RARI_FRAMEWORK and the build's \
+                     dist/server/config.json; defaults to react)",
+                )
+                .value_parser(["react"]),
+        )
+        .arg(
             Arg::new("verbose")
                 .short('v')
                 .long("verbose")
@@ -295,6 +306,12 @@ fn load_configuration(matches: &clap::ArgMatches) -> Result<Config, RariError> {
 
     if let Some(&port) = matches.get_one::<u16>("port") {
         config.server.port = port;
+    }
+
+    if let Some(framework) = matches.get_one::<String>("framework") {
+        config.framework = framework
+            .parse()
+            .map_err(|e| RariError::configuration(format!("Invalid framework: {e}")))?;
     }
 
     validate_configuration(&config)?;
