@@ -1,0 +1,7 @@
+{
+  "extends": "../../.config/typescript/package.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ESNext"]
+  },
+  "include": ["src"]
+}

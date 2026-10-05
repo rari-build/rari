@@ -114,6 +114,15 @@ export const monorepoEslintConfigs: Linter.Config[] = [
     },
   },
   {
+    // Qwik apps: `component$` default exports are anonymous by convention and
+    // React Fast Refresh does not apply.
+    files: ['examples/qwik-*/**/*.{ts,tsx}', 'packages/qwik/**/*.{ts,tsx}'],
+    rules: {
+      'react/only-export-components': 'off',
+      'react/no-unnecessary-use-prefix': 'off',
+    },
+  },
+  {
     files: ['tools/bundle-react-esm/*.ts'],
     rules: {
       'no-console': 'off',
@@ -146,6 +155,15 @@ export const monorepoLint: OxlintConfig = {
       files: ['tools/bundle-react-esm/*.ts'],
       rules: {
         'no-console': 'off',
+      },
+    },
+    {
+      // Qwik apps: `component$` default exports are anonymous by convention and
+      // React Fast Refresh does not apply.
+      files: ['examples/qwik-*/**/*.{ts,tsx}', 'packages/qwik/**/*.{ts,tsx}'],
+      rules: {
+        'react/only-export-components': 'off',
+        'react/no-unnecessary-use-prefix': 'off',
       },
     },
     {

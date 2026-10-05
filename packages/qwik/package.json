@@ -1,0 +1,77 @@
+{
+  "name": "@rari/qwik",
+  "type": "module",
+  "version": "0.17.2",
+  "description": "Qwik adapter for rari: build a Qwik Router app into a server bundle the rari Rust host loads into V8 and streams",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "directory": "packages/qwik",
+    "type": "git",
+    "url": "git+https://github.com/rari-build/rari.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "qwik",
+    "rari",
+    "resumable",
+    "rust",
+    "ssr",
+    "vite"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./build": {
+      "types": "./dist/build.d.mts",
+      "import": "./dist/build.mjs"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "import": "./dist/vite.mjs"
+    },
+    "./platform": {
+      "types": "./dist/platform.d.mts",
+      "import": "./dist/platform.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "dist/index.d.mts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": "^24.21.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "pnpm typecheck && vp pack",
+    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "@qwik.dev/core": ">=2.0.0-rc.0",
+    "@qwik.dev/router": ">=2.0.0-rc.0",
+    "vite": ">=8 <9"
+  },
+  "dependencies": {
+    "@rari/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@qwik.dev/core": "catalog:qwik",
+    "@qwik.dev/router": "catalog:qwik",
+    "@types/node": "catalog:typescript",
+    "typescript": "catalog:typescript",
+    "typescript-7": "catalog:typescript",
+    "vite": "npm:@voidzero-dev/vite-plus-core@^1.0.0",
+    "vite-plus": "catalog:build"
+  }
+}
