@@ -26,6 +26,7 @@ fn is_ident_continue(c: u8) -> bool {
 enum ScanPrev {
     Start,
     Punct(u8),
+    For,
     IdentRegexPrefix,
     IdentOther,
     Primary,
@@ -44,10 +45,52 @@ fn is_regex_prefix_keyword(word: &[u8]) -> bool {
             | b"await"
             | b"yield"
             | b"in"
-            | b"of"
             | b"instanceof"
             | b"extends"
     )
+}
+
+fn classify_ident(word: &[u8], prev: ScanPrev, in_for_header: bool) -> ScanPrev {
+    if matches!(prev, ScanPrev::Punct(b'.')) {
+        return ScanPrev::IdentOther;
+    }
+    if word == b"for" {
+        return ScanPrev::For;
+    }
+    if word == b"await" && matches!(prev, ScanPrev::For) {
+        return ScanPrev::For;
+    }
+    if word == b"of" {
+        return if in_for_header { ScanPrev::IdentRegexPrefix } else { ScanPrev::IdentOther };
+    }
+    if is_regex_prefix_keyword(word) { ScanPrev::IdentRegexPrefix } else { ScanPrev::IdentOther }
+}
+
+fn note_for_header_punct(
+    c: u8,
+    prev: ScanPrev,
+    in_for_header: &mut bool,
+    for_paren_depth: &mut i32,
+) {
+    if c == b'(' && matches!(prev, ScanPrev::For) {
+        *in_for_header = true;
+        *for_paren_depth = 1;
+        return;
+    }
+    if !*in_for_header {
+        return;
+    }
+    match c {
+        b'(' => *for_paren_depth += 1,
+        b')' => {
+            *for_paren_depth -= 1;
+            if *for_paren_depth <= 0 {
+                *in_for_header = false;
+                *for_paren_depth = 0;
+            }
+        }
+        _ => {}
+    }
 }
 
 fn is_module_keyword_boundary(bytes: &[u8], start: usize) -> bool {
@@ -104,7 +147,7 @@ fn skip_string(bytes: &[u8], start: usize, quote: u8) -> usize {
 
 fn is_regex_start_context(prev: ScanPrev) -> bool {
     match prev {
-        ScanPrev::IdentOther | ScanPrev::Primary => false,
+        ScanPrev::IdentOther | ScanPrev::Primary | ScanPrev::For => false,
         ScanPrev::Punct(c) => !matches!(c, b')' | b']' | b'/') && !c.is_ascii_digit(),
         ScanPrev::Start | ScanPrev::IdentRegexPrefix => true,
     }
@@ -173,6 +216,8 @@ fn skip_template(bytes: &[u8], start: usize) -> usize {
 fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
     let mut depth = 1usize;
     let mut prev = ScanPrev::Punct(b'{');
+    let mut in_for_header = false;
+    let mut for_paren_depth = 0i32;
     while i < bytes.len() && depth > 0 {
         let c = bytes[i];
         if c.is_ascii_whitespace() {
@@ -197,11 +242,13 @@ fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
             }
             b'{' => {
                 depth += 1;
+                note_for_header_punct(c, prev, &mut in_for_header, &mut for_paren_depth);
                 prev = ScanPrev::Punct(b'{');
                 i += 1;
             }
             b'}' => {
                 depth -= 1;
+                note_for_header_punct(c, prev, &mut in_for_header, &mut for_paren_depth);
                 prev = ScanPrev::Punct(b'}');
                 i += 1;
             }
@@ -211,13 +258,10 @@ fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
                 while i < bytes.len() && is_ident_continue(bytes[i]) {
                     i += 1;
                 }
-                prev = if is_regex_prefix_keyword(&bytes[start..i]) {
-                    ScanPrev::IdentRegexPrefix
-                } else {
-                    ScanPrev::IdentOther
-                };
+                prev = classify_ident(&bytes[start..i], prev, in_for_header);
             }
             _ => {
+                note_for_header_punct(c, prev, &mut in_for_header, &mut for_paren_depth);
                 prev = ScanPrev::Punct(c);
                 i += 1;
             }
@@ -230,6 +274,8 @@ pub fn is_esm_code(code: &str) -> bool {
     let bytes = code.as_bytes();
     let mut i = 0;
     let mut prev = ScanPrev::Start;
+    let mut in_for_header = false;
+    let mut for_paren_depth = 0i32;
     while i < bytes.len() {
         let c = bytes[i];
 
@@ -270,14 +316,11 @@ pub fn is_esm_code(code: &str) -> bool {
             {
                 return true;
             }
-            prev = if is_regex_prefix_keyword(&bytes[start..i]) {
-                ScanPrev::IdentRegexPrefix
-            } else {
-                ScanPrev::IdentOther
-            };
+            prev = classify_ident(&bytes[start..i], prev, in_for_header);
             continue;
         }
 
+        note_for_header_punct(c, prev, &mut in_for_header, &mut for_paren_depth);
         prev = ScanPrev::Punct(c);
         i += 1;
     }
@@ -563,5 +606,9 @@ mod tests {
         assert!(is_esm_code(r"const t = `${/\//}`; export default 1"));
         assert!(is_esm_code(r"function f(){return /\//;} export default function Page(){}"));
         assert!(is_esm_code(r"const t = `${(()=>{return /\//;})()}`; export default 1"));
+        assert!(is_esm_code(r"a.of / b; export default 1"));
+        assert!(is_esm_code(r"of / b; export default 1"));
+        assert!(!is_esm_code(r"for (const x of /export/) {}"));
+        assert!(is_esm_code(r"for (const x of /export/) {} export default 1"));
     }
 }
