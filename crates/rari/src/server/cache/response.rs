@@ -30,6 +30,9 @@ pub struct PrebuiltResponse {
     pub cache_control: String,
     pub is_not_found: bool,
     pub cached_at: Instant,
+    /// Matched route pattern, reported as `x-rari-route` on hits (guest
+    /// renderers); `None` where the renderer does not label responses.
+    pub route: Option<String>,
 }
 
 impl PrebuiltResponse {
@@ -1239,6 +1242,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             })
         };
 
@@ -1271,6 +1275,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             })
         };
 
@@ -1308,6 +1313,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             })
         };
 
@@ -1349,6 +1355,7 @@ mod tests {
                         cache_control: "public".to_string(),
                         is_not_found: false,
                         cached_at: Instant::now(),
+                        route: None,
                     });
                     insert_static_fast_cache(&cache, &key, entry, max_entries);
                 }
@@ -1381,6 +1388,7 @@ mod tests {
                 cache_control: "public, max-age=1".to_string(),
                 is_not_found: false,
                 cached_at,
+                route: None,
             }),
             10,
         );
@@ -1403,6 +1411,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at,
+                route: None,
             }),
             10,
         );
@@ -1424,6 +1433,7 @@ mod tests {
             cache_control: "public, max-age=1".to_string(),
             is_not_found: false,
             cached_at: stale_at,
+            route: None,
         });
         insert_static_fast_cache(&cache, "/", Arc::clone(&stale), 10);
 
@@ -1437,6 +1447,7 @@ mod tests {
             cache_control: "public, max-age=60".to_string(),
             is_not_found: false,
             cached_at: Instant::now(),
+            route: None,
         });
         insert_static_fast_cache(&cache, "/", Arc::clone(&fresh), 10);
 
