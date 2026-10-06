@@ -1,11 +1,7 @@
-use std::{
-    sync::OnceLock,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use cow_utils::CowUtils;
 use rari_error::RariError;
-use regex::Regex;
 use serde_json::Value;
 
 use super::interface::JsRuntimeInterface;
@@ -18,15 +14,158 @@ fn escape_js_string(s: &str) -> String {
         .into_owned()
 }
 
-pub fn is_esm_code(code: &str) -> bool {
-    static ESM_REGEX: OnceLock<Regex> = OnceLock::new();
-    #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    let regex = ESM_REGEX.get_or_init(|| {
-        Regex::new(r#"(?:^|[^\w.$])(?:import|export)(?:\s*[*{"']|[\s])"#)
-            .expect("Valid ESM detection regex")
-    });
+fn is_ident_start(c: u8) -> bool {
+    c.is_ascii_alphabetic() || c == b'_' || c == b'$'
+}
 
-    regex.is_match(code)
+fn is_ident_continue(c: u8) -> bool {
+    is_ident_start(c) || c.is_ascii_digit()
+}
+
+fn is_module_keyword_boundary(bytes: &[u8], start: usize) -> bool {
+    if start == 0 {
+        return true;
+    }
+    let prev = bytes[start - 1];
+    !is_ident_continue(prev) && prev != b'.'
+}
+
+fn is_module_keyword_suffix(bytes: &[u8], end: usize) -> bool {
+    let mut j = end;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j < bytes.len() && matches!(bytes[j], b'*' | b'{' | b'"' | b'\'') {
+        return true;
+    }
+    end < bytes.len()
+        && bytes[end].is_ascii_whitespace()
+        && j < bytes.len()
+        && is_ident_start(bytes[j])
+}
+
+fn skip_line_comment(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && bytes[i] != b'\n' {
+        i += 1;
+    }
+    i
+}
+
+fn skip_block_comment(bytes: &[u8], mut i: usize) -> usize {
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+            return i + 2;
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
+fn skip_string(bytes: &[u8], start: usize, quote: u8) -> usize {
+    let mut i = start + 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i = (i + 2).min(bytes.len()),
+            c if c == quote => return i + 1,
+            b'\n' if quote != b'`' => return i,
+            _ => i += 1,
+        }
+    }
+    bytes.len()
+}
+
+fn skip_template(bytes: &[u8], start: usize) -> usize {
+    let mut i = start + 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i = (i + 2).min(bytes.len()),
+            b'`' => return i + 1,
+            b'$' if i + 1 < bytes.len() && bytes[i + 1] == b'{' => {
+                i += 2;
+                i = skip_template_expression(bytes, i);
+            }
+            _ => i += 1,
+        }
+    }
+    bytes.len()
+}
+
+fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
+    let mut depth = 1usize;
+    while i < bytes.len() && depth > 0 {
+        let c = bytes[i];
+        if c == b'/' && i + 1 < bytes.len() {
+            if bytes[i + 1] == b'/' {
+                i = skip_line_comment(bytes, i + 2);
+                continue;
+            }
+            if bytes[i + 1] == b'*' {
+                i = skip_block_comment(bytes, i + 2);
+                continue;
+            }
+        }
+        match c {
+            b'\'' | b'"' => i = skip_string(bytes, i, c),
+            b'`' => i = skip_template(bytes, i),
+            b'{' => {
+                depth += 1;
+                i += 1;
+            }
+            b'}' => {
+                depth -= 1;
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    i
+}
+
+pub fn is_esm_code(code: &str) -> bool {
+    let bytes = code.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+
+        if c == b'/' && i + 1 < bytes.len() {
+            if bytes[i + 1] == b'/' {
+                i = skip_line_comment(bytes, i + 2);
+                continue;
+            }
+            if bytes[i + 1] == b'*' {
+                i = skip_block_comment(bytes, i + 2);
+                continue;
+            }
+        }
+
+        if c == b'\'' || c == b'"' {
+            i = skip_string(bytes, i, c);
+            continue;
+        }
+        if c == b'`' {
+            i = skip_template(bytes, i);
+            continue;
+        }
+
+        if is_ident_start(c) {
+            let start = i;
+            i += 1;
+            while i < bytes.len() && is_ident_continue(bytes[i]) {
+                i += 1;
+            }
+            let word = &code[start..i];
+            if (word == "import" || word == "export")
+                && is_module_keyword_boundary(bytes, start)
+                && is_module_keyword_suffix(bytes, i)
+            {
+                return true;
+            }
+            continue;
+        }
+
+        i += 1;
+    }
+    false
 }
 
 pub fn invalidate_script_name(component_id: &str) -> String {
@@ -298,5 +437,10 @@ mod tests {
         assert!(is_esm_code("export default function Page() {}"));
         assert!(is_esm_code("  export { foo }"));
         assert!(!is_esm_code("const exportName = 1; function importData() {}"));
+        assert!(!is_esm_code("// import { foo } from 'bar'\nfunction x() {}"));
+        assert!(!is_esm_code("/* export default 1 */\nfunction x() {}"));
+        assert!(!is_esm_code(r#"const s = "import { x } from 'y'""#));
+        assert!(!is_esm_code("const s = `export default 1`"));
+        assert!(is_esm_code("// just a comment\nexport default function Page() {}"));
     }
 }
