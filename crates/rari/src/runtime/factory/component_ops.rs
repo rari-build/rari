@@ -22,6 +22,34 @@ fn is_ident_continue(c: u8) -> bool {
     is_ident_start(c) || c.is_ascii_digit()
 }
 
+#[derive(Clone, Copy)]
+enum ScanPrev {
+    Start,
+    Punct(u8),
+    IdentRegexPrefix,
+    IdentOther,
+    Primary,
+}
+
+fn is_regex_prefix_keyword(word: &[u8]) -> bool {
+    matches!(
+        word,
+        b"return"
+            | b"typeof"
+            | b"case"
+            | b"throw"
+            | b"delete"
+            | b"void"
+            | b"new"
+            | b"await"
+            | b"yield"
+            | b"in"
+            | b"of"
+            | b"instanceof"
+            | b"extends"
+    )
+}
+
 fn is_module_keyword_boundary(bytes: &[u8], start: usize) -> bool {
     if start == 0 {
         return true;
@@ -74,12 +102,11 @@ fn skip_string(bytes: &[u8], start: usize, quote: u8) -> usize {
     bytes.len()
 }
 
-fn is_regex_start_context(prev_significant: Option<u8>) -> bool {
-    match prev_significant {
-        None => true,
-        Some(b')' | b']' | b'/' | b'"' | b'\'' | b'`') => false,
-        Some(c) if is_ident_continue(c) => false,
-        Some(_) => true,
+fn is_regex_start_context(prev: ScanPrev) -> bool {
+    match prev {
+        ScanPrev::IdentOther | ScanPrev::Primary => false,
+        ScanPrev::Punct(c) => !matches!(c, b')' | b']' | b'/') && !c.is_ascii_digit(),
+        ScanPrev::Start | ScanPrev::IdentRegexPrefix => true,
     }
 }
 
@@ -111,7 +138,7 @@ fn skip_regex_literal(bytes: &[u8], start: usize) -> usize {
     bytes.len()
 }
 
-fn try_skip_slash(bytes: &[u8], i: usize, prev_significant: Option<u8>) -> Option<(usize, bool)> {
+fn try_skip_slash(bytes: &[u8], i: usize, prev: ScanPrev) -> Option<(usize, bool)> {
     if i >= bytes.len() || bytes[i] != b'/' {
         return None;
     }
@@ -121,7 +148,7 @@ fn try_skip_slash(bytes: &[u8], i: usize, prev_significant: Option<u8>) -> Optio
     if i + 1 < bytes.len() && bytes[i + 1] == b'*' {
         return Some((skip_block_comment(bytes, i + 2), false));
     }
-    if is_regex_start_context(prev_significant) {
+    if is_regex_start_context(prev) {
         return Some((skip_regex_literal(bytes, i), true));
     }
     None
@@ -145,16 +172,16 @@ fn skip_template(bytes: &[u8], start: usize) -> usize {
 
 fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
     let mut depth = 1usize;
-    let mut prev_significant: Option<u8> = Some(b'{');
+    let mut prev = ScanPrev::Punct(b'{');
     while i < bytes.len() && depth > 0 {
         let c = bytes[i];
         if c.is_ascii_whitespace() {
             i += 1;
             continue;
         }
-        if let Some((next, ends_like_primary)) = try_skip_slash(bytes, i, prev_significant) {
+        if let Some((next, ends_like_primary)) = try_skip_slash(bytes, i, prev) {
             if ends_like_primary {
-                prev_significant = Some(b'1');
+                prev = ScanPrev::Primary;
             }
             i = next;
             continue;
@@ -162,24 +189,36 @@ fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
         match c {
             b'\'' | b'"' => {
                 i = skip_string(bytes, i, c);
-                prev_significant = Some(c);
+                prev = ScanPrev::Primary;
             }
             b'`' => {
                 i = skip_template(bytes, i);
-                prev_significant = Some(b'`');
+                prev = ScanPrev::Primary;
             }
             b'{' => {
                 depth += 1;
-                prev_significant = Some(b'{');
+                prev = ScanPrev::Punct(b'{');
                 i += 1;
             }
             b'}' => {
                 depth -= 1;
-                prev_significant = Some(b'}');
+                prev = ScanPrev::Punct(b'}');
                 i += 1;
             }
+            _ if is_ident_start(c) => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && is_ident_continue(bytes[i]) {
+                    i += 1;
+                }
+                prev = if is_regex_prefix_keyword(&bytes[start..i]) {
+                    ScanPrev::IdentRegexPrefix
+                } else {
+                    ScanPrev::IdentOther
+                };
+            }
             _ => {
-                prev_significant = Some(c);
+                prev = ScanPrev::Punct(c);
                 i += 1;
             }
         }
@@ -190,7 +229,7 @@ fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
 pub fn is_esm_code(code: &str) -> bool {
     let bytes = code.as_bytes();
     let mut i = 0;
-    let mut prev_significant: Option<u8> = None;
+    let mut prev = ScanPrev::Start;
     while i < bytes.len() {
         let c = bytes[i];
 
@@ -199,9 +238,9 @@ pub fn is_esm_code(code: &str) -> bool {
             continue;
         }
 
-        if let Some((next, ends_like_primary)) = try_skip_slash(bytes, i, prev_significant) {
+        if let Some((next, ends_like_primary)) = try_skip_slash(bytes, i, prev) {
             if ends_like_primary {
-                prev_significant = Some(b'1');
+                prev = ScanPrev::Primary;
             }
             i = next;
             continue;
@@ -209,12 +248,12 @@ pub fn is_esm_code(code: &str) -> bool {
 
         if c == b'\'' || c == b'"' {
             i = skip_string(bytes, i, c);
-            prev_significant = Some(c);
+            prev = ScanPrev::Primary;
             continue;
         }
         if c == b'`' {
             i = skip_template(bytes, i);
-            prev_significant = Some(b'`');
+            prev = ScanPrev::Primary;
             continue;
         }
 
@@ -231,11 +270,15 @@ pub fn is_esm_code(code: &str) -> bool {
             {
                 return true;
             }
-            prev_significant = Some(bytes[i - 1]);
+            prev = if is_regex_prefix_keyword(&bytes[start..i]) {
+                ScanPrev::IdentRegexPrefix
+            } else {
+                ScanPrev::IdentOther
+            };
             continue;
         }
 
-        prev_significant = Some(c);
+        prev = ScanPrev::Punct(c);
         i += 1;
     }
     false
@@ -515,8 +558,10 @@ mod tests {
         assert!(!is_esm_code(r#"const s = "import { x } from 'y'""#));
         assert!(!is_esm_code("const s = `export default 1`"));
         assert!(is_esm_code("// just a comment\nexport default function Page() {}"));
-        assert!(is_esm_code(r#"const re = /\//; export default function Page() {}"#));
+        assert!(is_esm_code(r"const re = /\//; export default function Page() {}"));
         assert!(is_esm_code(r#"const re = /["']/; export { foo }"#));
-        assert!(is_esm_code(r#"const t = `${/\//}`; export default 1"#));
+        assert!(is_esm_code(r"const t = `${/\//}`; export default 1"));
+        assert!(is_esm_code(r"function f(){return /\//;} export default function Page(){}"));
+        assert!(is_esm_code(r"const t = `${(()=>{return /\//;})()}`; export default 1"));
     }
 }
