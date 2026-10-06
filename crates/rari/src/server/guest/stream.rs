@@ -12,7 +12,11 @@
 //!    guest emits it once it knows the status (after loaders/actions ran, before
 //!    any HTML), via `op_fizz_chunk(streamId, json)`.
 //! 2. Every following chunk is body bytes, via `op_fizz_chunk_bytes(streamId,
-//!    uint8array)` (or `op_fizz_chunk` for text).
+//!    uint8array)` (or `op_fizz_chunk` for text). Both have sync `_try`
+//!    twins returning `0` sent / `1` full / `2` disconnected; a guest should
+//!    try those first and only await the async op on `1`, so a render that
+//!    never has to wait for the host completes without an event-loop turn per
+//!    chunk (`@rari/core/guest`'s sink does this).
 //! 3. The guest calls `op_fizz_done(streamId)` exactly once, then resolves the
 //!    promise its handler returned. Settling before `done` makes the runtime fail
 //!    the stream ("ended without completing"), which is what we want: a guest

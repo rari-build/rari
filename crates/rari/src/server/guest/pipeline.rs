@@ -20,11 +20,11 @@ use axum::{
     body::{Body, Bytes, to_bytes},
     http::{
         HeaderMap, HeaderName, HeaderValue, Method, Request, StatusCode,
-        request::Parts,
         header::{
             ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, ETAG,
             HOST, IF_NONE_MATCH, SET_COOKIE, VARY,
         },
+        request::Parts,
     },
     response::{IntoResponse, Response},
 };
@@ -110,9 +110,8 @@ impl GuestRequest {
     ///
     /// Fails only if serialisation fails, which for this plain struct it does not.
     pub fn to_json(&self) -> Result<String, rari_error::RariError> {
-        serde_json::to_string(self).map_err(|err| {
-            rari_error::RariError::serialization(format!("guest request: {err}"))
-        })
+        serde_json::to_string(self)
+            .map_err(|err| rari_error::RariError::serialization(format!("guest request: {err}")))
     }
 }
 
@@ -373,10 +372,14 @@ impl CacheLookup {
     /// Answer from the static fast tier (an `Arc` clone of a prebuilt,
     /// precompressed response) or the response cache, if the page is there.
     async fn hit(&self, state: &ServerState, request_headers: &HeaderMap) -> Option<Response> {
-        if self.use_fast_tier && let Some(prebuilt) = state.static_fast_cache.get(&self.fast_key) {
+        if self.use_fast_tier
+            && let Some(prebuilt) = state.static_fast_cache.get(&self.fast_key)
+        {
             return Some(fast_hit_response(&prebuilt, request_headers));
         }
-        if self.cacheable_request && let Some(cached) = state.response_cache.get(&self.cache_key).await {
+        if self.cacheable_request
+            && let Some(cached) = state.response_cache.get(&self.cache_key).await
+        {
             return Some(cached_hit_response(&cached, request_headers));
         }
         None

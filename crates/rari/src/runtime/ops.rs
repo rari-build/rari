@@ -336,6 +336,7 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
         op_fizz_chunk_try(),
         op_fizz_chunk(),
         op_fizz_chunk_bytes(),
+        op_fizz_chunk_bytes_try(),
         op_fizz_done(),
         op_stream_promise_settled(),
         op_internal_log(),
@@ -371,6 +372,29 @@ pub async fn op_fizz_chunk(
     #[string] html: String,
 ) -> Result<(), JsErrorBox> {
     send_stream_chunk(&state, &stream_id, html.into_bytes()).await
+}
+
+/// Sync try-send for byte chunks, the binary twin of [`op_fizz_chunk_try`].
+/// Returns: `0` sent, `1` full (use the async op), `2` disconnected. Guest
+/// renderers write every chunk through this first: a render that never has
+/// to await the host finishes in one event-loop turn instead of one per chunk.
+#[op2(fast)]
+pub fn op_fizz_chunk_bytes_try(
+    state: &OpState,
+    #[string] stream_id: &str,
+    #[buffer] data: &[u8],
+) -> u8 {
+    let Some(stream_op_state) = state.try_borrow::<StreamOpState>() else {
+        return 2;
+    };
+    let Some(sender) = stream_op_state.get_sender(stream_id) else {
+        return 2;
+    };
+    match sender.try_send(Ok(data.to_vec())) {
+        Ok(()) => 0,
+        Err(mpsc::error::TrySendError::Full(_)) => 1,
+        Err(mpsc::error::TrySendError::Closed(_)) => 2,
+    }
 }
 
 /// Binary variant of [`op_fizz_chunk`] for streams that produce `Uint8Array`

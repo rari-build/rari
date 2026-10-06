@@ -371,7 +371,10 @@ impl AppRouter {
     /// counts, after that every directory contributes its default layouts, and
     /// a `skip_parents` layout ends the walk. With no selection this is the
     /// plain default chain, outermost first.
-    fn layout_chain(mut candidates: Vec<LayoutEntry>, selection: LayoutSelection) -> Vec<LayoutEntry> {
+    fn layout_chain(
+        mut candidates: Vec<LayoutEntry>,
+        selection: LayoutSelection,
+    ) -> Vec<LayoutEntry> {
         if selection.skip {
             return Vec::new();
         }
@@ -397,7 +400,9 @@ impl AppRouter {
         while let Some(first) = depth_iter.next() {
             let depth = Self::file_path_depth(&first.file_path);
             let mut level = vec![first];
-            while let Some(next) = depth_iter.next_if(|l| Self::file_path_depth(&l.file_path) == depth) {
+            while let Some(next) =
+                depth_iter.next_if(|l| Self::file_path_depth(&l.file_path) == depth)
+            {
                 level.push(next);
             }
             level.reverse();
@@ -435,7 +440,11 @@ impl AppRouter {
 
     /// The layout chain for a path with no page file of its own (a not-found
     /// render), honouring the selection recorded on the not-found page.
-    fn resolve_layouts_with(&self, route_path: &str, selection: LayoutSelection) -> Vec<LayoutEntry> {
+    fn resolve_layouts_with(
+        &self,
+        route_path: &str,
+        selection: LayoutSelection,
+    ) -> Vec<LayoutEntry> {
         let mut layouts = Vec::new();
         let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
 

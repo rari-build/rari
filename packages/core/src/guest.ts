@@ -56,12 +56,19 @@ export interface GuestRequest {
 export type GuestHandler = (request: GuestRequest) => Promise<void>
 
 type HostOp = (...args: readonly unknown[]) => unknown
+type HostTryOp = (...args: readonly unknown[]) => number
 
-/** The rari runtime's stream ops. */
+/**
+ * The rari runtime's stream ops. The `*Try` ops are synchronous and return
+ * `0` sent, `1` channel full (fall back to the async op), `2` disconnected;
+ * a chunk sent through them costs no event-loop turn.
+ */
 export interface HostStreamOps {
   readonly chunk: HostOp
   readonly chunkBytes: HostOp
   readonly done: HostOp
+  readonly chunkTry?: HostTryOp
+  readonly chunkBytesTry?: HostTryOp
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,6 +76,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isHostOp(value: unknown): value is HostOp {
+  return typeof value === 'function'
+}
+
+function isHostTryOp(value: unknown): value is HostTryOp {
   return typeof value === 'function'
 }
 
@@ -83,9 +94,19 @@ export function hostStreamOps(): HostStreamOps {
     isHostOp(ops.op_fizz_chunk_bytes) &&
     isHostOp(ops.op_fizz_done)
   ) {
-    return { chunk: ops.op_fizz_chunk, chunkBytes: ops.op_fizz_chunk_bytes, done: ops.op_fizz_done }
+    return {
+      chunk: ops.op_fizz_chunk,
+      chunkBytes: ops.op_fizz_chunk_bytes,
+      done: ops.op_fizz_done,
+      chunkTry: isHostTryOp(ops.op_fizz_chunk_try) ? ops.op_fizz_chunk_try : undefined,
+      chunkBytesTry: isHostTryOp(ops.op_fizz_chunk_bytes_try)
+        ? ops.op_fizz_chunk_bytes_try
+        : undefined,
+    }
   }
-  throw new Error('@rari/core/guest: host stream ops are not available; is this running inside rari?')
+  throw new Error(
+    '@rari/core/guest: host stream ops are not available; is this running inside rari?',
+  )
 }
 
 /** Decode a {@link GuestRequest.bodyBase64} body. */
@@ -134,38 +155,82 @@ const TEXT_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['content-type', 'text/plain; charset=utf-8'],
 ]
 
+/** Thrown when the host dropped the response (the client went away). */
+export class HostDisconnectedError extends Error {
+  constructor() {
+    super('rari host: stream receiver disconnected')
+    this.name = 'HostDisconnectedError'
+  }
+}
+
 /**
  * One response stream towards the host: header frame first, body bytes, then
  * exactly one `done`. {@link HostResponseSink.writable} is the shape most
  * frameworks' request handlers ask a platform for.
+ *
+ * Chunks go through the host's synchronous try-send ops whenever the channel
+ * has room, so a render that never hits backpressure completes in a single
+ * event-loop turn; only a full channel makes a write await the async op, and
+ * later writes queue behind it to keep the byte order.
  */
 export class HostResponseSink {
   headersSent = false
   private done = false
+  /** The async send in flight under backpressure; later chunks chain on it. */
+  private pending: Promise<void> | null = null
 
   constructor(
     private readonly ops: HostStreamOps,
     private readonly streamId: string,
   ) {}
 
-  async sendHeaders(
+  /** Send one chunk, synchronously when the host allows it. */
+  private push(
+    tryOp: HostTryOp | undefined,
+    asyncOp: HostOp,
+    payload: string | Uint8Array,
+  ): Promise<void> | undefined {
+    if (this.pending === null && tryOp) {
+      const status = tryOp(this.streamId, payload)
+      if (status === 0) return undefined
+      if (status === 2) throw new HostDisconnectedError()
+    }
+    const send = async () => {
+      await asyncOp(this.streamId, payload)
+    }
+    const chained = this.pending === null ? send() : this.pending.then(send)
+    this.pending = chained
+    void chained.then(
+      () => {
+        if (this.pending === chained) this.pending = null
+      },
+      () => {
+        if (this.pending === chained) this.pending = null
+      },
+    )
+    return chained
+  }
+
+  sendHeaders(
     status: number,
     headers: ReadonlyArray<readonly [string, string]>,
-  ): Promise<void> {
+  ): Promise<void> | undefined {
     this.headersSent = true
-    await this.ops.chunk(this.streamId, JSON.stringify({ status, headers }))
+    return this.push(this.ops.chunkTry, this.ops.chunk, JSON.stringify({ status, headers }))
   }
 
   async sendText(status: number, text: string): Promise<void> {
     await this.sendHeaders(status, TEXT_HEADERS)
-    await this.ops.chunk(this.streamId, text)
+    await this.push(this.ops.chunkTry, this.ops.chunk, text)
   }
 
   /** Send a whole `Response` (status, headers, streamed body). */
   async sendResponse(response: Response): Promise<void> {
     await this.sendHeaders(response.status, headerPairs(response.headers))
     if (response.body) {
-      for await (const chunk of response.body) await this.ops.chunkBytes(this.streamId, chunk)
+      for await (const chunk of response.body) {
+        await this.push(this.ops.chunkBytesTry, this.ops.chunkBytes, chunk)
+      }
     }
   }
 
@@ -180,17 +245,15 @@ export class HostResponseSink {
     headers: Headers,
     resolve: (response: null) => void,
   ): WritableStream<Uint8Array> {
-    const headersWritten = this.sendHeaders(status, headerPairs(headers))
+    void this.sendHeaders(status, headerPairs(headers))
     const close = async () => {
-      await headersWritten
+      if (this.pending) await this.pending
       this.finish()
       resolve(null)
     }
     return new WritableStream<Uint8Array>({
-      write: async chunk => {
-        await headersWritten
-        await this.ops.chunkBytes(this.streamId, chunk)
-      },
+      write: (chunk): Promise<void> | undefined =>
+        this.push(this.ops.chunkBytesTry, this.ops.chunkBytes, chunk),
       close,
       abort: close,
     })

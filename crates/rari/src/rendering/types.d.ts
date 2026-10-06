@@ -74,6 +74,7 @@ declare global {
       namespace ops {
         function op_sanitize_html(html: string, componentId: string): string
         function op_fizz_chunk_try(streamId: string, text: string): number
+        function op_fizz_chunk_bytes_try(streamId: string, data: Uint8Array): number
         function op_fizz_chunk(streamId: string, text: string): Promise<void>
         function op_fizz_done(streamId: string): void
         function op_stream_promise_settled(streamId: string, ok: boolean, error: string): void
