@@ -74,6 +74,59 @@ fn skip_string(bytes: &[u8], start: usize, quote: u8) -> usize {
     bytes.len()
 }
 
+fn is_regex_start_context(prev_significant: Option<u8>) -> bool {
+    match prev_significant {
+        None => true,
+        Some(b')' | b']' | b'/' | b'"' | b'\'' | b'`') => false,
+        Some(c) if is_ident_continue(c) => false,
+        Some(_) => true,
+    }
+}
+
+fn skip_regex_literal(bytes: &[u8], start: usize) -> usize {
+    let mut i = start + 1;
+    let mut in_class = false;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i = (i + 2).min(bytes.len()),
+            b'[' if !in_class => {
+                in_class = true;
+                i += 1;
+            }
+            b']' if in_class => {
+                in_class = false;
+                i += 1;
+            }
+            b'/' if !in_class => {
+                i += 1;
+                while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+                return i;
+            }
+            b'\n' => return i,
+            _ => i += 1,
+        }
+    }
+    bytes.len()
+}
+
+fn try_skip_slash(bytes: &[u8], i: usize, prev_significant: Option<u8>) -> Option<(usize, bool)> {
+    if i >= bytes.len() || bytes[i] != b'/' {
+        return None;
+    }
+    if i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+        return Some((skip_line_comment(bytes, i + 2), false));
+    }
+    if i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+        return Some((skip_block_comment(bytes, i + 2), false));
+    }
+    if is_regex_start_context(prev_significant) {
+        return Some((skip_regex_literal(bytes, i), true));
+    }
+    None
+}
+
 fn skip_template(bytes: &[u8], start: usize) -> usize {
     let mut i = start + 1;
     while i < bytes.len() {
@@ -92,30 +145,43 @@ fn skip_template(bytes: &[u8], start: usize) -> usize {
 
 fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
     let mut depth = 1usize;
+    let mut prev_significant: Option<u8> = Some(b'{');
     while i < bytes.len() && depth > 0 {
         let c = bytes[i];
-        if c == b'/' && i + 1 < bytes.len() {
-            if bytes[i + 1] == b'/' {
-                i = skip_line_comment(bytes, i + 2);
-                continue;
+        if c.is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        if let Some((next, ends_like_primary)) = try_skip_slash(bytes, i, prev_significant) {
+            if ends_like_primary {
+                prev_significant = Some(b'1');
             }
-            if bytes[i + 1] == b'*' {
-                i = skip_block_comment(bytes, i + 2);
-                continue;
-            }
+            i = next;
+            continue;
         }
         match c {
-            b'\'' | b'"' => i = skip_string(bytes, i, c),
-            b'`' => i = skip_template(bytes, i),
+            b'\'' | b'"' => {
+                i = skip_string(bytes, i, c);
+                prev_significant = Some(c);
+            }
+            b'`' => {
+                i = skip_template(bytes, i);
+                prev_significant = Some(b'`');
+            }
             b'{' => {
                 depth += 1;
+                prev_significant = Some(b'{');
                 i += 1;
             }
             b'}' => {
                 depth -= 1;
+                prev_significant = Some(b'}');
                 i += 1;
             }
-            _ => i += 1,
+            _ => {
+                prev_significant = Some(c);
+                i += 1;
+            }
         }
     }
     i
@@ -124,26 +190,31 @@ fn skip_template_expression(bytes: &[u8], mut i: usize) -> usize {
 pub fn is_esm_code(code: &str) -> bool {
     let bytes = code.as_bytes();
     let mut i = 0;
+    let mut prev_significant: Option<u8> = None;
     while i < bytes.len() {
         let c = bytes[i];
 
-        if c == b'/' && i + 1 < bytes.len() {
-            if bytes[i + 1] == b'/' {
-                i = skip_line_comment(bytes, i + 2);
-                continue;
+        if c.is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+
+        if let Some((next, ends_like_primary)) = try_skip_slash(bytes, i, prev_significant) {
+            if ends_like_primary {
+                prev_significant = Some(b'1');
             }
-            if bytes[i + 1] == b'*' {
-                i = skip_block_comment(bytes, i + 2);
-                continue;
-            }
+            i = next;
+            continue;
         }
 
         if c == b'\'' || c == b'"' {
             i = skip_string(bytes, i, c);
+            prev_significant = Some(c);
             continue;
         }
         if c == b'`' {
             i = skip_template(bytes, i);
+            prev_significant = Some(b'`');
             continue;
         }
 
@@ -160,9 +231,11 @@ pub fn is_esm_code(code: &str) -> bool {
             {
                 return true;
             }
+            prev_significant = Some(bytes[i - 1]);
             continue;
         }
 
+        prev_significant = Some(c);
         i += 1;
     }
     false
@@ -442,5 +515,8 @@ mod tests {
         assert!(!is_esm_code(r#"const s = "import { x } from 'y'""#));
         assert!(!is_esm_code("const s = `export default 1`"));
         assert!(is_esm_code("// just a comment\nexport default function Page() {}"));
+        assert!(is_esm_code(r#"const re = /\//; export default function Page() {}"#));
+        assert!(is_esm_code(r#"const re = /["']/; export { foo }"#));
+        assert!(is_esm_code(r#"const t = `${/\//}`; export default 1"#));
     }
 }
