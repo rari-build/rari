@@ -44,6 +44,26 @@ import { containsLayoutSlot, currentRouteLocation, flightRouteCache } from './ro
 
 const TIMESTAMP_REGEX = /"timestamp":(\d+)/
 const STALE_PAYLOAD_THRESHOLD_MS = 5000
+const HMR_REFETCH_RETRIES = 3
+const HMR_REFETCH_RETRY_MS = 150
+
+function isTransientHmrFetchError(error: unknown): boolean {
+  if (!isError(error)) return false
+  if (error.name === 'AbortError') return false
+  const message = error.message
+  return (
+    message === 'Failed to fetch' ||
+    message.includes('NetworkError') ||
+    message.includes('network error') ||
+    message.includes('Load failed')
+  )
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
 
 interface RscPayload {
   readonly element: FlightContent
@@ -337,7 +357,6 @@ export function AppRouterProvider({
       if (containsLayoutSlot(element)) return
 
       const { pathname, search } = routeLocation
-      if (flightRouteCache.hasRoute(pathname, search)) return
       flightRouteCache.set(pathname, search, element)
     },
     [routeLocation],
@@ -773,6 +792,20 @@ export function AppRouterProvider({
       commitSuccessfulNavigation(detail, resolvedPayload)
     }
 
+    const refetchForHmr = async (): Promise<RscPayload | undefined> => {
+      let lastError: unknown
+      for (let attempt = 0; attempt < HMR_REFETCH_RETRIES; attempt += 1) {
+        try {
+          return await refetchRscPayloadRef.current()
+        } catch (error) {
+          lastError = error
+          if (!isTransientHmrFetchError(error) || attempt === HMR_REFETCH_RETRIES - 1) throw error
+          await sleep(HMR_REFETCH_RETRY_MS * (attempt + 1))
+        }
+      }
+      throw toError(lastError)
+    }
+
     const handleAppRouterRerender = async () => {
       scrollPositionRef.current = {
         x: window.scrollX,
@@ -782,7 +815,8 @@ export function AppRouterProvider({
       saveFormState()
 
       try {
-        await refetchRscPayloadRef.current()
+        const parsed = await refetchForHmr()
+        if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
 
         setRenderKey(prev => prev + 1)
 
@@ -905,7 +939,8 @@ export function AppRouterProvider({
 
     const handleRscInvalidate = async () => {
       try {
-        await refetchRscPayloadRef.current()
+        const parsed = await refetchForHmr()
+        if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -928,7 +963,8 @@ export function AppRouterProvider({
 
     const handleManifestUpdated = async () => {
       try {
-        await refetchRscPayloadRef.current()
+        const parsed = await refetchForHmr()
+        if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
         setHmrError(null)
       } catch (error) {
         console.error('Manifest update error:', errorMessage(error, String(error)))

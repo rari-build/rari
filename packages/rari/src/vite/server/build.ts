@@ -1272,6 +1272,7 @@ export class ServerComponentBuilder {
 
     const result = await this.emitRscEntries([{ componentId, filePath }], {
       minify: this.options.minify,
+      codeSplitting: false,
     })
     const built = result.outputs.get(componentId)
     if (built == null) {
