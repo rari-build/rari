@@ -29,7 +29,11 @@ export const QWIK_ROUTE_CONVENTIONS: RouteConventions = {
   template: '',
   route: '',
   ogImage: '',
+  modifiers: true,
 }
+
+/** Qwik Router page/endpoint/layout file extensions (`index.md` is a page too). */
+export const QWIK_ROUTE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js', '.mdx', '.md'] as const
 
 export interface BuildQwikServerOptions {
   /** Project root. Defaults to cwd. */
@@ -219,6 +223,7 @@ export async function buildQwikServer(
   // routes Qwik serves.
   const routeManifest = await generateAppRouteManifest(paths.routesDir, {
     conventions: QWIK_ROUTE_CONVENTIONS,
+    extensions: QWIK_ROUTE_EXTENSIONS,
   })
   await writeJson(path.join(paths.serverDir, 'routes.json'), routeManifest)
 

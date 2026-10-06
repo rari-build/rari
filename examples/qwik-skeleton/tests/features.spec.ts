@@ -40,6 +40,19 @@ test.describe('SSR + routing', () => {
     expect(await post.text()).toContain('blog post: hello-world')
   })
 
+  test('Qwik route-file modifiers and markdown pages are host routes', async ({ request }) => {
+    const narrow = await request.get('/narrow/')
+    expect(narrow.status()).toBe(200)
+    expect(narrow.headers()['x-rari-route']).toBe('/narrow')
+    expect(await narrow.text()).toContain('narrow page via named layout')
+    expect(await narrow.text()).toContain('data-layout="narrow"')
+
+    const notes = await request.get('/notes/')
+    expect(notes.status()).toBe(200)
+    expect(notes.headers()['x-rari-route']).toBe('/notes')
+    expect(await notes.text()).toContain('notes page from markdown')
+  })
+
   test('route params come from the host match', async ({ page }) => {
     await page.goto('/blog/host-routed/')
     await expect(page.getByTestId('host-route')).toHaveText('/blog/[slug] host-routed')

@@ -551,11 +551,15 @@ impl GuestRenderer for QwikGuest {
             let body = Bytes::from(full);
 
             if !failed {
-                let policy = RouteCachePolicy::from_cache_control(
-                    state.config.get_cache_control_for_route(&path),
-                    &path,
-                );
-                if policy.enabled {
+                // The page's own Cache-Control (Qwik's `cacheControl()`) sets the
+                // host's TTL; the route config is the fallback. `max-age=0` means
+                // "don't keep it", not "keep it for the default lifetime".
+                let cache_control = headers
+                    .get(CACHE_CONTROL)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_else(|| state.config.get_cache_control_for_route(&path));
+                let policy = RouteCachePolicy::from_cache_control(cache_control, &path);
+                if policy.enabled && policy.ttl > 0 {
                     let mut cache_headers = headers.clone();
                     insert_response_cache_vary_header(&mut cache_headers, cookie_header, true);
                     // Compress once at store time so hits serve precompressed bytes

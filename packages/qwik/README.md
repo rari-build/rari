@@ -26,6 +26,28 @@ Your app is a normal Qwik Router app: `src/root.tsx`, `src/entry.ssr.tsx` (`crea
 - `vite build` (or `rari build`) — the Qwik client build into `dist/client`, then the rari server bundle, route manifest and server config into `dist/server`.
 - `rari start` — serves the app from the Rust host. `dist/server/config.json` records `"framework": "qwik"`, so no flag or environment variable is needed (`--framework qwik` / `RARI_FRAMEWORK=qwik` override it).
 
+## What stays Qwik, what rari takes over
+
+The app is a standard Qwik Router project; nothing in `src/` is rari-specific. Compared with a Node/Cloudflare adapter:
+
+| Area | Standard Qwik 2 | On rari |
+| --- | --- | --- |
+| Scaffold | `pnpm create qwik@rc` | same, then `pnpm add rari @rari/qwik` and use `rariQwik()` in `vite.config.ts` |
+| Dev server, HMR, devtools | `vite --mode ssr` | same (Qwik's dev server; rari is not in the loop in dev) |
+| Routes, layouts, `404.tsx`, `error.tsx`, `index@layout`, `layout-name`, `index!`, `.md`/`.mdx` pages, `plugin@*.ts` | Qwik Router conventions | same files; rari's scanner reads the same conventions for its manifest |
+| Loaders, actions, `server$`, cookies, redirects, CSRF, `<head>` | Qwik Router | Qwik Router (`requestHandler`), unchanged |
+| Build | `vite build` + adapter config in `adapters/` | `vite build` (or `rari build`); no adapter directory, no `entry.<platform>.tsx` |
+| Serve | `node server/entry.node-server.js` | `rari start` |
+| URL → route | Qwik's trie, per request | rari's router first; unmatched URLs are host 404s (`x-rari-route: miss`), the match is on `platform.rari.route` |
+| Page cache | none (or a CDN via `cacheControl()`) | rari's response cache; the page's own `cacheControl()` sets the TTL, `no-store`/`private`/`max-age=0` opt out |
+| Static files, compression, ETag/304 | the adapter's | rari's |
+| SSG (`adapters/static`) | supported | not applicable; rari caches rendered pages instead |
+
+Two differences to know about:
+
+- `platform.rari.route` exists only when rari serves the request (production); in `vite dev` it is `null`. For params and the current URL prefer Qwik's `useLocation()`, which is identical in both.
+- `vite preview` uses Qwik's Node middleware (`src/entry.preview.tsx`), not rari. Use `rari start` to preview the production host.
+
 ## Options
 
 ```ts
