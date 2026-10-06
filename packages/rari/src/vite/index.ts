@@ -2564,8 +2564,7 @@ ${clientTransformedCode}`
       const componentType = hmrCoordinator?.detectComponentType(file) ?? 'unknown'
 
       if (isAppRouterSpecialRouteFile(file)) {
-        const rebuilt = await rebuildAppRouterFile(file, server)
-        return rebuilt ? [] : undefined
+        return []
       }
 
       if (componentType === 'client') return undefined
