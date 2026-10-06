@@ -21,6 +21,10 @@ export interface AppRouteEntry {
   segments: RouteSegment[]
   params: string[]
   isDynamic: boolean
+  /** Layout variant the page selects (`page@name`); see `route-file.ts`. */
+  layout?: string
+  /** `page!`: the page renders without any layout. */
+  skipLayouts?: boolean
   metadata?: RouteMetadata
   staticParams?: Array<Record<string, string | string[]>>
 }
@@ -32,6 +36,10 @@ export interface LayoutEntry {
   componentId?: string
   parentPath?: string
   additionalPaths?: string[]
+  /** Variant name (`layout-name`); absent for the directory's default layout. */
+  name?: string
+  /** `layout!`: a top layout, the layouts above it are skipped. */
+  skipParents?: boolean
 }
 
 export interface LoadingEntry {
@@ -56,6 +64,10 @@ export interface NotFoundEntry {
   css?: string[]
   componentId?: string
   additionalPaths?: string[]
+  /** Layout variant the page selects (`not-found@name`). */
+  layout?: string
+  /** `not-found!`: the page renders without any layout. */
+  skipLayouts?: boolean
 }
 
 export interface OgImageEntry {

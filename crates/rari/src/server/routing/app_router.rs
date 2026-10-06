@@ -27,6 +27,12 @@ pub struct AppRouteEntry {
     pub is_dynamic: bool,
     #[serde(rename = "staticParams", default, skip_serializing_if = "Option::is_none")]
     pub static_params: Option<Vec<FxHashMap<String, serde_json::Value>>>,
+    /// Layout variant the page selects (`page@name` in rari's route-file grammar).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+    /// `page!`: the page renders without any layout.
+    #[serde(rename = "skipLayouts", default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_layouts: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +51,12 @@ pub struct LayoutEntry {
     pub is_root: bool,
     #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
     pub additional_paths: Option<Vec<String>>,
+    /// Variant name (`layout-name`); `None` for the directory's default layout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// `layout!`: a top layout, the layouts above it are skipped.
+    #[serde(rename = "skipParents", default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_parents: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,6 +115,12 @@ pub struct NotFoundEntry {
     pub css: Vec<String>,
     #[serde(rename = "additionalPaths", default, skip_serializing_if = "Option::is_none")]
     pub additional_paths: Option<Vec<String>>,
+    /// Layout variant the page selects (`not-found@name`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+    /// `not-found!`: the page renders without any layout.
+    #[serde(rename = "skipLayouts", default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_layouts: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,6 +148,14 @@ pub struct AppRouteMatch {
     pub not_found: Option<NotFoundEntry>,
     pub templates: Vec<TemplateEntry>,
     pub pathname: String,
+}
+
+/// What a page asks of its layout chain, as the scanner recorded it from the
+/// route-file grammar (`page@name`, `page!`).
+#[derive(Debug, Clone, Copy)]
+struct LayoutSelection<'a> {
+    variant: Option<&'a str>,
+    skip: bool,
 }
 
 pub struct AppRouter {
@@ -187,7 +213,13 @@ impl AppRouter {
 
         let not_found_entry = self.find_not_found(&normalized_path)?;
 
-        let layouts = self.resolve_layouts(&normalized_path);
+        let layouts = self.resolve_layouts_with(
+            &normalized_path,
+            LayoutSelection {
+                variant: not_found_entry.layout.as_deref(),
+                skip: not_found_entry.skip_layouts,
+            },
+        );
         let templates = self.resolve_templates(&normalized_path);
         let loading = self.find_loading(&normalized_path);
         let error = self.find_error(&normalized_path);
@@ -201,6 +233,8 @@ impl AppRouter {
             params: vec![],
             is_dynamic: false,
             static_params: None,
+            layout: not_found_entry.layout.clone(),
+            skip_layouts: not_found_entry.skip_layouts,
         };
 
         Some(AppRouteMatch {
@@ -308,7 +342,7 @@ impl AppRouter {
     }
 
     fn resolve_layouts_for_route(&self, route: &AppRouteEntry) -> Vec<LayoutEntry> {
-        let mut layouts: Vec<LayoutEntry> = self
+        let candidates: Vec<LayoutEntry> = self
             .manifest
             .layouts
             .iter()
@@ -323,17 +357,85 @@ impl AppRouter {
             .cloned()
             .collect();
 
-        layouts.sort_by_key(|layout| Self::file_path_depth(&layout.file_path));
+        Self::layout_chain(
+            candidates,
+            LayoutSelection { variant: route.layout.as_deref(), skip: route.skip_layouts },
+        )
+    }
 
+    /// Apply rari's route-file grammar to the layouts that could wrap a page.
+    ///
+    /// `candidates` are every layout whose directory (or shared group path)
+    /// covers the page. The chain is walked from the page's directory outward:
+    /// until the selected variant is found only a layout of that variant
+    /// counts, after that every directory contributes its default layouts, and
+    /// a `skip_parents` layout ends the walk. With no selection this is the
+    /// plain default chain, outermost first.
+    fn layout_chain(mut candidates: Vec<LayoutEntry>, selection: LayoutSelection) -> Vec<LayoutEntry> {
+        if selection.skip {
+            return Vec::new();
+        }
+        // Stable sort: layouts at the same depth (group layouts sharing a path)
+        // keep manifest order.
+        candidates.sort_by_key(|layout| Self::file_path_depth(&layout.file_path));
+
+        // This runs per request ahead of the cache lookup, so an app that uses
+        // no variants (every React app today) pays nothing beyond the sort.
+        if selection.variant.is_none()
+            && candidates.iter().all(|layout| layout.name.is_none() && !layout.skip_parents)
+        {
+            for layout in &mut candidates {
+                layout.is_root =
+                    Self::normalized_dir(&layout.file_path).is_empty() || layout.path == "/";
+            }
+            return candidates;
+        }
+
+        let mut levels: Vec<Vec<LayoutEntry>> = Vec::new();
+        let mut found_variant = false;
+        let mut depth_iter = candidates.into_iter().rev().peekable();
+        while let Some(first) = depth_iter.next() {
+            let depth = Self::file_path_depth(&first.file_path);
+            let mut level = vec![first];
+            while let Some(next) = depth_iter.next_if(|l| Self::file_path_depth(&l.file_path) == depth) {
+                level.push(next);
+            }
+            level.reverse();
+
+            let picked: Vec<LayoutEntry> = match selection.variant {
+                Some(variant) if !found_variant => {
+                    level.into_iter().filter(|l| l.name.as_deref() == Some(variant)).collect()
+                }
+                _ => level.into_iter().filter(|l| l.name.is_none()).collect(),
+            };
+            if picked.is_empty() {
+                continue;
+            }
+            if selection.variant.is_some() {
+                found_variant = true;
+            }
+            let stop = picked.iter().any(|l| l.skip_parents);
+            levels.push(picked);
+            if stop {
+                break;
+            }
+        }
+
+        let mut layouts: Vec<LayoutEntry> = levels.into_iter().rev().flatten().collect();
         for layout in &mut layouts {
             layout.is_root =
                 Self::normalized_dir(&layout.file_path).is_empty() || layout.path == "/";
         }
-
         layouts
     }
 
     pub fn resolve_layouts(&self, route_path: &str) -> Vec<LayoutEntry> {
+        self.resolve_layouts_with(route_path, LayoutSelection { variant: None, skip: false })
+    }
+
+    /// The layout chain for a path with no page file of its own (a not-found
+    /// render), honouring the selection recorded on the not-found page.
+    fn resolve_layouts_with(&self, route_path: &str, selection: LayoutSelection) -> Vec<LayoutEntry> {
         let mut layouts = Vec::new();
         let segments: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
 
@@ -364,15 +466,11 @@ impl AppRouter {
                 {
                     continue;
                 }
-
-                let mut layout_entry = layout;
-                layout_entry.is_root = Self::normalized_dir(&layout_entry.file_path).is_empty()
-                    || layout_entry.path == "/";
-                layouts.push(layout_entry);
+                layouts.push(layout);
             }
         }
 
-        layouts
+        Self::layout_chain(layouts, selection)
     }
 
     pub fn resolve_templates(&self, route_path: &str) -> Vec<TemplateEntry> {
@@ -614,6 +712,7 @@ mod tests {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn create_test_manifest() -> AppRouteManifest {
         AppRouteManifest {
             routes: vec![
@@ -626,6 +725,8 @@ mod tests {
                     params: vec![],
                     is_dynamic: false,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
                 AppRouteEntry {
                     path: "/about".to_string(),
@@ -640,6 +741,8 @@ mod tests {
                     params: vec![],
                     is_dynamic: false,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
                 AppRouteEntry {
                     path: "/blog/[slug]".to_string(),
@@ -661,6 +764,8 @@ mod tests {
                     params: vec!["slug".to_string()],
                     is_dynamic: true,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
                 AppRouteEntry {
                     path: "/docs/[...slug]".to_string(),
@@ -682,6 +787,8 @@ mod tests {
                     params: vec!["slug".to_string()],
                     is_dynamic: true,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
             ],
             layouts: vec![
@@ -693,6 +800,8 @@ mod tests {
                     parent_path: None,
                     additional_paths: None,
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                 },
                 LayoutEntry {
                     path: "/blog".to_string(),
@@ -702,6 +811,8 @@ mod tests {
                     parent_path: Some("/".to_string()),
                     additional_paths: None,
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                 },
             ],
             loading: vec![],
@@ -817,6 +928,8 @@ mod tests {
                     params: vec![],
                     is_dynamic: false,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
                 AppRouteEntry {
                     path: "/[slug]".to_string(),
@@ -831,6 +944,8 @@ mod tests {
                     params: vec!["slug".to_string()],
                     is_dynamic: true,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
             ],
             layouts: vec![],
@@ -869,6 +984,8 @@ mod tests {
                 css: vec![],
                 parent_path: Some("/".to_string()),
                 is_root: false,
+                name: None,
+                skip_parents: false,
                 additional_paths: Some(vec!["/pricing".to_string()]),
             }],
             loading: vec![],
@@ -908,6 +1025,8 @@ mod tests {
                     params: vec![],
                     is_dynamic: false,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
                 AppRouteEntry {
                     path: "/forgot".to_string(),
@@ -922,6 +1041,8 @@ mod tests {
                     params: vec![],
                     is_dynamic: false,
                     static_params: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
             ],
             layouts: vec![
@@ -932,6 +1053,8 @@ mod tests {
                     css: vec![],
                     parent_path: None,
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                     additional_paths: None,
                 },
                 LayoutEntry {
@@ -941,6 +1064,8 @@ mod tests {
                     css: vec![],
                     parent_path: Some("/".to_string()),
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                     additional_paths: Some(vec!["/pricing".to_string()]),
                 },
                 LayoutEntry {
@@ -950,6 +1075,8 @@ mod tests {
                     css: vec![],
                     parent_path: Some("/".to_string()),
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                     additional_paths: Some(vec!["/login".to_string(), "/signup".to_string()]),
                 },
                 LayoutEntry {
@@ -959,6 +1086,8 @@ mod tests {
                     css: vec![],
                     parent_path: Some("/".to_string()),
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                     additional_paths: Some(vec!["/reset".to_string()]),
                 },
             ],
@@ -995,6 +1124,8 @@ mod tests {
                 css: vec![],
                 parent_path: None,
                 is_root: true,
+                name: None,
+                skip_parents: false,
                 additional_paths: None,
             }],
             loading: vec![],
@@ -1057,6 +1188,8 @@ mod tests {
                 component_id: None,
                 css: vec![],
                 additional_paths: Some(vec!["/pricing".to_string()]),
+                layout: None,
+                skip_layouts: false,
             }],
             ..build_minimal_manifest()
         };
@@ -1082,6 +1215,8 @@ mod tests {
                 params: vec![],
                 is_dynamic: false,
                 static_params: None,
+                layout: None,
+                skip_layouts: false,
             }],
             loading: vec![
                 LoadingEntry {
@@ -1122,6 +1257,8 @@ mod tests {
                     component_id: None,
                     css: vec![],
                     additional_paths: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
                 NotFoundEntry {
                     path: "/forgot".to_string(),
@@ -1129,6 +1266,8 @@ mod tests {
                     component_id: None,
                     css: vec![],
                     additional_paths: None,
+                    layout: None,
+                    skip_layouts: false,
                 },
             ],
             ..build_minimal_manifest()
@@ -1154,6 +1293,8 @@ mod tests {
                     css: vec![],
                     parent_path: Some("/".to_string()),
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                     additional_paths: None,
                 },
                 LayoutEntry {
@@ -1163,6 +1304,8 @@ mod tests {
                     css: vec![],
                     parent_path: Some("/".to_string()),
                     is_root: false,
+                    name: None,
+                    skip_parents: false,
                     additional_paths: None,
                 },
             ],
@@ -1172,6 +1315,8 @@ mod tests {
                 component_id: None,
                 css: vec![],
                 additional_paths: None,
+                layout: None,
+                skip_layouts: false,
             }],
             ..build_minimal_manifest()
         };
@@ -1194,6 +1339,8 @@ mod tests {
                 css: vec![],
                 parent_path: Some("/".to_string()),
                 is_root: false,
+                name: None,
+                skip_parents: false,
                 additional_paths: Some(vec!["/pricing".to_string()]),
             }],
             loading: vec![LoadingEntry {
@@ -1216,6 +1363,8 @@ mod tests {
                 component_id: None,
                 css: vec![],
                 additional_paths: Some(vec!["/pricing".to_string()]),
+                layout: None,
+                skip_layouts: false,
             }],
             ..build_minimal_manifest()
         };
@@ -1294,6 +1443,8 @@ mod tests {
             params: vec![],
             is_dynamic: false,
             static_params: None,
+            layout: None,
+            skip_layouts: false,
         });
 
         assert_eq!(templates.len(), 1);
@@ -1322,6 +1473,8 @@ mod tests {
             component_id: None,
             css: vec![],
             additional_paths: None,
+            layout: None,
+            skip_layouts: false,
         }];
         manifest.templates = vec![template_entry("/", "template.tsx")];
         let router = AppRouter::new(manifest);
@@ -1329,5 +1482,72 @@ mod tests {
         let matched = router.create_not_found_match("/missing").unwrap();
         assert_eq!(matched.templates.len(), 1);
         assert_eq!(matched.templates[0].path, "/");
+    }
+
+    fn grammar_manifest() -> AppRouteManifest {
+        serde_json::from_value(serde_json::json!({
+            "routes": [
+                { "path": "/", "filePath": "page.tsx", "segments": [], "params": [], "isDynamic": false },
+                { "path": "/wide", "filePath": "wide/page@wide.tsx", "layout": "wide",
+                  "segments": [{ "type": "static", "value": "wide" }], "params": [], "isDynamic": false },
+                { "path": "/bare", "filePath": "bare/page!.tsx", "skipLayouts": true,
+                  "segments": [{ "type": "static", "value": "bare" }], "params": [], "isDynamic": false },
+                { "path": "/docs/intro", "filePath": "docs/intro/page.tsx",
+                  "segments": [{ "type": "static", "value": "docs" }, { "type": "static", "value": "intro" }],
+                  "params": [], "isDynamic": false },
+                { "path": "/admin/users", "filePath": "admin/users/page@admin.tsx", "layout": "admin",
+                  "segments": [{ "type": "static", "value": "admin" }, { "type": "static", "value": "users" }],
+                  "params": [], "isDynamic": false }
+            ],
+            "layouts": [
+                { "path": "/", "filePath": "layout.tsx" },
+                { "path": "/", "filePath": "layout-wide.tsx", "name": "wide" },
+                { "path": "/wide", "filePath": "wide/layout.tsx" },
+                { "path": "/docs", "filePath": "docs/layout!.tsx", "skipParents": true },
+                { "path": "/admin", "filePath": "admin/layout-admin.tsx", "name": "admin" }
+            ],
+            "notFound": [{ "path": "/", "filePath": "not-found!.tsx", "skipLayouts": true }],
+            "loading": [], "errors": [], "templates": [],
+            "generated": "test"
+        }))
+        .unwrap()
+    }
+
+    fn chain(router: &AppRouter, path: &str) -> Vec<String> {
+        router.match_route(path).unwrap().layouts.into_iter().map(|l| l.file_path).collect()
+    }
+
+    #[test]
+    fn layout_variants_are_only_used_by_pages_that_select_them() {
+        let router = AppRouter::new(grammar_manifest());
+        assert_eq!(chain(&router, "/"), vec!["layout.tsx"]);
+        // The selected variant is searched outward from the page; default
+        // layouts below the point where it is found do not apply.
+        assert_eq!(chain(&router, "/wide"), vec!["layout-wide.tsx"]);
+        // Once found, the directories above contribute their defaults.
+        assert_eq!(chain(&router, "/admin/users"), vec!["layout.tsx", "admin/layout-admin.tsx"]);
+    }
+
+    #[test]
+    fn bang_skips_layouts() {
+        let router = AppRouter::new(grammar_manifest());
+        assert!(chain(&router, "/bare").is_empty());
+        // A top layout ends the chain: the root layout is skipped.
+        assert_eq!(chain(&router, "/docs/intro"), vec!["docs/layout!.tsx"]);
+        let not_found = router.create_not_found_match("/nope").unwrap();
+        assert!(not_found.layouts.is_empty());
+        assert!(not_found.route.skip_layouts);
+    }
+
+    #[test]
+    fn grammar_fields_round_trip_through_json() {
+        let manifest = grammar_manifest();
+        let json = serde_json::to_value(&manifest).unwrap();
+        assert_eq!(json["routes"][1]["layout"], "wide");
+        assert_eq!(json["routes"][2]["skipLayouts"], true);
+        assert!(json["routes"][0].get("layout").is_none());
+        assert!(json["routes"][0].get("skipLayouts").is_none());
+        assert_eq!(json["layouts"][3]["skipParents"], true);
+        assert!(json["layouts"][0].get("name").is_none());
     }
 }

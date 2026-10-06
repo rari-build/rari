@@ -17,11 +17,14 @@ import path from 'node:path'
 import { PATH_SEPARATOR_REGEX } from '../regex-constants'
 import { toPosixPath } from '../utils/path'
 import { discoverAppIconsInDir } from './app-icons'
+import { findRouteFiles } from './route-file'
 
 /**
  * Base names of the special files a framework's router recognises inside the
  * app directory. The scanner only cares about *which* file plays which role;
  * what each role means at render time is the framework adapter's business.
+ * On top of the base names every framework gets rari's route-file grammar
+ * (`page@name`, `page!`, `layout-name`, `layout!`; see `route-file.ts`).
  */
 export interface RouteConventions {
   /** Page component for the directory's route (`page` in React, `index` in Qwik). */
@@ -175,6 +178,23 @@ class AppRouteGenerator {
       ogImages,
       appIcons,
     )
+
+    // A layout variant is only a layout when some page selects it; otherwise a
+    // colocated `layout-*.tsx` helper stays a plain file.
+    const selectedVariants = new Set(
+      [...routes, ...notFound].flatMap(page => (page.layout == null ? [] : [page.layout])),
+    )
+    for (let i = layouts.length - 1; i >= 0; i--) {
+      const { name } = layouts[i]
+      if (name != null && !selectedVariants.has(name)) {
+        if (this.verbose) {
+          console.warn(
+            `[rari] Router: ignoring layout variant '${layouts[i].filePath}' (no page selects '@${name}')`,
+          )
+        }
+        layouts.splice(i, 1)
+      }
+    }
 
     for (const entries of [layouts, loading, errors, notFound, templates, ogImages]) {
       this.finalizeGroupEntries(routes, entries)
@@ -340,7 +360,7 @@ class AppRouteGenerator {
     this.pushLayoutEntry(relativePath, files, routePath, layouts)
     this.pushNamedSpecial(relativePath, files, routePath, this.conventions.loading, loading)
     this.pushNamedSpecial(relativePath, files, routePath, this.conventions.error, errors)
-    this.pushNamedSpecial(relativePath, files, routePath, this.conventions.notFound, notFound)
+    this.pushNotFoundEntry(relativePath, files, routePath, notFound)
     this.pushTemplateEntry(relativePath, files, routePath, templates)
     await this.pushOgImageEntry(relativePath, files, routePath, ogImages)
 
@@ -365,16 +385,24 @@ class AppRouteGenerator {
     routePath: string,
     routes: AppRouteEntry[],
   ): void {
-    const pageFile = this.findFile(files, this.conventions.page)
-    if (pageFile == null || pageFile === '') return
+    const pageFiles = findRouteFiles(files, this.conventions.page, 'page', this.extensions)
+    const pageFile = pageFiles.at(0)
+    if (pageFile == null) return
+    if (pageFiles.length > 1) {
+      throw new Error(
+        `[rari] Route conflict: '${routePath}' has more than one page file in '${relativePath || '.'}': ${pageFiles.map(file => `'${file.fileName}'`).join(', ')}.`,
+      )
+    }
     const segments = this.parseRouteSegments(relativePath)
     const params = this.extractParams(segments)
     routes.push({
       path: routePath,
-      filePath: toPosixPath(path.join(relativePath, pageFile)),
+      filePath: toPosixPath(path.join(relativePath, pageFile.fileName)),
       segments,
       params,
       isDynamic: params.length > 0,
+      ...(pageFile.variant == null ? {} : { layout: pageFile.variant }),
+      ...(pageFile.bang ? { skipLayouts: true } : {}),
     })
   }
 
@@ -384,14 +412,21 @@ class AppRouteGenerator {
     routePath: string,
     layouts: LayoutEntry[],
   ): void {
-    const layoutFile = this.findFile(files, this.conventions.layout)
-    if (layoutFile == null || layoutFile === '') return
     const parentPath = this.getParentPath(relativePath)
-    layouts.push({
-      path: routePath,
-      filePath: toPosixPath(path.join(relativePath, layoutFile)),
-      parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
-    })
+    for (const layoutFile of findRouteFiles(
+      files,
+      this.conventions.layout,
+      'layout',
+      this.extensions,
+    )) {
+      layouts.push({
+        path: routePath,
+        filePath: toPosixPath(path.join(relativePath, layoutFile.fileName)),
+        parentPath: parentPath !== null ? this.pathToRoute(parentPath) : undefined,
+        ...(layoutFile.variant == null ? {} : { name: layoutFile.variant }),
+        ...(layoutFile.bang ? { skipParents: true } : {}),
+      })
+    }
   }
 
   private pushNamedSpecial(
@@ -406,6 +441,23 @@ class AppRouteGenerator {
     entries.push({
       path: routePath,
       filePath: toPosixPath(path.join(relativePath, file)),
+    })
+  }
+
+  /** The not-found page is a page: it can select a layout variant or skip layouts. */
+  private pushNotFoundEntry(
+    relativePath: string,
+    files: string[],
+    routePath: string,
+    notFound: NotFoundEntry[],
+  ): void {
+    const file = findRouteFiles(files, this.conventions.notFound, 'page', this.extensions).at(0)
+    if (file == null) return
+    notFound.push({
+      path: routePath,
+      filePath: toPosixPath(path.join(relativePath, file.fileName)),
+      ...(file.variant == null ? {} : { layout: file.variant }),
+      ...(file.bang ? { skipLayouts: true } : {}),
     })
   }
 
@@ -463,6 +515,7 @@ class AppRouteGenerator {
     })
   }
 
+  /** Exact role match for roles outside the layout grammar (templates, API routes, OG images, …). */
   private findFile(files: string[], baseName: string): string | undefined {
     // An empty convention name disables that role for the framework.
     if (baseName === '') return undefined
@@ -470,7 +523,6 @@ class AppRouteGenerator {
       const fileName = `${baseName}${ext}`
       if (files.includes(fileName)) return fileName
     }
-
     return undefined
   }
 
