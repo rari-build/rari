@@ -309,6 +309,7 @@ export function AppRouterProvider({
 
   const currentNavigationIdRef = useRef<number>(0)
   const actionRefreshGenerationRef = useRef(0)
+  const hmrRouteCacheSeqRef = useRef(new Map<string, number>())
   const pendingFormScrollRestoreRef = useRef<RscPayload | null>(null)
   const pendingNavigateCommittedIdRef = useRef<number | null>(null)
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
@@ -806,6 +807,25 @@ export function AppRouterProvider({
       throw toError(lastError)
     }
 
+    const refetchAndCacheIfCurrent = async (): Promise<RscPayload | undefined> => {
+      const expectedNavigationId = currentNavigationIdRef.current
+      const { pathname, search } = currentRouteLocation()
+      const expectedRoute = `${pathname}${search}`
+      const seqMap = hmrRouteCacheSeqRef.current
+      const seq = (seqMap.get(expectedRoute) ?? 0) + 1
+      seqMap.set(expectedRoute, seq)
+
+      const parsed = await refetchForHmr()
+
+      if (currentNavigationIdRef.current !== expectedNavigationId) return parsed
+      const { pathname: currentPath, search: currentSearch } = currentRouteLocation()
+      if (`${currentPath}${currentSearch}` !== expectedRoute) return parsed
+      if (seqMap.get(expectedRoute) !== seq) return parsed
+
+      if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
+      return parsed
+    }
+
     const handleAppRouterRerender = async () => {
       scrollPositionRef.current = {
         x: window.scrollX,
@@ -815,8 +835,7 @@ export function AppRouterProvider({
       saveFormState()
 
       try {
-        const parsed = await refetchForHmr()
-        if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
+        await refetchAndCacheIfCurrent()
 
         setRenderKey(prev => prev + 1)
 
@@ -939,8 +958,7 @@ export function AppRouterProvider({
 
     const handleRscInvalidate = async () => {
       try {
-        const parsed = await refetchForHmr()
-        if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
+        await refetchAndCacheIfCurrent()
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -963,8 +981,7 @@ export function AppRouterProvider({
 
     const handleManifestUpdated = async () => {
       try {
-        const parsed = await refetchForHmr()
-        if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
+        await refetchAndCacheIfCurrent()
         setHmrError(null)
       } catch (error) {
         console.error('Manifest update error:', errorMessage(error, String(error)))
