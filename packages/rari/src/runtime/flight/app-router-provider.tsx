@@ -807,7 +807,7 @@ export function AppRouterProvider({
       throw toError(lastError)
     }
 
-    const refetchAndCacheIfCurrent = async (): Promise<RscPayload | undefined> => {
+    const refetchAndCacheIfCurrent = async (): Promise<boolean> => {
       const expectedNavigationId = currentNavigationIdRef.current
       const { pathname, search } = currentRouteLocation()
       const expectedRoute = `${pathname}${search}`
@@ -817,13 +817,13 @@ export function AppRouterProvider({
 
       const parsed = await refetchForHmr()
 
-      if (currentNavigationIdRef.current !== expectedNavigationId) return parsed
+      if (currentNavigationIdRef.current !== expectedNavigationId) return false
       const { pathname: currentPath, search: currentSearch } = currentRouteLocation()
-      if (`${currentPath}${currentSearch}` !== expectedRoute) return parsed
-      if (seqMap.get(expectedRoute) !== seq) return parsed
+      if (`${currentPath}${currentSearch}` !== expectedRoute) return false
+      if (seqMap.get(expectedRoute) !== seq) return false
 
       if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
-      return parsed
+      return true
     }
 
     const handleAppRouterRerender = async () => {
@@ -835,21 +835,20 @@ export function AppRouterProvider({
       saveFormState()
 
       try {
-        await refetchAndCacheIfCurrent()
+        const applied = await refetchAndCacheIfCurrent()
+        if (!applied) return
 
         setRenderKey(prev => prev + 1)
-
         setHmrError(null)
+
+        requestAnimationFrame(() => {
+          window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+          restoreFormState()
+        })
       } catch (error) {
         console.error('HMR refetch error:', errorMessage(error, String(error)))
         if (consecutiveFailuresRef.current >= MAX_RETRIES) handleFallbackReload()
       }
-
-      requestAnimationFrame(() => {
-        window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
-
-        restoreFormState()
-      })
     }
 
     const handleActionFlightRefresh = (event: Event) => {
@@ -958,7 +957,8 @@ export function AppRouterProvider({
 
     const handleRscInvalidate = async () => {
       try {
-        await refetchAndCacheIfCurrent()
+        const applied = await refetchAndCacheIfCurrent()
+        if (!applied) return
 
         setRenderKey(prev => prev + 1)
         setHmrError(null)
@@ -981,7 +981,8 @@ export function AppRouterProvider({
 
     const handleManifestUpdated = async () => {
       try {
-        await refetchAndCacheIfCurrent()
+        const applied = await refetchAndCacheIfCurrent()
+        if (!applied) return
         setHmrError(null)
       } catch (error) {
         console.error('Manifest update error:', errorMessage(error, String(error)))

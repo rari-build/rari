@@ -115,6 +115,17 @@ fn is_module_keyword_suffix(bytes: &[u8], end: usize) -> bool {
         && is_ident_start(bytes[j])
 }
 
+fn is_import_meta_suffix(bytes: &[u8], import_end: usize) -> bool {
+    let Some(rest) = bytes.get(import_end..) else {
+        return false;
+    };
+    if !rest.starts_with(b".meta") {
+        return false;
+    }
+    let after = import_end + ".meta".len();
+    after >= bytes.len() || !is_ident_continue(bytes[after])
+}
+
 fn skip_line_comment(bytes: &[u8], mut i: usize) -> usize {
     while i < bytes.len() && bytes[i] != b'\n' {
         i += 1;
@@ -310,7 +321,13 @@ pub fn is_esm_code(code: &str) -> bool {
                 i += 1;
             }
             let word = &code[start..i];
-            if (word == "import" || word == "export")
+            if word == "import"
+                && is_module_keyword_boundary(bytes, start)
+                && (is_module_keyword_suffix(bytes, i) || is_import_meta_suffix(bytes, i))
+            {
+                return true;
+            }
+            if word == "export"
                 && is_module_keyword_boundary(bytes, start)
                 && is_module_keyword_suffix(bytes, i)
             {
@@ -610,5 +627,9 @@ mod tests {
         assert!(is_esm_code(r"of / b; export default 1"));
         assert!(!is_esm_code(r"for (const x of /export/) {}"));
         assert!(is_esm_code(r"for (const x of /export/) {} export default 1"));
+        assert!(is_esm_code("const u = import.meta.url"));
+        assert!(is_esm_code("import.meta"));
+        assert!(!is_esm_code("import.metaa"));
+        assert!(!is_esm_code("ximport.meta"));
     }
 }
