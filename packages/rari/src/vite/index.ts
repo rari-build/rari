@@ -1274,9 +1274,9 @@ export function rari(
     )
   }
 
-  const appRouterHmrInFlight = new Map<string, Promise<void>>()
+  const appRouterHmrInFlight = new Map<string, Promise<boolean>>()
   const appRouterHmrDirty = new Set<string>()
-  async function rebuildAppRouterFile(file: string, viteServer: ViteDevServer): Promise<void> {
+  async function rebuildAppRouterFile(file: string, viteServer: ViteDevServer): Promise<boolean> {
     const existing = appRouterHmrInFlight.get(file)
     if (existing != null) {
       appRouterHmrDirty.add(file)
@@ -1284,23 +1284,27 @@ export function rari(
     }
 
     const run = (async () => {
+      let succeeded = false
       do {
         appRouterHmrDirty.delete(file)
         if (hmrCoordinator == null && ensureHmrReady != null) await ensureHmrReady()
         if (hmrCoordinator == null) {
           console.error(`[rari] HMR: coordinator not ready for ${file}`)
-          return
+          return false
         }
         try {
           await hmrCoordinator.rebuildAndNotifyNow(file, viteServer)
+          succeeded = true
         } catch (error) {
           console.error(
             '[rari] HMR: Failed to rebuild app router file',
             `${file}:`,
             errorMessage(error, String(error)),
           )
+          succeeded = false
         }
       } while (appRouterHmrDirty.has(file))
+      return succeeded
     })().finally(() => {
       appRouterHmrInFlight.delete(file)
     })
@@ -2395,7 +2399,6 @@ ${clientTransformedCode}`
           moduleAnalysisCache.invalidate(filePath)
 
           if (isAppRouterSpecialRouteFile(filePath)) {
-            await rebuildAppRouterFile(filePath, server)
             return
           }
 
@@ -2561,8 +2564,8 @@ ${clientTransformedCode}`
       const componentType = hmrCoordinator?.detectComponentType(file) ?? 'unknown'
 
       if (isAppRouterSpecialRouteFile(file)) {
-        await rebuildAppRouterFile(file, server)
-        return []
+        const rebuilt = await rebuildAppRouterFile(file, server)
+        return rebuilt ? [] : undefined
       }
 
       if (componentType === 'client') return undefined
@@ -2594,8 +2597,8 @@ ${clientTransformedCode}`
       moduleAnalysisCache.invalidate(file)
 
       if (isAppRouterSpecialRouteFile(file)) {
-        await rebuildAppRouterFile(file, server)
-        return []
+        const rebuilt = await rebuildAppRouterFile(file, server)
+        return rebuilt ? [] : undefined
       }
 
       const componentType = hmrCoordinator?.detectComponentType(file) ?? 'unknown'
