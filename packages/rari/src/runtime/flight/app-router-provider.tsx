@@ -542,16 +542,27 @@ export function AppRouterProvider({
   const refetchRscPayload = async (
     targetPath?: string,
     abortSignal?: AbortSignal,
-    options?: { readonly commit?: boolean },
+    options?: {
+      readonly commit?: boolean
+      readonly expectedRoute?: string
+      readonly expectedSeq?: number
+    },
   ) => {
     const pathToFetch =
       targetPath != null && targetPath !== '' ? targetPath : window.location.pathname
 
     const navigationId = currentNavigationIdRef.current
     const commit = options?.commit !== false
-    const requestKey = `${navigationId}:${pathToFetch}${window.location.search}:${commit ? 'commit' : 'defer'}`
+    const hmrSeqKey =
+      options?.expectedRoute != null && options.expectedSeq != null
+        ? `:hmr:${options.expectedRoute}:${options.expectedSeq}`
+        : ''
+    const requestKey = `${navigationId}:${pathToFetch}${window.location.search}:${commit ? 'commit' : 'defer'}${hmrSeqKey}`
     const existingFetch = pendingFetchesRef.current.get(requestKey)
     if (existingFetch) return existingFetch
+
+    const expectedRoute = options?.expectedRoute
+    const expectedSeq = options?.expectedSeq
 
     const fetchPromise = (async (): Promise<RscPayload | undefined> => {
       try {
@@ -582,7 +593,12 @@ export function AppRouterProvider({
         if (parsed === 'stale') return undefined
         if (parsed instanceof Error) throw parsed
 
-        if (currentNavigationIdRef.current === navigationId) {
+        const hmrStillCurrent =
+          expectedRoute == null ||
+          expectedSeq == null ||
+          hmrRouteCacheSeqRef.current.get(expectedRoute) === expectedSeq
+
+        if (currentNavigationIdRef.current === navigationId && hmrStillCurrent) {
           if (commit) setRscPayload(parsed)
           if (parsed.flightProtocol != null && parsed.flightProtocol !== '')
             lastSuccessfulPayloadRef.current = parsed.flightProtocol
@@ -618,14 +634,17 @@ export function AppRouterProvider({
     useRef<(flightProtocol: string) => RscPayload | Promise<RscPayload>>(parseRscFlightProtocol)
   const parseRscResponseRef =
     useRef<(responsePromise: Promise<Response>) => Promise<RscPayload>>(parseRscResponse)
-  const refetchRscPayloadRef =
-    useRef<
-      (
-        targetPath?: string,
-        abortSignal?: AbortSignal,
-        options?: { readonly commit?: boolean },
-      ) => Promise<RscPayload | undefined>
-    >(refetchRscPayload)
+  const refetchRscPayloadRef = useRef<
+    (
+      targetPath?: string,
+      abortSignal?: AbortSignal,
+      options?: {
+        readonly commit?: boolean
+        readonly expectedRoute?: string
+        readonly expectedSeq?: number
+      },
+    ) => Promise<RscPayload | undefined>
+  >(refetchRscPayload)
 
   useEffect(() => {
     parseRscFlightProtocolRef.current = parseRscFlightProtocol
@@ -793,11 +812,18 @@ export function AppRouterProvider({
       commitSuccessfulNavigation(detail, resolvedPayload)
     }
 
-    const refetchForHmr = async (): Promise<RscPayload | undefined> => {
+    const refetchForHmr = async (options: {
+      readonly expectedRoute: string
+      readonly expectedSeq: number
+    }): Promise<RscPayload | undefined> => {
       let lastError: unknown
       for (let attempt = 0; attempt < HMR_REFETCH_RETRIES; attempt += 1) {
         try {
-          return await refetchRscPayloadRef.current()
+          return await refetchRscPayloadRef.current(undefined, undefined, {
+            commit: true,
+            expectedRoute: options.expectedRoute,
+            expectedSeq: options.expectedSeq,
+          })
         } catch (error) {
           lastError = error
           if (!isTransientHmrFetchError(error) || attempt === HMR_REFETCH_RETRIES - 1) throw error
@@ -815,7 +841,7 @@ export function AppRouterProvider({
       const seq = (seqMap.get(expectedRoute) ?? 0) + 1
       seqMap.set(expectedRoute, seq)
 
-      const parsed = await refetchForHmr()
+      const parsed = await refetchForHmr({ expectedRoute, expectedSeq: seq })
 
       if (currentNavigationIdRef.current !== expectedNavigationId) return false
       const { pathname: currentPath, search: currentSearch } = currentRouteLocation()
@@ -838,11 +864,22 @@ export function AppRouterProvider({
         const applied = await refetchAndCacheIfCurrent()
         if (!applied) return
 
+        const acceptedNavigationId = currentNavigationIdRef.current
+        const { pathname: acceptedPath, search: acceptedSearch } = currentRouteLocation()
+        const acceptedRoute = `${acceptedPath}${acceptedSearch}`
+        const acceptedScroll = {
+          x: scrollPositionRef.current.x,
+          y: scrollPositionRef.current.y,
+        }
+
         setRenderKey(prev => prev + 1)
         setHmrError(null)
 
         requestAnimationFrame(() => {
-          window.scrollTo(scrollPositionRef.current.x, scrollPositionRef.current.y)
+          if (currentNavigationIdRef.current !== acceptedNavigationId) return
+          const { pathname, search } = currentRouteLocation()
+          if (`${pathname}${search}` !== acceptedRoute) return
+          window.scrollTo(acceptedScroll.x, acceptedScroll.y)
           restoreFormState()
         })
       } catch (error) {
