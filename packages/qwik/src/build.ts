@@ -15,10 +15,12 @@ export const SERVER_ENTRY_FILE = 'qwik-server-entry.mjs'
 export type QwikExperimentalFeature = keyof typeof ExperimentalFeatures
 
 /**
- * Qwik Router's file conventions mapped onto rari's scanner. Qwik only treats
- * `index` and `layout` files (plus `404`) as special; the Next-style roles rari
- * knows are disabled so a Qwik route file named e.g. `error.tsx` is not mistaken
- * for an error boundary.
+ * Qwik Router's file conventions mapped onto rari's scanner: only the base
+ * names differ. Qwik treats `index` and `layout` files (plus `404`) as special;
+ * the Next-style roles rari knows are disabled so a Qwik route file named e.g.
+ * `error.tsx` is not mistaken for an error boundary. `index@name`, `index!`,
+ * `layout-name` and `layout!` are rari's own route-file grammar and need no
+ * mapping.
  */
 export const QWIK_ROUTE_CONVENTIONS: RouteConventions = {
   page: 'index',
@@ -29,7 +31,6 @@ export const QWIK_ROUTE_CONVENTIONS: RouteConventions = {
   template: '',
   route: '',
   ogImage: '',
-  modifiers: true,
 }
 
 /** Qwik Router page/endpoint/layout file extensions (`index.md` is a page too). */

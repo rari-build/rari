@@ -6,10 +6,13 @@
 // holds what every adapter needs regardless of framework: the route manifest
 // schema the Rust router reads from `dist/server/routes.json`, the file-system
 // route scanner that produces it (parametrised by each framework's file
-// conventions), the metadata-route conventions, and small build-time utilities.
+// conventions and rari's route-file grammar), the metadata-route conventions,
+// the guest-side request/response contract (`@rari/core/guest`), and small
+// build-time utilities.
 //
 // This entry pulls in Node built-ins; browser-safe modules are exposed as
 // subpaths (`@rari/core/utils/type-guards`, `@rari/core/regex-constants`, …).
+export * from './guest'
 export * from './platform'
 export * from './regex-constants'
 export * from './router'

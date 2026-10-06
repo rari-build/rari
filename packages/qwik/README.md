@@ -34,7 +34,8 @@ The app is a standard Qwik Router project; nothing in `src/` is rari-specific. C
 | --- | --- | --- |
 | Scaffold | `pnpm create qwik@rc` | same, then `pnpm add rari @rari/qwik` and use `rariQwik()` in `vite.config.ts` |
 | Dev server, HMR, devtools | `vite --mode ssr` | same (Qwik's dev server; rari is not in the loop in dev) |
-| Routes, layouts, `404.tsx`, `error.tsx`, `index@layout`, `layout-name`, `index!`, `.md`/`.mdx` pages, `plugin@*.ts` | Qwik Router conventions | same files; rari's scanner reads the same conventions for its manifest |
+| Routes, layouts, `404.tsx`, `error.tsx`, `.md`/`.mdx` pages, `plugin@*.ts` | Qwik Router conventions | same files; rari's scanner reads Qwik's base names for its manifest |
+| `index@name`, `index!`, `layout-name`, `layout!` | Qwik Router's layout selection | the same spellings are rari's route-file grammar, resolved by the host for every framework; `platform.rari.route.layouts` reports the resolved chain |
 | Loaders, actions, `server$`, cookies, redirects, CSRF, `<head>` | Qwik Router | Qwik Router (`requestHandler`), unchanged |
 | Build | `vite build` + adapter config in `adapters/` | `vite build` (or `rari build`); no adapter directory, no `entry.<platform>.tsx` |
 | Serve | `node server/entry.node-server.js` | `rari start` |
@@ -68,7 +69,7 @@ rari owns routing. Where rari has a feature Qwik also has, rari's wins; Qwik doe
 1. rari serves `/build/*`, `/assets/*` and other files from `dist/client` directly.
 2. rari matches the URL against `dist/server/routes.json` (emitted from your `src/routes` by `@rari/core`'s scanner, Qwik's trailing slash and `q-loader-*.json` data requests normalised away). No match and no `404` page in the app means a host 404 (`x-rari-route: miss`) and the runtime is never touched.
 3. Anonymous page GETs are answered from the host's response cache (precompressed, ETag/304, cookie-partitioned).
-4. On a miss the bundle's handler runs on a pooled V8 runtime with the request (URL, method, headers, body, client IP) and the host's route decision. `@rari/qwik/platform` builds a `ServerRequestEvent` with `platform.rari.route` set and hands it to Qwik Router's `requestHandler`.
+4. On a miss the bundle's handler runs on a pooled V8 runtime with the host's `GuestRequest` (URL, method, headers, body, client IP, and the route decision). `@rari/qwik/platform` builds a `ServerRequestEvent` with `platform.rari.route` set and hands it to Qwik Router's `requestHandler`; the request types and the response sink come from `@rari/core/guest`, shared with every other adapter.
 5. Qwik writes status and headers, then HTML chunks, which the host streams out as they are produced; every response carries `x-rari-route` with the matched pattern. Cacheable pages are stored for the next hit.
 
 Form actions (`POST ?qaction=…`) and `server$` RPC endpoints are Qwik's; the host routes every method on a matched page path to the handler.

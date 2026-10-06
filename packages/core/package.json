@@ -58,6 +58,10 @@
       "types": "./dist/platform.d.mts",
       "import": "./dist/platform.mjs"
     },
+    "./guest": {
+      "types": "./dist/guest.d.mts",
+      "import": "./dist/guest.mjs"
+    },
     "./package.json": "./package.json"
   },
   "types": "dist/index.d.mts",

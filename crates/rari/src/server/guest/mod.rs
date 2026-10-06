@@ -8,14 +8,19 @@
 //!
 //! The host/guest contract is deliberately small so a new framework only has to
 //! implement [`GuestRenderer`] and ship a bundle that speaks the streaming
-//! protocol in [`stream`]:
+//! protocol in [`stream`]. Everything around the render is the host's and
+//! identical for every guest ([`pipeline`]):
 //!
+//! - the host serves the guest's static output directories and public files,
 //! - the host matches the request against `dist/server/routes.json` (emitted by
-//!   the framework's build via `@rari/core`) for caching and 404 fast paths,
-//! - the host serves the guest's static output directories,
+//!   the framework's build via `@rari/core`'s scanner, with rari's route-file
+//!   grammar) and hands the decision to the guest as [`pipeline::HostRoute`],
+//! - anonymous page GETs are answered from the static fast tier and the
+//!   response cache, with the TTL taken from the page's own `Cache-Control`,
 //! - the guest renders the page inside V8 and streams `status + headers` then
 //!   body bytes back through the pool's streaming ops.
 
+pub mod pipeline;
 pub mod qwik;
 pub mod stream;
 
@@ -70,29 +75,48 @@ impl StaticMount {
     }
 }
 
-/// A framework renderer hosted by rari.
+/// A framework renderer hosted by rari: the framework-specific part of the
+/// request pipeline. The defaults suit a framework whose URLs are plain page
+/// paths; override them for framework-internal URLs.
 #[async_trait]
 pub trait GuestRenderer: Send + Sync {
     /// Which framework this renderer serves.
     fn framework(&self) -> Framework;
 
     /// Static output directories the host should serve before consulting the
-    /// renderer (client bundles, assets, copied `public/`).
+    /// renderer (content-hashed client bundles, assets).
     fn static_mounts(&self) -> Vec<StaticMount>;
+
+    /// Directory whose files the host serves verbatim when a request path with
+    /// a file extension names one (favicons, copied `public/` files).
+    fn public_dir(&self) -> Option<&Path> {
+        None
+    }
+
+    /// The page pathname the host routes a request path as: strips the
+    /// framework's data-request suffixes and trailing-slash variants so the
+    /// manifest match is the page the request belongs to.
+    fn page_pathname(&self, path: &str) -> String {
+        pipeline::default_page_pathname(path)
+    }
+
+    /// Paths the guest handles itself although the host's manifest has no page
+    /// for them (framework-level endpoints). Everything else unmatched is a
+    /// host 404 that never reaches V8.
+    fn owns_unmatched_path(&self, _path: &str) -> bool {
+        false
+    }
 
     /// Re-install the guest bundle on a pool slot the runtime rebuilt after a
     /// failure, so the slot can serve requests again.
     async fn resync_slot(&self, runtime: &Arc<dyn JsRuntimeInterface>) -> Result<(), RariError>;
 
-    /// Handle a page request end to end. Called for every method on every path
-    /// that no host route or static mount claimed, so the guest can run its own
-    /// form actions and RPC endpoints.
-    async fn handle(
+    /// Start rendering `request` on a pool slot; returns once the guest has
+    /// reported its status and headers (see [`stream::run_guest_script`]).
+    async fn render(
         &self,
-        state: &ServerState,
-        req: Request<Body>,
-        client_addr: Option<SocketAddr>,
-    ) -> Response;
+        request: &pipeline::GuestRequest,
+    ) -> Result<stream::GuestStream, RariError>;
 }
 
 /// Load the guest renderer selected by `config.framework`, if any. React
@@ -182,5 +206,5 @@ pub async fn handle_guest_route(State(state): State<ServerState>, req: Request<B
     // Present when served through `into_make_service_with_connect_info`; absent
     // in unit tests that call the router directly.
     let client_addr = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|info| info.0);
-    guest.handle(&state, req, client_addr).await
+    pipeline::handle(guest.as_ref(), &state, req, client_addr).await
 }

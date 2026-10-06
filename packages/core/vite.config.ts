@@ -9,6 +9,7 @@ export default defineConfig({
       'index': 'src/index.ts',
       'router': 'src/router/index.ts',
       'platform': 'src/platform.ts',
+      'guest': 'src/guest.ts',
       'regex-constants': 'src/regex-constants.ts',
       'utils/path': 'src/utils/path.ts',
       'utils/dist-paths': 'src/utils/dist-paths.ts',

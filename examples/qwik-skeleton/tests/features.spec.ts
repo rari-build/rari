@@ -46,6 +46,8 @@ test.describe('SSR + routing', () => {
     expect(narrow.headers()['x-rari-route']).toBe('/narrow')
     expect(await narrow.text()).toContain('narrow page via named layout')
     expect(await narrow.text()).toContain('data-layout="narrow"')
+    // The host resolved the variant chain: only the named layout, no default.
+    expect(await narrow.text()).toMatch(/data-testid="host-layouts"[^>]*>layout-narrow\.tsx</)
 
     const notes = await request.get('/notes/')
     expect(notes.status()).toBe(200)
