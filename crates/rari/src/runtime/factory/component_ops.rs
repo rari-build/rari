@@ -21,8 +21,10 @@ fn escape_js_string(s: &str) -> String {
 pub fn is_esm_code(code: &str) -> bool {
     static ESM_REGEX: OnceLock<Regex> = OnceLock::new();
     #[expect(clippy::expect_used, reason = "Infallible operation with valid inputs")]
-    let regex = ESM_REGEX
-        .get_or_init(|| Regex::new(r"(?m)^\s*export[\s{]").expect("Valid ESM detection regex"));
+    let regex = ESM_REGEX.get_or_init(|| {
+        Regex::new(r"(?:^|[^\w.$])(?:import|export)(?:\s*[*{]|[\s])")
+            .expect("Valid ESM detection regex")
+    });
 
     regex.is_match(code)
 }
@@ -273,7 +275,7 @@ pub async fn load_component_code(
 
 #[cfg(test)]
 mod tests {
-    use super::build_invalidate_script;
+    use super::{build_invalidate_script, is_esm_code};
 
     #[test]
     fn invalidate_script_invokes_snapshotted_helper() {
@@ -286,5 +288,14 @@ mod tests {
             "per-HMR invalidate script should stay tiny (got {} bytes)",
             script.len()
         );
+    }
+
+    #[test]
+    fn detects_minified_esm_import_export() {
+        let bundled = r#"import{jsx as t}from"react/jsx-runtime";function i(){return t("h1",{children:"hi"})}export{i as default};"#;
+        assert!(is_esm_code(bundled));
+        assert!(is_esm_code("export default function Page() {}"));
+        assert!(is_esm_code("  export { foo }"));
+        assert!(!is_esm_code("const exportName = 1; function importData() {}"));
     }
 }

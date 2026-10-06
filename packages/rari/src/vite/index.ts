@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import type { IncomingMessage } from 'node:http'
-import type { CSSModulesOptions, Plugin, UserConfig } from 'vite-plus'
+import type { CSSModulesOptions, Plugin, UserConfig, ViteDevServer } from 'vite-plus'
 import type { ModuleAnalysis } from './analysis/directives'
 import type { MdxPluginOptions } from './mdx/registry'
 import type { RariPlugin } from './plugin/types'
@@ -31,6 +31,7 @@ import {
   TSX_EXT_REGEX,
   WINDOWS_PATH_REGEX,
 } from '@/shared/regex-constants'
+import { resolveClientOutDir, resolveDistRootFromClientOutDir } from '@/shared/utils/dist-paths'
 import { clearFileResolverCache, resolveImportToFilePath } from '@/shared/utils/file-resolver'
 import { isPathInside, normalizeAssetsDir, pathnameFromUrl, toPosixPath } from '@/shared/utils/path'
 import { getRariServerPort } from '@/shared/utils/server-port'
@@ -1247,8 +1248,66 @@ export function rari(
   let hmrCoordinator: HMRCoordinator | null = null
   const resolvedAlias: Record<string, string> = {}
   let resolvedAssetsDir = 'assets'
-  let resolvedOutDir = path.join(process.cwd(), 'dist')
+  let resolvedClientOutDir = path.join(process.cwd(), 'dist', 'client')
+  let resolvedDistRoot = path.join(process.cwd(), 'dist')
   let cachedMdxRegistryModule: string | null = null
+  let ensureHmrReady: (() => Promise<void>) | null = null
+
+  const SPECIAL_ROUTE_FILE_BASES = [
+    'page',
+    'layout',
+    'template',
+    'loading',
+    'error',
+    'not-found',
+  ] as const
+
+  function isAppRouterSpecialRouteFile(file: string): boolean {
+    const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
+    if (!isAppRouterFile) return false
+    return SPECIAL_ROUTE_FILE_BASES.some(
+      base =>
+        file.endsWith(`${base}.tsx`) ||
+        file.endsWith(`${base}.jsx`) ||
+        file.endsWith(`${base}.ts`) ||
+        file.endsWith(`${base}.js`),
+    )
+  }
+
+  const appRouterHmrInFlight = new Map<string, Promise<void>>()
+  const appRouterHmrDirty = new Set<string>()
+  async function rebuildAppRouterFile(file: string, viteServer: ViteDevServer): Promise<void> {
+    const existing = appRouterHmrInFlight.get(file)
+    if (existing != null) {
+      appRouterHmrDirty.add(file)
+      return existing
+    }
+
+    const run = (async () => {
+      do {
+        appRouterHmrDirty.delete(file)
+        if (hmrCoordinator == null && ensureHmrReady != null) await ensureHmrReady()
+        if (hmrCoordinator == null) {
+          console.error(`[rari] HMR: coordinator not ready for ${file}`)
+          return
+        }
+        try {
+          await hmrCoordinator.rebuildAndNotifyNow(file, viteServer)
+        } catch (error) {
+          console.error(
+            '[rari] HMR: Failed to rebuild app router file',
+            `${file}:`,
+            errorMessage(error, String(error)),
+          )
+        }
+      } while (appRouterHmrDirty.has(file))
+    })().finally(() => {
+      appRouterHmrInFlight.delete(file)
+    })
+
+    appRouterHmrInFlight.set(file, run)
+    return run
+  }
 
   function invalidateMdxRegistryModuleCache(): void {
     cachedMdxRegistryModule = null
@@ -1914,7 +1973,8 @@ ${clientTransformedCode}`
     configResolved(config) {
       const paths = resolvePluginPaths(config)
       resolvedAssetsDir = paths.assetsDir
-      resolvedOutDir = paths.outDir
+      resolvedClientOutDir = resolveClientOutDir(paths.projectRoot, config.build.outDir)
+      resolvedDistRoot = resolveDistRootFromClientOutDir(resolvedClientOutDir)
       Object.assign(resolvedAlias, readViteAliases(config))
     },
 
@@ -1959,7 +2019,7 @@ ${clientTransformedCode}`
           : process.cwd(),
       )
       const srcDir = path.join(projectRoot, 'src')
-      await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedOutDir)
+      await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedClientOutDir)
 
       const reactDevtoolsStubFiles = new Map([
         ['/installHook.js.map', 'installHook.js'],
@@ -1997,7 +2057,8 @@ ${clientTransformedCode}`
       const discoverAndRegisterComponents = async () => {
         try {
           const builder = new ServerComponentBuilder(projectRoot, {
-            outDir: resolvedOutDir,
+            outDir: resolvedDistRoot,
+            clientOutDir: resolvedClientOutDir,
             rscDir: 'server',
             manifestPath: 'server/manifest.json',
             serverConfigPath: 'server/config.json',
@@ -2263,6 +2324,10 @@ ${clientTransformedCode}`
         }
       }
 
+      ensureHmrReady = async () => {
+        if (devServerComponentBuilder == null) await discoverAndRegisterComponents()
+      }
+
       startRustServer().catch((error: unknown) => {
         console.error('[rari] Failed to start Rust server:', error)
       })
@@ -2321,17 +2386,20 @@ ${clientTransformedCode}`
 
       server.watcher.on('change', filePath => {
         void (async () => {
-          if (TSX_EXT_REGEX.test(filePath)) {
-            deleteComponentType(filePath)
-            removeTrackedClientComponent(filePath)
-            moduleAnalysisCache.invalidate(filePath)
+          if (!TSX_EXT_REGEX.test(filePath)) return
+          if (!isPathInside(filePath, srcDir)) return
+          if (filePath.includes('/dist/') || filePath.includes('\\dist\\')) return
+
+          deleteComponentType(filePath)
+          removeTrackedClientComponent(filePath)
+          moduleAnalysisCache.invalidate(filePath)
+
+          if (isAppRouterSpecialRouteFile(filePath)) {
+            await rebuildAppRouterFile(filePath, server)
+            return
           }
 
-          if (
-            TSX_EXT_REGEX.test(filePath) &&
-            isPathInside(filePath, srcDir) &&
-            isServerComponent(filePath)
-          ) {
+          if (isServerComponent(filePath)) {
             server.ws.send({
               type: 'custom',
               event: 'rari:register-server-component',
@@ -2492,36 +2560,9 @@ ${clientTransformedCode}`
 
       const componentType = hmrCoordinator?.detectComponentType(file) ?? 'unknown'
 
-      const isAppRouterFile = file.includes('/app/') || file.includes('\\app\\')
-      const hasExtension = (fileName: string, baseName: string) =>
-        fileName.endsWith(`${baseName}.tsx`) ||
-        fileName.endsWith(`${baseName}.jsx`) ||
-        fileName.endsWith(`${baseName}.ts`) ||
-        fileName.endsWith(`${baseName}.js`)
-
-      const SPECIAL_ROUTE_FILE_BASES = [
-        'page',
-        'layout',
-        'template',
-        'loading',
-        'error',
-        'not-found',
-      ] as const
-      const isSpecialRouteFile = SPECIAL_ROUTE_FILE_BASES.some(base => hasExtension(file, base))
-
-      if (isAppRouterFile && isSpecialRouteFile) {
-        if (hmrCoordinator) {
-          try {
-            await hmrCoordinator.rebuildAndNotifyNow(file, server)
-          } catch (error) {
-            console.error(
-              '[rari] HMR: Failed to rebuild app router file',
-              `${file}:`,
-              errorMessage(error, String(error)),
-            )
-          }
-        }
-        return undefined
+      if (isAppRouterSpecialRouteFile(file)) {
+        await rebuildAppRouterFile(file, server)
+        return []
       }
 
       if (componentType === 'client') return undefined
@@ -2529,6 +2570,37 @@ ${clientTransformedCode}`
       if (componentType === 'server') {
         if (hmrCoordinator) await hmrCoordinator.handleServerComponentUpdate(file, server)
 
+        return []
+      }
+
+      return undefined
+    },
+
+    async hotUpdate(
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+      this: { environment: { name: string } },
+      // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+      ctx: { file: string; server: ViteDevServer },
+    ) {
+      if (this.environment.name !== 'client') return undefined
+      const { file, server } = ctx
+      if (!TSX_EXT_REGEX.test(file)) return undefined
+      if (file.includes('/dist/') || file.includes('\\dist\\')) return undefined
+
+      clearFileResolverCache()
+      if (file.endsWith('.mdx')) invalidateMdxRegistryModuleCache()
+      deleteComponentType(file)
+      removeTrackedClientComponent(file)
+      moduleAnalysisCache.invalidate(file)
+
+      if (isAppRouterSpecialRouteFile(file)) {
+        await rebuildAppRouterFile(file, server)
+        return []
+      }
+
+      const componentType = hmrCoordinator?.detectComponentType(file) ?? 'unknown'
+      if (componentType === 'server' && hmrCoordinator) {
+        await hmrCoordinator.handleServerComponentUpdate(file, server)
         return []
       }
 
@@ -2552,7 +2624,7 @@ ${clientTransformedCode}`
         options.projectRoot != null && options.projectRoot !== ''
           ? options.projectRoot
           : process.cwd()
-      await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedOutDir)
+      await writeImageConfig(projectRoot, options, resolvedAssetsDir, resolvedClientOutDir)
     },
   }
 
