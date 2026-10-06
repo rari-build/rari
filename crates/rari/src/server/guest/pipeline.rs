@@ -20,6 +20,7 @@ use axum::{
     body::{Body, Bytes, to_bytes},
     http::{
         HeaderMap, HeaderName, HeaderValue, Method, Request, StatusCode,
+        request::Parts,
         header::{
             ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, ETAG,
             HOST, IF_NONE_MATCH, SET_COOKIE, VARY,
@@ -218,11 +219,7 @@ fn frame_headers(frame: &[(String, String)]) -> HeaderMap {
 /// Serve a page from the static fast tier: an `Arc` clone of a prebuilt,
 /// per-encoding compressed response, no deserialisation. Same tier the React
 /// SSR path answers cookie-less GETs from.
-fn fast_hit_response(
-    prebuilt: &PrebuiltResponse,
-    request_headers: &HeaderMap,
-    route_label: &HeaderValue,
-) -> Response {
+fn fast_hit_response(prebuilt: &PrebuiltResponse, request_headers: &HeaderMap) -> Response {
     let vary = static_html_vary_header(None);
     if request_headers.get(IF_NONE_MATCH).and_then(|v| v.to_str().ok()) == Some(&prebuilt.etag) {
         let mut headers = HeaderMap::new();
@@ -255,7 +252,9 @@ fn fast_hit_response(
     if let Some(value) = encoding {
         headers.insert(CONTENT_ENCODING, HeaderValue::from_static(value));
     }
-    headers.insert(ROUTE_HEADER, route_label.clone());
+    if let Some(label) = prebuilt.route.as_deref().and_then(|r| HeaderValue::from_str(r).ok()) {
+        headers.insert(ROUTE_HEADER, label);
+    }
     headers.insert("x-cache", HeaderValue::from_static("HIT"));
     let status = if prebuilt.is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
     response_with_headers(status, &headers, Body::from(body))
@@ -332,16 +331,71 @@ async fn try_serve_public_file(
     serve_mounted_file(dir, relative, false, &state.config.caching.static_files).await
 }
 
+/// The cache side of a request, computed once up front: whether the request
+/// may be answered from the host's caches and under which keys.
+struct CacheLookup {
+    is_get: bool,
+    cacheable_request: bool,
+    use_fast_tier: bool,
+    cache_key: String,
+    fast_key: String,
+}
+
+impl CacheLookup {
+    fn new(state: &ServerState, parts: &Parts, path: &str) -> Self {
+        // The key partitions on the same cookie rules as the RSC path so a
+        // cookie-bearing request never reads another visitor's page.
+        let is_get = parts.method == Method::GET;
+        let cookie_header = request_cookie_header(&parts.headers);
+        let query = query_params(parts.uri.query());
+        let query_for_cache = route_query_params_for_cache(&query);
+        let cacheable_request =
+            is_get && cookie_header.is_none() && state.response_cache.config.enabled;
+        Self {
+            is_get,
+            cacheable_request,
+            // Only cookie-independent renders are stored in the fast tier.
+            use_fast_tier: cacheable_request && can_use_static_fast_cache(cookie_header),
+            cache_key: response_cache_key(
+                path,
+                query_for_cache.as_ref(),
+                Some("guest"),
+                cookie_header,
+            ),
+            fast_key: ResponseCache::generate_static_fast_cache_key(
+                path,
+                query_for_cache.as_ref(),
+                None,
+            ),
+        }
+    }
+
+    /// Answer from the static fast tier (an `Arc` clone of a prebuilt,
+    /// precompressed response) or the response cache, if the page is there.
+    async fn hit(&self, state: &ServerState, request_headers: &HeaderMap) -> Option<Response> {
+        if self.use_fast_tier && let Some(prebuilt) = state.static_fast_cache.get(&self.fast_key) {
+            return Some(fast_hit_response(&prebuilt, request_headers));
+        }
+        if self.cacheable_request && let Some(cached) = state.response_cache.get(&self.cache_key).await {
+            return Some(cached_hit_response(&cached, request_headers));
+        }
+        None
+    }
+}
+
 /// Handle a page request end to end for `guest`.
 ///
 /// 1. public files from the guest's build output,
-/// 2. the host's route decision (manifest match, not-found page, or a host 404
+/// 2. for anonymous GETs, the static fast tier and then the response cache,
+/// 3. the host's route decision (manifest match, not-found page, or a host 404
 ///    unless the guest owns the path),
-/// 3. for anonymous GETs, the static fast tier and then the response cache,
-/// 4. otherwise the guest renders on a pool slot; cacheable pages are buffered
-///    and stored under the TTL from the page's own `Cache-Control` (falling
-///    back to the route config), everything else streams as produced.
-#[expect(clippy::too_many_lines)]
+/// 4. the guest renders on a pool slot; cacheable pages are buffered and
+///    stored under the TTL from the page's own `Cache-Control` (falling back
+///    to the route config), everything else streams as produced.
+///
+/// Steps 1 and 2 are the hot path and stay in this small future; the render
+/// future is built (and boxed) only on a miss, so a cached hit never pays for
+/// the state machine of a full render.
 pub async fn handle(
     guest: &dyn GuestRenderer,
     state: &ServerState,
@@ -355,6 +409,25 @@ pub async fn handle(
         return response;
     }
 
+    let lookup = CacheLookup::new(state, &parts, &path);
+    if let Some(response) = lookup.hit(state, &parts.headers).await {
+        return response;
+    }
+
+    Box::pin(render(guest, state, parts, body, path, lookup, client_addr)).await
+}
+
+/// Route, render and respond on a cache miss; see [`handle`].
+#[expect(clippy::too_many_lines)]
+async fn render(
+    guest: &dyn GuestRenderer,
+    state: &ServerState,
+    parts: Parts,
+    body: Body,
+    path: String,
+    lookup: CacheLookup,
+    client_addr: Option<SocketAddr>,
+) -> Response {
     // Host-first routing: rari decides what the URL is before the guest runs.
     // No manifest at all means the guest decides everything.
     let host_route = match state.app_router.as_ref() {
@@ -370,7 +443,6 @@ pub async fn handle(
         |route| HeaderValue::from_str(&route.path).unwrap_or(HeaderValue::from_static("miss")),
     );
 
-    let is_get = parts.method == Method::GET;
     let path_and_query = parts.uri.path_and_query().map_or("/", |pq| pq.as_str());
     let url = format!("{}{}", request_origin(state, &parts.headers), path_and_query);
 
@@ -382,7 +454,7 @@ pub async fn handle(
         })
         .collect();
 
-    let body_base64 = if is_get || parts.method == Method::HEAD {
+    let body_base64 = if lookup.is_get || parts.method == Method::HEAD {
         None
     } else {
         match to_bytes(body, MAX_REQUEST_BODY_BYTES).await {
@@ -394,32 +466,6 @@ pub async fn handle(
             }
         }
     };
-
-    // Host-owned response cache for anonymous page GETs. The key partitions on
-    // the same cookie rules as the RSC path so a cookie-bearing request never
-    // reads another visitor's page.
-    let cookie_header = request_cookie_header(&parts.headers);
-    let query = query_params(parts.uri.query());
-    let query_for_cache = route_query_params_for_cache(&query);
-    let cache_enabled = state.response_cache.config.enabled;
-    let cacheable_request = is_get && cookie_header.is_none() && cache_enabled;
-    let cache_key =
-        response_cache_key(&path, query_for_cache.as_ref(), Some("guest"), cookie_header);
-
-    // Cookie-less GETs are answered from the static fast tier first: the same
-    // `Arc<PrebuiltResponse>` tier the React path uses, with no cache-entry
-    // deserialisation per hit. Only cookie-independent renders are stored.
-    let fast_key =
-        ResponseCache::generate_static_fast_cache_key(&path, query_for_cache.as_ref(), None);
-    let use_fast_tier = cacheable_request && can_use_static_fast_cache(cookie_header);
-
-    if use_fast_tier && let Some(prebuilt) = state.static_fast_cache.get(&fast_key) {
-        return fast_hit_response(&prebuilt, &parts.headers, &route_label);
-    }
-
-    if cacheable_request && let Some(cached) = state.response_cache.get(&cache_key).await {
-        return cached_hit_response(&cached, &parts.headers);
-    }
 
     let request = GuestRequest {
         stream_id: next_stream_id(),
@@ -442,13 +488,13 @@ pub async fn handle(
 
     let status = StatusCode::from_u16(stream.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     let mut headers = frame_headers(&stream.headers);
-    headers.insert(ROUTE_HEADER, route_label);
+    headers.insert(ROUTE_HEADER, route_label.clone());
     let is_html = headers
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.starts_with("text/html"));
 
-    let store = cacheable_request
+    let store = lookup.cacheable_request
         && status == StatusCode::OK
         && is_html
         && !headers.contains_key(SET_COOKIE)
@@ -482,6 +528,7 @@ pub async fn handle(
             let policy = RouteCachePolicy::from_cache_control(&cache_control, &path);
             if policy.enabled && policy.ttl > 0 {
                 let mut cache_headers = headers.clone();
+                let cookie_header = request_cookie_header(&parts.headers);
                 insert_response_cache_vary_header(&mut cache_headers, cookie_header, true);
                 // Compress once at store time so hits serve precompressed bytes
                 // instead of paying for compression per request (RSC parity).
@@ -489,7 +536,7 @@ pub async fn handle(
                     compress_all_encodings(body.clone()).await;
                 let etag = ResponseCache::generate_etag(&body);
 
-                if use_fast_tier {
+                if lookup.use_fast_tier {
                     let content_type = headers
                         .get(CONTENT_TYPE)
                         .and_then(|v| v.to_str().ok())
@@ -497,7 +544,7 @@ pub async fn handle(
                         .to_string();
                     insert_static_fast_cache(
                         &state.static_fast_cache,
-                        &fast_key,
+                        &lookup.fast_key,
                         Arc::new(PrebuiltResponse {
                             identity: body.clone(),
                             gzip: compressed_gzip.clone(),
@@ -508,6 +555,7 @@ pub async fn handle(
                             cache_control,
                             is_not_found: false,
                             cached_at: Instant::now(),
+                            route: route_label.to_str().ok().map(str::to_string),
                         }),
                         state.response_cache.config.max_entries,
                     );
@@ -516,7 +564,7 @@ pub async fn handle(
                 state
                     .response_cache
                     .set(
-                        cache_key,
+                        lookup.cache_key,
                         CachedResponse {
                             body: body.clone(),
                             headers: cache_headers,
