@@ -70,7 +70,7 @@ deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
 # === Async & Concurrency ===
-async-compression = { version = "0.4.48", features = ["brotli", "gzip", "tokio", "zstd"] }
+async-compression = { version = "0.4.50", features = ["brotli", "gzip", "tokio", "zstd"] }
 async-stream = "0.3.6"
 async-trait = "0.1.92"
 futures = "0.3.34"
@@ -135,7 +135,7 @@ serde_json = { workspace = true }
 
 # === System Integration ===
 hyper-util = { version = "0.1.21", features = ["client-legacy", "tokio"] }
-libc = "0.2.189"
+libc = "0.2.190"
 nix = { workspace = true, features = ["term"] }
 rustyline = { workspace = true }
 sys_traits = { workspace = true }
@@ -159,7 +159,7 @@ smallvec = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-signal-hook = { version = "0.4.4", features = ["iterator"] }
+signal-hook = { version = "0.4.5", features = ["iterator"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
