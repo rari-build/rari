@@ -58,12 +58,10 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runner: namespace-profile-rari-windows-amd64
             name: rari-win32-x64.exe
-            vcpkg_triplet: x64-windows
             platform: win32-x64
           - target: aarch64-pc-windows-msvc
             runner: windows-11-arm
             name: rari-win32-arm64.exe
-            vcpkg_triplet: arm64-windows
             platform: win32-arm64
             github_hosted: true
 
@@ -98,8 +96,6 @@ jobs:
           targets: ${{ matrix.target }}
 
       - uses: ./.github/actions/setup-rust-build-deps
-        with:
-          vcpkg-triplet: ${{ matrix.vcpkg_triplet }}
 
       - uses: ./.github/actions/setup-pnpm
         if: ${{ matrix.github_hosted }}
@@ -140,8 +136,6 @@ jobs:
           crates/rari/snapshots
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
-          PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
-          VCPKG_ROOT: C:\vcpkg
 
       - name: Build binary (Linux)
         if: runner.os == 'Linux'
@@ -161,8 +155,6 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }} --bin rari
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
-          PKG_CONFIG_PATH: C:\vcpkg\installed\${{ matrix.vcpkg_triplet }}\lib\pkgconfig
-          VCPKG_ROOT: C:\vcpkg
 
       - name: Prepare binary (Unix)
         if: runner.os != 'Windows'

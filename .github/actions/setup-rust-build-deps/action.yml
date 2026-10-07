@@ -3,28 +3,17 @@ description: Install OS packages required to build Rust crates in CI
 
 inputs:
   fontconfig:
-    description: Install fontconfig (required for the rari binary)
+    description: Install fontconfig (Linux/macOS)
     required: false
     default: 'true'
   mold:
     description: Install mold linker on Linux
     required: false
     default: 'true'
-  vcpkg-triplet:
-    description: Windows vcpkg triplet for fontconfig (e.g. x64-windows)
-    required: false
-    default: ''
 
 runs:
   using: composite
   steps:
-    - name: Validate Windows fontconfig inputs
-      if: runner.os == 'Windows' && inputs.fontconfig == 'true' && inputs.vcpkg-triplet == ''
-      shell: bash
-      run: |
-        echo "fontconfig is enabled but vcpkg-triplet is empty; set vcpkg-triplet (e.g. x64-windows)"
-        exit 1
-
     - name: Install system dependencies (Linux)
       if: runner.os == 'Linux'
       shell: bash
@@ -49,8 +38,3 @@ runs:
         if [ "${{ inputs.fontconfig }}" = "true" ]; then
           brew list fontconfig &>/dev/null || brew install fontconfig
         fi
-
-    - name: Install system dependencies (Windows)
-      if: runner.os == 'Windows' && inputs.fontconfig == 'true' && inputs.vcpkg-triplet != ''
-      shell: pwsh
-      run: vcpkg install fontconfig:${{ inputs.vcpkg-triplet }}

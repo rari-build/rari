@@ -1290,7 +1290,7 @@ export function rari(
         if (hmrCoordinator == null && ensureHmrReady != null) await ensureHmrReady()
         if (hmrCoordinator == null) {
           console.error(`[rari] HMR: coordinator not ready for ${file}`)
-          return false
+          return succeeded
         }
         try {
           await hmrCoordinator.rebuildAndNotifyNow(file, viteServer)
@@ -1301,7 +1301,6 @@ export function rari(
             `${file}:`,
             errorMessage(error, String(error)),
           )
-          succeeded = false
         }
       } while (appRouterHmrDirty.has(file))
       return succeeded
