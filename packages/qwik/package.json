@@ -1,7 +1,7 @@
 {
   "name": "@rari/qwik",
   "type": "module",
-  "version": "0.17.2",
+  "version": "0.1.0-alpha.0",
   "description": "Qwik adapter for rari: build a Qwik Router app into a server bundle the rari Rust host loads into V8 and streams",
   "author": "Ryan Skinner",
   "license": "MIT",
@@ -42,6 +42,10 @@
     "./package.json": "./package.json"
   },
   "types": "dist/index.d.mts",
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
   "files": [
     "LICENSE",
     "README.md",

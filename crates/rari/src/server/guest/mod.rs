@@ -134,6 +134,11 @@ pub async fn load(
     match config.framework {
         Framework::React => Ok(None),
         Framework::Qwik => {
+            tracing::warn!(
+                "[rari] the Qwik guest renderer is alpha: the host and its caching are the \
+                 same as for React, but the adapter has been exercised by its conformance \
+                 and benchmark apps only"
+            );
             let guest = qwik::QwikGuest::load(runtime, project_root).await?;
             Ok(Some(Arc::new(guest)))
         }

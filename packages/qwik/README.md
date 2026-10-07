@@ -1,5 +1,7 @@
 # @rari/qwik
 
+> **Alpha.** The adapter runs the conformance app and the benchmark apps (loaders, actions, `server$`, `<head>`, 404s, redirects, out-of-order streaming, no-JS forms, named layouts, markdown pages), and it tracks Qwik 2 while Qwik 2 is itself a release candidate. Expect edges in real apps; please report them. The rari host underneath is the same one that serves React.
+
 Qwik adapter for [rari](https://rari.build): run a [Qwik Router](https://qwik.dev) app on rari's Rust host.
 
 rari is the host — HTTP server, routing, response cache, static assets, and a pool of V8 runtimes. Qwik is the guest: this package builds your app into a self-contained server bundle that rari loads into V8 and streams per request. Loaders, actions, `server$`, cookies, redirects, `<head>` and rendering are Qwik Router's own `requestHandler`; rari is just another platform for it, like the Node or Cloudflare adapters.
@@ -30,19 +32,19 @@ Your app is a normal Qwik Router app: `src/root.tsx`, `src/entry.ssr.tsx` (`crea
 
 The app is a standard Qwik Router project; nothing in `src/` is rari-specific. Compared with a Node/Cloudflare adapter:
 
-| Area | Standard Qwik 2 | On rari |
-| --- | --- | --- |
-| Scaffold | `pnpm create qwik@rc` | same, then `pnpm add rari @rari/qwik` and use `rariQwik()` in `vite.config.ts` |
-| Dev server, HMR, devtools | `vite --mode ssr` | same (Qwik's dev server; rari is not in the loop in dev) |
-| Routes, layouts, `404.tsx`, `error.tsx`, `.md`/`.mdx` pages, `plugin@*.ts` | Qwik Router conventions | same files; rari's scanner reads Qwik's base names for its manifest |
-| `index@name`, `index!`, `layout-name`, `layout!` | Qwik Router's layout selection | the same spellings are rari's route-file grammar, resolved by the host for every framework; `platform.rari.route.layouts` reports the resolved chain |
-| Loaders, actions, `server$`, cookies, redirects, CSRF, `<head>` | Qwik Router | Qwik Router (`requestHandler`), unchanged |
-| Build | `vite build` + adapter config in `adapters/` | `vite build` (or `rari build`); no adapter directory, no `entry.<platform>.tsx` |
-| Serve | `node server/entry.node-server.js` | `rari start` |
-| URL → route | Qwik's trie, per request | rari's router first; unmatched URLs are host 404s (`x-rari-route: miss`), the match is on `platform.rari.route` |
-| Page cache | none (or a CDN via `cacheControl()`) | rari's response cache; the page's own `cacheControl()` sets the TTL, `no-store`/`private`/`max-age=0` opt out |
-| Static files, compression, ETag/304 | the adapter's | rari's |
-| SSG (`adapters/static`) | supported | not applicable; rari caches rendered pages instead |
+| Area                                                                       | Standard Qwik 2                              | On rari                                                                                                                                              |
+| -------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scaffold                                                                   | `pnpm create qwik@rc`                        | same, then `pnpm add rari @rari/qwik` and use `rariQwik()` in `vite.config.ts`                                                                       |
+| Dev server, HMR, devtools                                                  | `vite --mode ssr`                            | same (Qwik's dev server; rari is not in the loop in dev)                                                                                             |
+| Routes, layouts, `404.tsx`, `error.tsx`, `.md`/`.mdx` pages, `plugin@*.ts` | Qwik Router conventions                      | same files; rari's scanner reads Qwik's base names for its manifest                                                                                  |
+| `index@name`, `index!`, `layout-name`, `layout!`                           | Qwik Router's layout selection               | the same spellings are rari's route-file grammar, resolved by the host for every framework; `platform.rari.route.layouts` reports the resolved chain |
+| Loaders, actions, `server$`, cookies, redirects, CSRF, `<head>`            | Qwik Router                                  | Qwik Router (`requestHandler`), unchanged                                                                                                            |
+| Build                                                                      | `vite build` + adapter config in `adapters/` | `vite build` (or `rari build`); no adapter directory, no `entry.<platform>.tsx`                                                                      |
+| Serve                                                                      | `node server/entry.node-server.js`           | `rari start`                                                                                                                                         |
+| URL → route                                                                | Qwik's trie, per request                     | rari's router first; unmatched URLs are host 404s (`x-rari-route: miss`), the match is on `platform.rari.route`                                      |
+| Page cache                                                                 | none (or a CDN via `cacheControl()`)         | rari's response cache; the page's own `cacheControl()` sets the TTL, `no-store`/`private`/`max-age=0` opt out                                        |
+| Static files, compression, ETag/304                                        | the adapter's                                | rari's                                                                                                                                               |
+| SSG (`adapters/static`)                                                    | supported                                    | not applicable; rari caches rendered pages instead                                                                                                   |
 
 Two differences to know about:
 

@@ -132,7 +132,7 @@ fn cli() -> Command {
                 .value_name("FRAMEWORK")
                 .help(
                     "Guest framework to host (overrides RARI_FRAMEWORK and the build's \
-                     dist/server/config.json; defaults to react)",
+                     dist/server/config.json; defaults to react; qwik is alpha)",
                 )
                 .value_parser(["react", "qwik"]),
         )
