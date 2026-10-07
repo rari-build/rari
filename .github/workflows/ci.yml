@@ -236,8 +236,6 @@ jobs:
           toolchain: nightly
 
       - uses: ./.github/actions/setup-rust-build-deps
-        with:
-          vcpkg-triplet: x64-windows
 
       - name: Bundle React ESM vendor files
         uses: ./.github/actions/bundle-react-esm
@@ -260,16 +258,12 @@ jobs:
         run: just ci-generate-snapshot
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
-          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
-          VCPKG_ROOT: C:\vcpkg
 
       - name: Build rari binary (Windows)
         if: runner.os == 'Windows'
         run: cargo build --bin rari
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
-          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
-          VCPKG_ROOT: C:\vcpkg
 
       - name: Build rari binary (Linux)
         if: runner.os != 'Windows'
