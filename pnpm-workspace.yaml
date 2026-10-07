@@ -47,12 +47,12 @@ packages:
 
 catalogs:
   analytics:
-    posthog-js: ^1.434.17
+    posthog-js: ^1.436.1
   build:
-    '@napi-rs/cli': ^3.10.5
-    oxc-transform-react: ^0.151.0
-    rolldown: ^1.2.11
-    vite: ^8.3.1
+    '@napi-rs/cli': ^3.10.7
+    oxc-transform-react: ^0.153.0
+    rolldown: ^1.2.12
+    vite: ^8.3.2
     vite-plus: ^1.0.0
   cli:
     '@clack/prompts': ^1.8.1
@@ -62,15 +62,15 @@ catalogs:
   lint:
     '@e18e/eslint-plugin': ^0.8.1
     '@eslint-community/eslint-plugin-eslint-comments': ^4.8.1
-    '@eslint-react/eslint-plugin': ^5.21.2
-    '@typescript-eslint/parser': ^8.71.0
-    eslint: ^10.11.0
+    '@eslint-react/eslint-plugin': ^5.24.4
+    '@typescript-eslint/parser': ^8.71.1
+    eslint: ^10.12.0
     eslint-config-flat-gitignore: ^2.4.0
     eslint-plugin-antfu: ^3.2.3
     eslint-plugin-command: ^4.0.0
     eslint-plugin-de-morgan: ^2.2.0
     eslint-plugin-jsonc: ^3.4.2
-    eslint-plugin-oxlint: ^1.86.0
+    eslint-plugin-oxlint: ^1.87.0
     eslint-plugin-perfectionist: ^5.12.1
     eslint-plugin-pnpm: ^1.9.1
     eslint-plugin-react-refresh: ^0.5.7
@@ -80,19 +80,19 @@ catalogs:
     eslint-plugin-unused-imports: ^4.4.1
     eslint-plugin-yml: ^3.8.1
     jsonc-eslint-parser: ^3.3.0
-    knip: ^6.38.0
+    knip: ^6.39.0
     yaml-eslint-parser: ^2.1.0
   mdx:
     '@mdx-js/mdx': ^3.1.1
-    '@shikijs/core': ^4.4.3
-    '@shikijs/engine-oniguruma': ^4.4.3
-    '@shikijs/langs': ^4.4.3
-    '@shikijs/themes': ^4.4.3
-    '@shikijs/types': ^4.4.3
-    mermaid: ^12.0.0
+    '@shikijs/core': ^4.5.0
+    '@shikijs/engine-oniguruma': ^4.5.0
+    '@shikijs/langs': ^4.5.0
+    '@shikijs/themes': ^4.5.0
+    '@shikijs/types': ^4.5.0
+    mermaid: ^12.1.0
     remark-gfm: ^4.0.1
   monitoring:
-    '@sentry/react': ^11.1.0
+    '@sentry/react': ^11.4.0
   rari:
     '@rari/use-cache': ^0.17.1
     rari: ^0.17.2
@@ -110,9 +110,9 @@ catalogs:
     tailwindcss: ^4.3.3
   testing:
     '@playwright/test': ^1.63.0
-    '@vitest/coverage-v8': ^5.0.2
+    '@vitest/coverage-v8': ^5.0.3
   typescript:
-    '@types/node': ^26.6.3
+    '@types/node': ^26.6.4
     # https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0
     typescript: npm:@typescript/typescript6@^6.0.2
     typescript-7: npm:typescript@^7.0.2
