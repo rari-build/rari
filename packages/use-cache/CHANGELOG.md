@@ -1,3 +1,11 @@
+## [@rari/use-cache@0.17.3] - 2026-10-08
+
+### ⚙️ Miscellaneous Tasks
+
+- update dependencies in Cargo.toml by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.17.1...@rari/use-cache@0.17.3
 ## [@rari/use-cache@0.17.1] - 2026-09-29
 
 ### 🐛 Bug Fixes

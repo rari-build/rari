@@ -165,12 +165,12 @@
     "react-server-dom-webpack": "catalog:react"
   },
   "optionalDependencies": {
-    "rari-darwin-arm64": "0.17.1",
-    "rari-darwin-x64": "0.17.1",
-    "rari-linux-arm64": "0.17.1",
-    "rari-linux-x64": "0.17.1",
-    "rari-win32-arm64": "0.17.1",
-    "rari-win32-x64": "0.17.1"
+    "rari-darwin-arm64": "0.17.3",
+    "rari-darwin-x64": "0.17.3",
+    "rari-linux-arm64": "0.17.3",
+    "rari-linux-x64": "0.17.3",
+    "rari-win32-arm64": "0.17.3",
+    "rari-win32-x64": "0.17.3"
   },
   "devDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
