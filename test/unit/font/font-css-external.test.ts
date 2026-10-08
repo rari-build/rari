@@ -45,14 +45,12 @@ async function buildFontFixture(plugins: readonly Plugin[]): Promise<string[]> {
 }
 
 describe('font CSS public URL externalization', () => {
-  it('warns without the font plugin when /assets/*.woff2 CSS urls are unresolved', async () => {
-    const unresolved = await buildFontFixture([])
-    expect(unresolved.some(message => message.includes('.woff2'))).toBe(true)
-  })
+  it('warns for unresolved /assets/*.woff2 CSS urls not emitted by the font plugin', async () => {
+    const withoutPlugin = await buildFontFixture([])
+    expect(withoutPlugin.some(message => message.includes('.woff2'))).toBe(true)
 
-  it('does not warn when the font plugin marks emitted font urls as external', async () => {
-    const unresolved = await buildFontFixture([createFontPlugin()])
-    expect(unresolved).toEqual([])
+    const withPlugin = await buildFontFixture([createFontPlugin()])
+    expect(withPlugin.some(message => message.includes('.woff2'))).toBe(true)
   })
 
   it('does not warn for localFont CSS across shared multi-env builds', async () => {

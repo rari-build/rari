@@ -18,7 +18,7 @@ import { addClientHeadExtraTag } from '../client-head'
 import {
   classNameFromHash,
   hashedFontFileName,
-  isEmittedFontPublicUrl,
+  isTrackedFontPublicUrl,
   publicFontUrl,
 } from './assets'
 import { buildFontFamilyStack, fontMimeType, serializeFontFaceRule } from './css'
@@ -849,12 +849,12 @@ function resolveExistingExternal(
 
 function silenceEmittedFontCssUrls(
   build: { rolldownOptions?: { external?: RolldownExternal | RolldownExternal[] } },
-  assetsDir: string,
+  emittedPublicUrls: ReadonlySet<string>,
 ): void {
   build.rolldownOptions ??= {}
   const previous = build.rolldownOptions.external
   build.rolldownOptions.external = (id, importer, isResolved) => {
-    if (isEmittedFontPublicUrl(id, assetsDir)) return true
+    if (isTrackedFontPublicUrl(id, emittedPublicUrls)) return true
     return resolveExistingExternal(previous, id, importer, isResolved)
   }
 }
@@ -865,6 +865,7 @@ export function createFontPlugin(): Plugin {
   let outDir = path.join(projectRoot, 'dist', 'client')
   const cssModules = new Map<string, string>()
   const pendingAssets = new Map<string, Buffer>()
+  const emittedPublicUrls = new Set<string>()
 
   return {
     name: 'rari:font',
@@ -874,9 +875,9 @@ export function createFontPlugin(): Plugin {
       projectRoot = paths.projectRoot
       assetsDir = paths.assetsDir
       outDir = paths.outDir
-      silenceEmittedFontCssUrls(config.build, assetsDir)
+      silenceEmittedFontCssUrls(config.build, emittedPublicUrls)
       for (const environment of Object.values(config.environments)) {
-        silenceEmittedFontCssUrls(environment.build, assetsDir)
+        silenceEmittedFontCssUrls(environment.build, emittedPublicUrls)
       }
     },
     resolveId(id) {
@@ -892,7 +893,10 @@ export function createFontPlugin(): Plugin {
       if (result == null) return null
 
       for (const entry of result.cssModules) cssModules.set(entry.id, entry.css)
-      for (const asset of result.assets) pendingAssets.set(asset.fileName, asset.source)
+      for (const asset of result.assets) {
+        pendingAssets.set(asset.fileName, asset.source)
+        emittedPublicUrls.add(publicFontUrl(asset.fileName))
+      }
       for (const url of result.preloadUrls) {
         const format = fontFormatFromExt(path.extname(url).toLowerCase())
         addClientHeadExtraTag(
