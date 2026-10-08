@@ -18,7 +18,7 @@ export default async function LastUpdated({ filePath }: LastUpdatedProps) {
         href={editUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 ml-auto hover:underline hover:text-fg-secondary transition-colors"
+        className="inline-flex items-center gap-1.5 sm:ml-auto hover:underline hover:text-fg-secondary transition-colors"
       >
         Edit this page on GitHub
         <Github className="w-3.5 h-3.5" aria-hidden="true" />
