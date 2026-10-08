@@ -829,7 +829,11 @@ type RolldownExternal = string | RegExp | RolldownExternalFn
 
 function isExternalMatch(id: string, test: RolldownExternal): boolean {
   if (typeof test === 'function') return Boolean(test(id, undefined, false))
-  return typeof test === 'string' ? id === test : test.test(id)
+  if (typeof test === 'string') return id === test
+  const { lastIndex } = test
+  const matched = test.test(id)
+  test.lastIndex = lastIndex
+  return matched
 }
 
 function resolveExistingExternal(
