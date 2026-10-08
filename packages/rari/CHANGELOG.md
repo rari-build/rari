@@ -1,3 +1,53 @@
+## [rari@0.17.3] - 2026-10-08
+
+### 🚀 Features
+
+- soft-nav hollow shells with immediate loading and page view transitions by @skiniks
+- enhance layout handling with rari-layout-stamp support by @skiniks
+- add regex handling and improve comment skipping in ESM detection by @skiniks
+- implement enhanced handling for 'for' statements in ESM detection and improve regex context management by @skiniks
+- add support for 'import.meta' in ESM detection and improve HMR cache handling logic by @skiniks
+- enhance refetch logic in AppRouterProvider to support expected route and sequence tracking for improved HMR handling by @skiniks
+
+### 🐛 Bug Fixes
+
+- correct header name from "trailers" to "trailer" in Vite server configuration by @skiniks
+- keep app-router HMR updates sticky across edits by @skiniks
+- enhance ESM detection regex and improve HMR cache handling by @skiniks
+- *(runtime)* pick_least_busy raced on stream loads and failed requests by @JuicyBenjamin
+- *(cache)* s-maxage governs the host's TTL, as the freshness check already assumed by @JuicyBenjamin
+- *(runtime)* improve event loop handling in pump_once function by @skiniks
+- *(runtime)* set event_loop_busy flag in error handling by @skiniks
+- *(font)* add public URL handling for emitted fonts and enhance font plugin functionality by @skiniks
+- *(font)* preserve lastIndex in regex matching for external fonts by @skiniks
+
+### 🚜 Refactor
+
+- update route location handling and improve test assertions by @skiniks
+- reorganize server module structure and update component utility paths by @skiniks
+- improve script handling and layout composition in rendering by @skiniks
+- enhance error handling and improve request context management in rendering by @skiniks
+- simplify ESM detection logic and enhance comment handling in component operations by @skiniks
+- enhance regex context handling and streamline ESM detection logic by @skiniks
+- simplify setup-rust-build-deps action by removing Windows-specific vcpkg-triplet input and related validation, and update fontconfig description for clarity by @skiniks
+- *(font)* rename and enhance font URL tracking functionality by @skiniks
+
+### ⚡ Performance
+
+- *(server)* check the static fast tier before routing by @JuicyBenjamin
+- *(runtime)* never park the isolate loop on a timed event-loop pump by @JuicyBenjamin
+
+### ⚙️ Miscellaneous Tasks
+
+- update dependencies in Cargo.toml by @skiniks
+- *(rari)* update version to 0.17.3 by @skiniks
+
+
+### 🆕 New Contributors
+
+- @JuicyBenjamin made their first contribution
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.2...rari@0.17.3
 ## [rari@0.17.2] - 2026-09-29
 
 ### 🚀 Features
