@@ -6,19 +6,19 @@ import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs, styleText } from 'node:util'
-import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
+import { getBinaryPath, getInstallationInstructions } from '@rari/core/platform'
 import {
   isError,
   parseJsonRecord,
   readPackageManagerFieldFromRecord,
   readViteBinFromPackageRecord,
-} from '@/shared/utils/type-guards'
+} from '@rari/core/utils/type-guards'
+import { logError, logInfo, logSuccess, logWarn } from '@rari/logger'
 import {
   findImageConfigPath,
   outDirFromImageConfigPath,
   resolveViteBuildPackageRoot,
 } from './build-target'
-import { getBinaryPath, getInstallationInstructions } from './platform'
 
 type PackageManager = 'pnpm' | 'yarn' | 'bun' | 'npm'
 

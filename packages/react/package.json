@@ -1,0 +1,193 @@
+{
+  "name": "@rari/react",
+  "type": "module",
+  "version": "0.17.2",
+  "description": "React adapter for rari: React Server Components, the app router, and the Vite plugin, hosted by the rari Rust server",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "directory": "packages/react",
+    "type": "git",
+    "url": "git+https://github.com/rari-build/rari.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "deno",
+    "framework",
+    "react",
+    "rsc",
+    "rust",
+    "server-components",
+    "ssr",
+    "vite"
+  ],
+  "sideEffects": [
+    "./dist/runtime/entry-client.mjs",
+    "./dist/runtime/rsc-client-runtime.mjs"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "node": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./image": {
+      "types": "./dist/image.d.mts",
+      "default": "./dist/image.mjs"
+    },
+    "./image/static": {
+      "types": "./dist/image/static.d.mts"
+    },
+    "./font": {
+      "types": "./dist/font.d.mts",
+      "default": "./dist/font.mjs"
+    },
+    "./font/local": {
+      "types": "./dist/font/local.d.mts",
+      "default": "./dist/font/local.mjs"
+    },
+    "./font/google": {
+      "types": "./dist/font/google-catalog.d.mts",
+      "default": "./dist/font/google.mjs"
+    },
+    "./mdx": {
+      "types": "./dist/mdx.d.mts",
+      "default": "./dist/mdx.mjs"
+    },
+    "./mdx/define": {
+      "types": "./dist/mdx/define.d.mts",
+      "default": "./dist/mdx/define.mjs"
+    },
+    "./mdx/registry": {
+      "types": "./dist/mdx/registry.d.mts",
+      "default": "./dist/mdx/registry.mjs"
+    },
+    "./og": {
+      "types": "./dist/og.d.mts",
+      "default": "./dist/og.mjs"
+    },
+    "./package.json": "./package.json",
+    "./router": {
+      "types": "./dist/router.d.mts",
+      "default": "./dist/router.mjs"
+    },
+    "./headers": {
+      "types": "./dist/headers.d.mts",
+      "default": "./dist/headers.mjs"
+    },
+    "./runtime/call-server": {
+      "types": "./dist/runtime/call-server.d.mts",
+      "default": "./dist/runtime/call-server.mjs"
+    },
+    "./runtime/action-flight-refresh": {
+      "types": "./dist/runtime/action-flight-refresh.d.mts",
+      "default": "./dist/runtime/action-flight-refresh.mjs"
+    },
+    "./runtime/merge-flight-refresh": {
+      "types": "./dist/runtime/merge-flight-refresh.d.mts",
+      "default": "./dist/runtime/merge-flight-refresh.mjs"
+    },
+    "./runtime/action-revalidation-kind": {
+      "types": "./dist/runtime/action-revalidation-kind.d.mts",
+      "default": "./dist/runtime/action-revalidation-kind.mjs"
+    },
+    "./runtime/entry-client": {
+      "types": "./dist/runtime/entry-client.d.mts",
+      "default": "./dist/runtime/entry-client.mjs"
+    },
+    "./runtime/rsc-references": {
+      "types": "./dist/runtime/rsc-references.d.mts",
+      "default": "./dist/runtime/rsc-references.mjs"
+    },
+    "./runtime/rsc-client-runtime": {
+      "types": "./dist/runtime/rsc-client-runtime.d.mts",
+      "default": "./dist/runtime/rsc-client-runtime.mjs"
+    },
+    "./runtime/ErrorBoundaryWrapper": {
+      "types": "./dist/runtime/ErrorBoundaryWrapper.d.mts",
+      "default": "./dist/runtime/ErrorBoundaryWrapper.mjs"
+    },
+    "./runtime/ClientRouter": {
+      "types": "./dist/runtime/ClientRouter.d.mts",
+      "default": "./dist/runtime/ClientRouter.mjs"
+    },
+    "./runtime/AppRouterProvider": {
+      "types": "./dist/runtime/AppRouterProvider.d.mts",
+      "default": "./dist/runtime/AppRouterProvider.mjs"
+    },
+    "./proxy/executor": {
+      "types": "./dist/proxy/executor.d.mts",
+      "default": "./dist/proxy/executor.mjs"
+    },
+    "./proxy/RariRequest": {
+      "types": "./dist/proxy/RariRequest.d.mts",
+      "default": "./dist/proxy/RariRequest.mjs"
+    },
+    "./proxy/RariResponse": {
+      "types": "./dist/proxy/RariResponse.d.mts",
+      "default": "./dist/proxy/RariResponse.mjs"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "default": "./dist/vite.mjs"
+    },
+    "./*.mjs": "./dist/*.mjs"
+  },
+  "types": "dist/index.d.mts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": "^24.21.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "pnpm typecheck && vp pack && node ./scripts/update-google-fonts.ts --types-only",
+    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "typecheck": "tsc",
+    "update-google-fonts": "node ./scripts/update-google-fonts.ts",
+    "update-react-refresh-runtime": "node ./scripts/update-react-refresh-runtime.ts"
+  },
+  "peerDependencies": {
+    "@mdx-js/mdx": "catalog:mdx",
+    "@rari/use-cache": "catalog:rari",
+    "oxc-transform-react": "catalog:build",
+    "react": "catalog:react",
+    "react-dom": "catalog:react"
+  },
+  "peerDependenciesMeta": {
+    "@mdx-js/mdx": {
+      "optional": true
+    },
+    "@rari/use-cache": {
+      "optional": true
+    },
+    "oxc-transform-react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@capsizecss/metrics": "catalog:font",
+    "@capsizecss/unpack": "catalog:font",
+    "@rari/core": "workspace:*",
+    "react-server-dom-webpack": "catalog:react"
+  },
+  "devDependencies": {
+    "@mdx-js/mdx": "catalog:mdx",
+    "@rari/logger": "workspace:*",
+    "@rari/use-cache": "workspace:*",
+    "@types/node": "catalog:typescript",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "oxc-transform-react": "catalog:build",
+    "typescript": "catalog:typescript",
+    "typescript-7": "catalog:typescript",
+    "vite-plus": "catalog:build"
+  }
+}

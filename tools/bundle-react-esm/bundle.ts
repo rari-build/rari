@@ -5,8 +5,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { build } from 'rolldown'
-import { patchBrowserClientForFormActions } from '../../packages/rari/src/shared/patch-flight-browser-client.ts'
-import { isRecord } from '../../packages/rari/src/shared/utils/type-guards.ts'
+import { patchBrowserClientForFormActions } from '../../packages/react/src/shared/patch-flight-browser-client.ts'
+import { isRecord } from '../../packages/react/src/shared/utils/type-guards.ts'
 import { assertExternalsRewritten, rewriteExternalRequires } from './rewrite-external-requires.ts'
 
 const require = createRequire(import.meta.url)

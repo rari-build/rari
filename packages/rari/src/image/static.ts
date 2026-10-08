@@ -1,1 +1,1 @@
-export type {} from './static-modules'
+export type * from '@rari/react/image/static'

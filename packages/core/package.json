@@ -1,0 +1,85 @@
+{
+  "name": "@rari/core",
+  "type": "module",
+  "version": "0.17.2",
+  "description": "Framework-agnostic build contracts for rari: the route manifest schema and scanner the Rust host consumes, metadata conventions, and shared utilities",
+  "author": "Ryan Skinner",
+  "license": "MIT",
+  "homepage": "https://github.com/rari-build/rari#readme",
+  "repository": {
+    "directory": "packages/core",
+    "type": "git",
+    "url": "git+https://github.com/rari-build/rari.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rari-build/rari/issues"
+  },
+  "keywords": [
+    "rari",
+    "router",
+    "manifest",
+    "framework-agnostic"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./router": {
+      "types": "./dist/router.d.mts",
+      "import": "./dist/router.mjs"
+    },
+    "./regex-constants": {
+      "types": "./dist/regex-constants.d.mts",
+      "import": "./dist/regex-constants.mjs"
+    },
+    "./utils/path": {
+      "types": "./dist/utils/path.d.mts",
+      "import": "./dist/utils/path.mjs"
+    },
+    "./utils/dist-paths": {
+      "types": "./dist/utils/dist-paths.d.mts",
+      "import": "./dist/utils/dist-paths.mjs"
+    },
+    "./utils/type-guards": {
+      "types": "./dist/utils/type-guards.d.mts",
+      "import": "./dist/utils/type-guards.mjs"
+    },
+    "./utils/xml": {
+      "types": "./dist/utils/xml.d.mts",
+      "import": "./dist/utils/xml.mjs"
+    },
+    "./utils/regexp": {
+      "types": "./dist/utils/regexp.d.mts",
+      "import": "./dist/utils/regexp.mjs"
+    },
+    "./platform": {
+      "types": "./dist/platform.d.mts",
+      "import": "./dist/platform.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "dist/index.d.mts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": "^24.21.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "pnpm typecheck && vp pack",
+    "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:typescript",
+    "typescript": "catalog:typescript",
+    "typescript-7": "catalog:typescript",
+    "vite-plus": "catalog:build"
+  }
+}

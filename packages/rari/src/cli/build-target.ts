@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
-import { DEFAULT_CLIENT_OUT_DIR, DEFAULT_DIST_ROOT } from '@/shared/utils/dist-paths'
-import { parseJsonRecord } from '@/shared/utils/type-guards'
+import { DEFAULT_CLIENT_OUT_DIR, DEFAULT_DIST_ROOT } from '@rari/core/utils/dist-paths'
+import { parseJsonRecord } from '@rari/core/utils/type-guards'
 
 const VITE_CONFIG_FILES = ['vite.config.ts'] as const
 
