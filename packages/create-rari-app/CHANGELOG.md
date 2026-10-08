@@ -1,3 +1,23 @@
+## [create-rari-app@0.5.31] - 2026-10-08
+
+### 🐛 Bug Fixes
+
+- enhance flight node handling in the runtime by @skiniks
+
+### 💼 Other
+
+- create-rari-app fails to spawn packageManager on Window systems by @clearfeld
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari and @rari/use-cache versions to 0.17.3
+
+
+### 🆕 New Contributors
+
+- @clearfeld made their first contribution
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.30...create-rari-app@0.5.31
 ## [create-rari-app@0.5.30] - 2026-09-29
 
 ### ⚙️ Miscellaneous Tasks
