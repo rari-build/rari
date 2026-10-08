@@ -12,6 +12,11 @@ export function publicFontUrl(fileName: string): string {
   return publicAssetUrl(fileName)
 }
 
+export function isTrackedFontPublicUrl(url: string, emittedUrls: ReadonlySet<string>): boolean {
+  const pathname = url.split(/[?#]/, 1)[0] ?? url
+  return emittedUrls.has(pathname)
+}
+
 export function ensureCacheDir(cacheDir: string): void {
   fs.mkdirSync(cacheDir, { recursive: true })
 }
