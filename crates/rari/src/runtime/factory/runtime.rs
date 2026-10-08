@@ -188,6 +188,9 @@ const PRIORITY_FAIRNESS_QUOTA: u32 = 8;
 /// completed ops and timers, and return without waiting for anything that is
 /// still pending. `Ok(true)` when the loop still has work outstanding (timers,
 /// in-flight ops), `Ok(false)` when it is idle.
+///
+/// A `Pending` result drops this future on purpose: Deno's `run_event_loop` is
+/// restartable, and the next call builds a fresh future against the same isolate.
 async fn pump_once(js_runtime: &mut deno_core::JsRuntime, label: &str) -> Result<bool, RariError> {
     let pump = utils::v8::run_event_loop_with_error_handling(js_runtime, label);
     tokio::pin!(pump);
@@ -335,6 +338,19 @@ impl RariRuntime {
                             check_pending_streams(&mut js_runtime, &mut pending_streams);
                             pending_streams.retain(|s| !s.done);
                             prune_orphaned_settled(&js_runtime, &pending_streams);
+                            // Last tracked task may leave untracked timers/ops; refresh
+                            // busy so the idle branch drains them instead of parking.
+                            if pending_batches.is_empty() && pending_streams.is_empty() {
+                                match pump_once(&mut js_runtime, "pending to idle").await {
+                                    Ok(busy) => event_loop_busy = busy,
+                                    Err(e) => {
+                                        eprintln!("[rari] Event loop error: {e}");
+                                        if is_runtime_restart_needed(&e) {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         } else {
                             priority_streak = 0;
                             // Nothing is tracked in pending_streams / pending_batches,
