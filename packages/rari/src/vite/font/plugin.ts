@@ -15,7 +15,12 @@ import { fromBuffer } from '@capsizecss/unpack'
 import { contentHash } from '@/shared/utils/content-hash'
 import { resolvePluginPaths } from '@/shared/utils/vite-aliases'
 import { addClientHeadExtraTag } from '../client-head'
-import { classNameFromHash, hashedFontFileName, publicFontUrl } from './assets'
+import {
+  classNameFromHash,
+  hashedFontFileName,
+  isEmittedFontPublicUrl,
+  publicFontUrl,
+} from './assets'
 import { buildFontFamilyStack, fontMimeType, serializeFontFaceRule } from './css'
 import {
   fontPreloadMarker,
@@ -815,6 +820,45 @@ function writeFontAssets(
   }
 }
 
+type RolldownExternalFn = (
+  id: string,
+  importer: string | undefined,
+  isResolved: boolean,
+) => boolean | null | undefined | void
+type RolldownExternal = string | RegExp | RolldownExternalFn
+
+function isExternalMatch(id: string, test: RolldownExternal): boolean {
+  if (typeof test === 'function') return Boolean(test(id, undefined, false))
+  return typeof test === 'string' ? id === test : test.test(id)
+}
+
+function resolveExistingExternal(
+  user: RolldownExternal | readonly RolldownExternal[] | undefined,
+  id: string,
+  importer: string | undefined,
+  isResolved: boolean,
+): boolean {
+  if (user == null) return false
+  if (typeof user === 'function') return Boolean(user(id, importer, isResolved))
+  if (typeof user === 'string' || user instanceof RegExp) return isExternalMatch(id, user)
+  return user.some(test => {
+    if (typeof test === 'function') return Boolean(test(id, importer, isResolved))
+    return isExternalMatch(id, test)
+  })
+}
+
+function silenceEmittedFontCssUrls(
+  build: { rolldownOptions?: { external?: RolldownExternal | RolldownExternal[] } },
+  assetsDir: string,
+): void {
+  build.rolldownOptions ??= {}
+  const previous = build.rolldownOptions.external
+  build.rolldownOptions.external = (id, importer, isResolved) => {
+    if (isEmittedFontPublicUrl(id, assetsDir)) return true
+    return resolveExistingExternal(previous, id, importer, isResolved)
+  }
+}
+
 export function createFontPlugin(): Plugin {
   let projectRoot = process.cwd()
   let assetsDir = 'assets'
@@ -830,6 +874,10 @@ export function createFontPlugin(): Plugin {
       projectRoot = paths.projectRoot
       assetsDir = paths.assetsDir
       outDir = paths.outDir
+      silenceEmittedFontCssUrls(config.build, assetsDir)
+      for (const environment of Object.values(config.environments)) {
+        silenceEmittedFontCssUrls(environment.build, assetsDir)
+      }
     },
     resolveId(id) {
       if (id.startsWith(CSS_PREFIX)) return id

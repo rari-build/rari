@@ -4,7 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { contentHash } from '../../../packages/rari/src/shared/utils/content-hash'
-import { hashedFontFileName } from '../../../packages/rari/src/vite/font/assets'
+import {
+  hashedFontFileName,
+  isEmittedFontPublicUrl,
+} from '../../../packages/rari/src/vite/font/assets'
 import {
   buildFontFamilyStack,
   fontFormatFromPath,
@@ -241,6 +244,14 @@ describe('font hashing', () => {
     expect(hashedFontFileName('/tmp/Geist.woff2', hash, 'assets')).toBe(
       `assets/Geist-${hash}.woff2`,
     )
+  })
+
+  it('recognizes emitted font public URLs for CSS externalization', () => {
+    expect(isEmittedFontPublicUrl('/assets/Geist-abcd1234.woff2')).toBe(true)
+    expect(isEmittedFontPublicUrl('/assets/Geist-abcd1234.woff2?v=1')).toBe(true)
+    expect(isEmittedFontPublicUrl('/static/Geist-abcd1234.woff2', 'static')).toBe(true)
+    expect(isEmittedFontPublicUrl('/assets/hero-abcd1234.webp')).toBe(false)
+    expect(isEmittedFontPublicUrl('assets/Geist-abcd1234.woff2')).toBe(false)
   })
 })
 
