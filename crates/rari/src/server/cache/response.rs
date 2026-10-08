@@ -30,6 +30,9 @@ pub struct PrebuiltResponse {
     pub cache_control: String,
     pub is_not_found: bool,
     pub cached_at: Instant,
+    /// Matched route pattern, reported as `x-rari-route` on hits (guest
+    /// renderers); `None` where the renderer does not label responses.
+    pub route: Option<String>,
 }
 
 impl PrebuiltResponse {
@@ -327,12 +330,12 @@ impl RouteCachePolicy {
                 policy.enabled = false;
                 return policy;
             }
+        }
 
-            if let Some(max_age_str) = directive.strip_prefix("max-age=")
-                && let Ok(max_age) = max_age_str.trim().parse::<u64>()
-            {
-                policy.ttl = max_age;
-            }
+        // Same precedence as the fast tier's freshness check: the host is a
+        // shared cache, so `s-maxage` governs its TTL when present.
+        if let Some(ttl) = Self::max_age_from_cache_control(cache_control) {
+            policy.ttl = ttl;
         }
 
         policy
@@ -928,6 +931,15 @@ mod tests {
     }
 
     #[test]
+    fn test_route_cache_policy_prefers_s_maxage() {
+        let policy = RouteCachePolicy::from_cache_control("max-age=0, s-maxage=604800", "/p");
+        assert!(policy.enabled);
+        assert_eq!(policy.ttl, 604_800);
+        let policy = RouteCachePolicy::from_cache_control("public, max-age=60", "/p");
+        assert_eq!(policy.ttl, 60);
+    }
+
+    #[test]
     fn test_max_age_from_cache_control() {
         let max_age = RouteCachePolicy::max_age_from_cache_control;
         assert_eq!(max_age("public, max-age=60"), Some(60));
@@ -1239,6 +1251,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             })
         };
 
@@ -1271,6 +1284,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             })
         };
 
@@ -1308,6 +1322,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             })
         };
 
@@ -1349,6 +1364,7 @@ mod tests {
                         cache_control: "public".to_string(),
                         is_not_found: false,
                         cached_at: Instant::now(),
+                        route: None,
                     });
                     insert_static_fast_cache(&cache, &key, entry, max_entries);
                 }
@@ -1381,6 +1397,7 @@ mod tests {
                 cache_control: "public, max-age=1".to_string(),
                 is_not_found: false,
                 cached_at,
+                route: None,
             }),
             10,
         );
@@ -1403,6 +1420,7 @@ mod tests {
                 cache_control: "public".to_string(),
                 is_not_found: false,
                 cached_at,
+                route: None,
             }),
             10,
         );
@@ -1424,6 +1442,7 @@ mod tests {
             cache_control: "public, max-age=1".to_string(),
             is_not_found: false,
             cached_at: stale_at,
+            route: None,
         });
         insert_static_fast_cache(&cache, "/", Arc::clone(&stale), 10);
 
@@ -1437,6 +1456,7 @@ mod tests {
             cache_control: "public, max-age=60".to_string(),
             is_not_found: false,
             cached_at: Instant::now(),
+            route: None,
         });
         insert_static_fast_cache(&cache, "/", Arc::clone(&fresh), 10);
 

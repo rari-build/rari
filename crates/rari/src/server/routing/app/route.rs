@@ -138,30 +138,6 @@ pub async fn handle_app_route(
         }
     }
 
-    let Some(app_router) = &state.app_router else {
-        tracing::error!(
-            "App router not initialized - routes.json may be missing or invalid. Path: {}",
-            path
-        );
-        return Err(StatusCode::NOT_FOUND);
-    };
-
-    let mut route_match = match app_router.match_route(path) {
-        Ok(m) => m,
-        Err(_) => match app_router.create_not_found_match(path) {
-            Some(not_found_match) => not_found_match,
-            None => return Err(StatusCode::NOT_FOUND),
-        },
-    };
-
-    let request_context = Arc::new(
-        RequestContext::new(path.to_string())
-            .with_http_headers(extract_headers(&headers))
-            .with_action_form_state(parse_action_form_state_from_cookie(request_cookie_header(
-                &headers,
-            ))),
-    );
-
     let render_mode = detect_render_mode(&headers);
     let accept_encoding = headers.get("accept-encoding").and_then(|v| v.to_str().ok());
 
@@ -212,6 +188,33 @@ pub async fn handle_app_route(
             return Ok(builder.body(Body::from(body)).expect("Valid fast-path response"));
         }
     }
+    // The fast tier above needs nothing below: route matching and the request
+    // context are built only once a render (or one of the slower caches) is
+    // actually needed, so a cached hit stays a hash lookup and a response.
+    let Some(app_router) = &state.app_router else {
+        tracing::error!(
+            "App router not initialized - routes.json may be missing or invalid. Path: {}",
+            path
+        );
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    let mut route_match = match app_router.match_route(path) {
+        Ok(m) => m,
+        Err(_) => match app_router.create_not_found_match(path) {
+            Some(not_found_match) => not_found_match,
+            None => return Err(StatusCode::NOT_FOUND),
+        },
+    };
+
+    let request_context = Arc::new(
+        RequestContext::new(path.to_string())
+            .with_http_headers(extract_headers(&headers))
+            .with_action_form_state(parse_action_form_state_from_cookie(request_cookie_header(
+                &headers,
+            ))),
+    );
+
     let search_params = extract_search_params(query_params_for_cache.clone().unwrap_or_default());
 
     let request_headers = extract_headers(&headers);
@@ -815,6 +818,7 @@ pub async fn handle_app_route(
                             cache_control: cache_control_value.to_string(),
                             is_not_found: route_match.not_found.is_some(),
                             cached_at: Instant::now(),
+                            route: None,
                         }),
                         state.response_cache.config.max_entries,
                     );

@@ -679,26 +679,21 @@ impl JsRuntimePool {
 
     /// Prefer healthy slots with the fewest in-flight streams (soft lease).
     pub fn pick_least_busy(&self) -> Option<usize> {
-        let healthy_indices: Vec<usize> = self
+        // One snapshot of (slot, load) for healthy slots. Loads are adjusted
+        // concurrently by every in-flight stream; reading them a second time
+        // to filter could see a changed value and produce an empty candidate
+        // list, failing the request with "no healthy runtime" although every
+        // slot was fine.
+        let loads: Vec<(usize, usize)> = self
             .healthy
             .iter()
             .enumerate()
-            .filter_map(|(i, h)| if h.load(Ordering::Acquire) { Some(i) } else { None })
+            .filter(|(_, h)| h.load(Ordering::Acquire))
+            .filter_map(|(i, _)| self.stream_load.get(i).map(|c| (i, c.load(Ordering::Acquire))))
             .collect();
-        if healthy_indices.is_empty() {
-            return None;
-        }
-
-        let min_load = healthy_indices
-            .iter()
-            .filter_map(|&i| self.stream_load.get(i).map(|c| c.load(Ordering::Acquire)))
-            .min()?;
-        let candidates: Vec<usize> = healthy_indices
-            .into_iter()
-            .filter(|&i| {
-                self.stream_load.get(i).is_some_and(|c| c.load(Ordering::Acquire) == min_load)
-            })
-            .collect();
+        let min_load = loads.iter().map(|&(_, load)| load).min()?;
+        let candidates: Vec<usize> =
+            loads.iter().filter(|&&(_, load)| load == min_load).map(|&(i, _)| i).collect();
         self.pick_strategy
             .pick(&candidates, &self.next_index)
             .filter(|&idx| idx < self.runtimes.len() && self.is_healthy(idx))

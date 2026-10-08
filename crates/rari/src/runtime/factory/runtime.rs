@@ -4,6 +4,7 @@ use std::{
     pin::Pin,
     rc::Rc,
     sync::Arc,
+    task::Poll,
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -183,6 +184,19 @@ fn is_priority_js_request(req: &JsRequest) -> bool {
 /// force an event-loop pump so timers/chunk ops are not starved.
 const PRIORITY_FAIRNESS_QUOTA: u32 = 8;
 
+/// Poll the event loop exactly once: run the microtask checkpoint, dispatch
+/// completed ops and timers, and return without waiting for anything that is
+/// still pending. `Ok(true)` when the loop still has work outstanding (timers,
+/// in-flight ops), `Ok(false)` when it is idle.
+async fn pump_once(js_runtime: &mut deno_core::JsRuntime, label: &str) -> Result<bool, RariError> {
+    let pump = utils::v8::run_event_loop_with_error_handling(js_runtime, label);
+    tokio::pin!(pump);
+    match futures::poll!(pump.as_mut()) {
+        Poll::Ready(result) => result.map(|()| false),
+        Poll::Pending => Ok(true),
+    }
+}
+
 async fn recv_js_request(
     priority_receiver: &mut mpsc::Receiver<JsRequest>,
     request_receiver: &mut mpsc::Receiver<JsRequest>,
@@ -233,6 +247,10 @@ impl RariRuntime {
                     let mut pending_streams: Vec<PendingStream> = Vec::new();
                     let mut batch_id_counter: u64 = 0;
                     let mut priority_streak: u32 = 0;
+                    // Whether the event loop had work outstanding the last time it was
+                    // polled. Every pump updates it; the no-pending branch drives the
+                    // loop while waiting for requests whenever it is set.
+                    let mut event_loop_busy = false;
 
                     while continue_processing {
                         let has_pending =
@@ -243,18 +261,19 @@ impl RariRuntime {
                             let pump_budget_ms = if pending_streams.is_empty() { 50 } else { 2 };
                             if priority_streak >= PRIORITY_FAIRNESS_QUOTA {
                                 priority_streak = 0;
-                                let event_loop_result = time::timeout(
-                                    Duration::from_millis(pump_budget_ms),
-                                    utils::v8::run_event_loop_with_error_handling(
-                                        &mut js_runtime,
-                                        "priority fairness pump",
-                                    ),
-                                )
-                                .await;
-                                if let Ok(Err(e)) = event_loop_result {
-                                    eprintln!("[rari] Event loop error: {e}");
-                                    if is_runtime_restart_needed(&e) {
-                                        break;
+                                // One tick lets in-flight renders progress between
+                                // intakes without parking on a budget: with any
+                                // long-lived pending op (an open fetch, an interval)
+                                // the event loop never reports idle, and a timed
+                                // pump would sleep its whole budget per quota while
+                                // requests queue.
+                                match pump_once(&mut js_runtime, "priority fairness pump").await {
+                                    Ok(busy) => event_loop_busy = busy,
+                                    Err(e) => {
+                                        eprintln!("[rari] Event loop error: {e}");
+                                        if is_runtime_restart_needed(&e) {
+                                            break;
+                                        }
                                     }
                                 }
                             } else {
@@ -282,6 +301,9 @@ impl RariRuntime {
                                                     eprintln!("[rari] Error processing request: {e}");
                                                     break;
                                                 }
+                                                // A fresh script usually leaves work behind;
+                                                // assume so until a pump reports idle.
+                                                event_loop_busy = true;
                                             }
                                             None => {
                                                 continue_processing = false;
@@ -294,11 +316,15 @@ impl RariRuntime {
                                             &mut js_runtime, "concurrent pending"
                                         ),
                                     ) => {
-                                        if let Ok(Err(e)) = event_loop_result {
-                                            eprintln!("[rari] Event loop error: {e}");
-                                            if is_runtime_restart_needed(&e) {
-                                                break;
+                                        match event_loop_result {
+                                            Ok(Ok(())) => event_loop_busy = false,
+                                            Ok(Err(e)) => {
+                                                eprintln!("[rari] Event loop error: {e}");
+                                                if is_runtime_restart_needed(&e) {
+                                                    break;
+                                                }
                                             }
+                                            Err(_budget_elapsed) => event_loop_busy = true,
                                         }
                                     }
                                 }
@@ -311,39 +337,70 @@ impl RariRuntime {
                             prune_orphaned_settled(&js_runtime, &pending_streams);
                         } else {
                             priority_streak = 0;
-                            match recv_js_request(&mut priority_receiver, &mut request_receiver).await {
-                                Some(req) => {
-                                    let result = handle_js_request(
-                                        req,
-                                        &mut js_runtime,
-                                        &module_loader,
-                                        &mut continue_processing,
-                                        &mut pending_batches,
-                                        &mut pending_streams,
-                                        &mut batch_id_counter,
-                                    ).await;
-                                    if let Err(e) = result {
-                                        eprintln!("[rari] Error processing request: {e}");
-                                        break;
+                            // Nothing is tracked in pending_streams / pending_batches,
+                            // but the event loop itself may still have work (a timer or
+                            // op scheduled by a plain ExecuteScript). Drive it while
+                            // waiting for the next request instead of parking on a
+                            // fixed budget: the event-loop future wakes on timers and
+                            // op completions, and a request interrupts it immediately.
+                            let received = if event_loop_busy {
+                                tokio::select! {
+                                    biased;
+                                    req = recv_js_request(&mut priority_receiver, &mut request_receiver) => Some(req),
+                                    result = utils::v8::run_event_loop_with_error_handling(
+                                        &mut js_runtime, "idle drain"
+                                    ) => {
+                                        match result {
+                                            Ok(()) => event_loop_busy = false,
+                                            Err(e) => {
+                                                eprintln!("[rari] Event loop error: {e}");
+                                                if is_runtime_restart_needed(&e) {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        None
                                     }
                                 }
-                                None => {
-                                    continue_processing = false;
-                                }
-                            }
+                            } else {
+                                Some(recv_js_request(&mut priority_receiver, &mut request_receiver).await)
+                            };
 
-                            let event_loop_result = time::timeout(
-                                Duration::from_millis(10),
-                                utils::v8::run_event_loop_with_error_handling(
-                                    &mut js_runtime,
-                                    "idle pump",
-                                ),
-                            )
-                            .await;
-                            if let Ok(Err(e)) = event_loop_result {
-                                eprintln!("[rari] Event loop error: {e}");
-                                if is_runtime_restart_needed(&e) {
-                                    break;
+                            if let Some(request) = received {
+                                match request {
+                                    Some(req) => {
+                                        let result = handle_js_request(
+                                            req,
+                                            &mut js_runtime,
+                                            &module_loader,
+                                            &mut continue_processing,
+                                            &mut pending_batches,
+                                            &mut pending_streams,
+                                            &mut batch_id_counter,
+                                        ).await;
+                                        if let Err(e) = result {
+                                            eprintln!("[rari] Error processing request: {e}");
+                                            break;
+                                        }
+                                    }
+                                    None => {
+                                        continue_processing = false;
+                                    }
+                                }
+
+                                // Drain what the request made ready (microtasks, completed
+                                // ops) without blocking on it: a pending long-lived op
+                                // would park this thread for a whole budget while the next
+                                // requests wait in the channel. Whatever is left outstanding
+                                // is driven by the select above on the next iteration.
+                                match pump_once(&mut js_runtime, "idle pump").await {
+                                    Ok(busy) => event_loop_busy = busy,
+                                    Err(e) => {
+                                        eprintln!("[rari] Event loop error: {e}");
+                                        if is_runtime_restart_needed(&e) {
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                             prune_orphaned_settled(&js_runtime, &pending_streams);

@@ -195,6 +195,7 @@ async fn warm_route(
                 cache_control: cache_control.to_string(),
                 is_not_found: false,
                 cached_at: Instant::now(),
+                route: None,
             }),
             state.response_cache.config.max_entries,
         );
