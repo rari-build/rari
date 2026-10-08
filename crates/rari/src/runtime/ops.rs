@@ -8,7 +8,7 @@ use std::{
 };
 
 use axum::http::HeaderMap;
-use deno_core::{ModuleSpecifier, OpDecl, OpState, op2};
+use deno_core::{JsBuffer, ModuleSpecifier, OpDecl, OpState, op2};
 use deno_error::JsErrorBox;
 use deno_runtime::BootstrapOptions;
 use rari_error::RariError;
@@ -335,6 +335,8 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
         op_send_chunk_to_rust(),
         op_fizz_chunk_try(),
         op_fizz_chunk(),
+        op_fizz_chunk_bytes(),
+        op_fizz_chunk_bytes_try(),
         op_fizz_done(),
         op_stream_promise_settled(),
         op_internal_log(),
@@ -369,17 +371,59 @@ pub async fn op_fizz_chunk(
     #[string] stream_id: String,
     #[string] html: String,
 ) -> Result<(), JsErrorBox> {
+    send_stream_chunk(&state, &stream_id, html.into_bytes()).await
+}
+
+/// Sync try-send for byte chunks, the binary twin of [`op_fizz_chunk_try`].
+/// Returns: `0` sent, `1` full (use the async op), `2` disconnected. Guest
+/// renderers write every chunk through this first: a render that never has
+/// to await the host finishes in one event-loop turn instead of one per chunk.
+#[op2(fast)]
+pub fn op_fizz_chunk_bytes_try(
+    state: &OpState,
+    #[string] stream_id: &str,
+    #[buffer] data: &[u8],
+) -> u8 {
+    let Some(stream_op_state) = state.try_borrow::<StreamOpState>() else {
+        return 2;
+    };
+    let Some(sender) = stream_op_state.get_sender(stream_id) else {
+        return 2;
+    };
+    match sender.try_send(Ok(data.to_vec())) {
+        Ok(()) => 0,
+        Err(mpsc::error::TrySendError::Full(_)) => 1,
+        Err(mpsc::error::TrySendError::Closed(_)) => 2,
+    }
+}
+
+/// Binary variant of [`op_fizz_chunk`] for streams that produce `Uint8Array`
+/// chunks (web `WritableStream` consumers such as guest framework renderers),
+/// so multi-byte sequences split across chunks survive intact.
+#[op2]
+pub async fn op_fizz_chunk_bytes(
+    state: Rc<RefCell<OpState>>,
+    #[string] stream_id: String,
+    #[buffer] data: JsBuffer,
+) -> Result<(), JsErrorBox> {
+    send_stream_chunk(&state, &stream_id, data.to_vec()).await
+}
+
+async fn send_stream_chunk(
+    state: &Rc<RefCell<OpState>>,
+    stream_id: &str,
+    bytes: Vec<u8>,
+) -> Result<(), JsErrorBox> {
     let sender = {
         let op_state_ref = state.borrow();
         let Some(stream_op_state) = op_state_ref.try_borrow::<StreamOpState>() else {
             return Err(JsErrorBox::generic("StreamOpState not found."));
         };
-        stream_op_state.get_sender(&stream_id)
+        stream_op_state.get_sender(stream_id)
     };
 
     match sender {
         Some(sender) => {
-            let bytes = html.into_bytes();
             // Prefer try_send so the common path doesn't await the channel. Fall back to
             // async send only under backpressure, never blocking_send (panics in Tokio).
             match sender.try_send(Ok(bytes)) {

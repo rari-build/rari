@@ -1,0 +1,22 @@
+{
+  "name": "qwik-skeleton",
+  "type": "module",
+  "private": true,
+  "description": "Conformance app for the rari Qwik adapter",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite dev",
+    "start": "../../target/debug/rari --mode production --port 3000",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@qwik.dev/core": "catalog:qwik",
+    "@qwik.dev/router": "catalog:qwik",
+    "@rari/qwik": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:testing",
+    "@types/node": "catalog:typescript",
+    "vite": "catalog:build"
+  }
+}

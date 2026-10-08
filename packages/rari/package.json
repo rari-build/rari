@@ -50,7 +50,7 @@
       "default": "./dist/font/local.mjs"
     },
     "./font/google": {
-      "types": "./dist/font/google-catalog.d.mts",
+      "types": "./dist/font/google.d.mts",
       "default": "./dist/font/google.mjs"
     },
     "./mdx": {
@@ -133,13 +133,11 @@
     "node": "^24.21.0 || >=26.0.0"
   },
   "scripts": {
-    "build": "pnpm typecheck && vp pack && node ./scripts/update-google-fonts.ts --types-only",
+    "build": "pnpm typecheck && vp pack",
     "clean": "node --eval \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
-    "typecheck": "tsc",
-    "update-google-fonts": "node ./scripts/update-google-fonts.ts",
-    "update-react-refresh-runtime": "node ./scripts/update-react-refresh-runtime.ts"
+    "typecheck": "tsc"
   },
   "peerDependencies": {
     "@mdx-js/mdx": "catalog:mdx",
@@ -160,9 +158,8 @@
     }
   },
   "dependencies": {
-    "@capsizecss/metrics": "catalog:font",
-    "@capsizecss/unpack": "catalog:font",
-    "react-server-dom-webpack": "catalog:react"
+    "@rari/core": "workspace:*",
+    "@rari/react": "workspace:*"
   },
   "optionalDependencies": {
     "rari-darwin-arm64": "0.17.1",
@@ -173,14 +170,10 @@
     "rari-win32-x64": "0.17.1"
   },
   "devDependencies": {
-    "@mdx-js/mdx": "catalog:mdx",
     "@rari/deploy": "workspace:*",
     "@rari/logger": "workspace:*",
-    "@rari/use-cache": "workspace:*",
     "@types/node": "catalog:typescript",
     "@types/react": "catalog:react",
-    "@types/react-dom": "catalog:react",
-    "oxc-transform-react": "catalog:build",
     "typescript": "catalog:typescript",
     "typescript-7": "catalog:typescript",
     "vite-plus": "catalog:build"

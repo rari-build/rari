@@ -3,13 +3,16 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["../packages/rari/src/*"],
+      "@/*": ["../packages/react/src/*"],
       "@rari/logger": ["../packages/logger/src/index"],
       "@rari/use-cache/runtime/*": ["../packages/use-cache/src/runtime/*"],
       "@rari/use-cache": ["../packages/use-cache/src/index"],
-      "@rari/*": ["../packages/rari/src/*"]
+      "@rari/core": ["../packages/core/src/index"],
+      "@rari/core/*": ["../packages/core/src/*"],
+      "@rari/cli/*": ["../packages/rari/src/cli/*"],
+      "@rari/*": ["../packages/react/src/*"]
     },
     "types": ["node", "react"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "../packages/rari/src/ambient.d.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "../packages/react/src/ambient.d.ts"]
 }

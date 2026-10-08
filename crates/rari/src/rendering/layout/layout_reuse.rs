@@ -126,6 +126,8 @@ mod tests {
             parent_path: None,
             is_root: path == "/",
             additional_paths: None,
+            name: None,
+            skip_parents: false,
         }
     }
 

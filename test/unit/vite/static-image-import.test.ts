@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vite-plus/test'
-import { parseJsonRecord } from '../../../packages/rari/src/shared/utils/type-guards'
-import { readImageDimensions } from '../../../packages/rari/src/vite/image/dimensions'
+import { parseJsonRecord } from '../../../packages/react/src/shared/utils/type-guards'
+import { readImageDimensions } from '../../../packages/react/src/vite/image/dimensions'
 import {
   beginStaticImageSourceMapBuild,
   buildStaticImageModule,
@@ -13,7 +13,7 @@ import {
   isStaticImageModuleId,
   resolveStaticImageFilePath,
   resolveStaticImageOutDir,
-} from '../../../packages/rari/src/vite/image/static-import'
+} from '../../../packages/react/src/vite/image/static-import'
 
 function pngFixture(width: number, height: number): Buffer {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])

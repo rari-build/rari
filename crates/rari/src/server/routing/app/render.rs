@@ -1084,6 +1084,7 @@ mod tests {
             image_optimizer: None,
             cache_registry,
             image_handler,
+            guest: None,
         }
     }
 

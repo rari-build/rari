@@ -16,6 +16,7 @@ use crate::{
             response::{ResponseCache, StaticFastCache},
         },
         config::Config,
+        guest::GuestRenderer,
         image::ImageOptimizer,
         og::OgImageGenerator,
         routing::{ApiRouteHandler, AppIconEntry, AppRouter},
@@ -93,6 +94,9 @@ pub struct ServerState {
     pub image_optimizer: Option<Arc<ImageOptimizer>>,
     pub cache_registry: Arc<CacheHandlerRegistry>,
     pub image_handler: Arc<dyn CacheHandler>,
+    /// The guest framework renderer, when `config.framework` is not React.
+    /// React pages render through the host's built-in RSC pipeline instead.
+    pub guest: Option<Arc<dyn GuestRenderer>>,
 }
 
 #[derive(Debug, Deserialize)]

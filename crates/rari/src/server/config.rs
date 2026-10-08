@@ -6,6 +6,7 @@ use std::{
     fmt::{self, Display, Formatter},
     fs,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::OnceLock,
 };
 
@@ -32,6 +33,57 @@ impl Display for Mode {
         match self {
             Self::Development => write!(f, "development"),
             Self::Production => write!(f, "production"),
+        }
+    }
+}
+
+/// The guest framework rari hosts.
+///
+/// rari is the host: Rust HTTP server, routing, caching, and the V8 runtime pool.
+/// The framework is the guest renderer loaded into that runtime. `React` is the
+/// default and the only framework with a built-in renderer (RSC); other
+/// variants select a guest renderer that the framework's build produced.
+///
+/// Selected, in order of precedence, by `--framework`, `RARI_FRAMEWORK`, or the
+/// `framework` key the build writes to `dist/server/config.json`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+#[non_exhaustive]
+pub enum Framework {
+    #[default]
+    React,
+    Qwik,
+}
+
+impl Framework {
+    pub const ALL: &'static [Self] = &[Self::React, Self::Qwik];
+
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::React => "react",
+            Self::Qwik => "qwik",
+        }
+    }
+}
+
+impl Display for Framework {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Framework {
+    type Err = ConfigError;
+
+    /// Case-insensitive. Unknown names are an error rather than a silent
+    /// fallback to React: a typo in `RARI_FRAMEWORK` must not start the wrong
+    /// renderer.
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name.trim().cow_to_lowercase().as_ref() {
+            "react" => Ok(Self::React),
+            "qwik" => Ok(Self::Qwik),
+            _ => Err(ConfigError::Framework(name.to_string())),
         }
     }
 }
@@ -482,6 +534,8 @@ impl Default for RscConfig {
 #[non_exhaustive]
 pub struct Config {
     pub mode: Mode,
+    #[serde(default)]
+    pub framework: Framework,
     pub server: ServerConfig,
     pub vite: ViteConfig,
     pub static_files: StaticConfig,
@@ -654,6 +708,12 @@ impl Config {
                 }
             };
             if let Some(config_data) = config_data {
+                // The framework's build records which guest renderer it produced,
+                // so `rari start` needs no extra flag or env for non-React apps.
+                if let Some(framework) = config_data.get("framework").and_then(Value::as_str) {
+                    config.framework = framework.parse()?;
+                }
+
                 if let Some(csp_data) = config_data.get("csp") {
                     if let Some(script_src) = csp_data.get("scriptSrc").and_then(|v| v.as_array()) {
                         config.csp.script_src = script_src
@@ -897,6 +957,10 @@ impl Config {
         }
 
         // Env wins over config.json for deploy-time overrides.
+        if let Ok(framework) = env::var("RARI_FRAMEWORK") {
+            config.framework = framework.parse()?;
+        }
+
         if let Ok(pool_size_str) = env::var("RARI_JS_POOL_SIZE") {
             let pool_size: usize = pool_size_str
                 .parse()
@@ -1139,6 +1203,8 @@ pub enum ConfigError {
     Timeout(String),
     #[error("Invalid config value for {0}")]
     Config(String),
+    #[error("Unknown framework '{0}' (expected one of: react, qwik)")]
+    Framework(String),
 }
 
 #[cfg(test)]

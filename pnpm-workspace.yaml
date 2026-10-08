@@ -2,6 +2,8 @@ catalogMode: prefer
 
 minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
+  - '@qwik.dev/core@2.0.0-rc.0'
+  - '@qwik.dev/router@2.0.0-rc.0'
   - '@rari/use-cache-darwin-arm64@0.17.1'
   - '@rari/use-cache-darwin-x64@0.17.1'
   - '@rari/use-cache-linux-arm64@0.17.1'
@@ -93,6 +95,9 @@ catalogs:
     remark-gfm: ^4.0.1
   monitoring:
     '@sentry/react': ^11.4.0
+  qwik:
+    '@qwik.dev/core': 2.0.0-rc.0
+    '@qwik.dev/router': 2.0.0-rc.0
   rari:
     '@rari/use-cache': ^0.17.1
     rari: ^0.17.2
@@ -119,3 +124,4 @@ catalogs:
 
 allowBuilds:
   core-js: true
+  sharp: false

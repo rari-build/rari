@@ -1,2 +1,1 @@
-export { defineMdxComponents } from './components/define'
-export type { MdxComponentEntry } from './components/define'
+export * from '@rari/react/mdx/define'

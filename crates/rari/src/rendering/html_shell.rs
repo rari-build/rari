@@ -729,6 +729,8 @@ mod tests {
                 params: vec![],
                 is_dynamic: false,
                 static_params: None,
+                layout: None,
+                skip_layouts: false,
             },
             params: FxHashMap::default(),
             layouts: vec![LayoutEntry {
@@ -738,6 +740,8 @@ mod tests {
                 css: vec!["/layout.css".to_string(), "/shared.css".to_string()],
                 parent_path: None,
                 is_root: true,
+                name: None,
+                skip_parents: false,
                 additional_paths: None,
             }],
             loading: Some(LoadingEntry {

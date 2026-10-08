@@ -6,7 +6,8 @@ import { defineConfig } from 'vite-plus'
 import { monorepoFmt, monorepoLint } from './.config/lint/monorepo'
 
 const rootDir = process.cwd()
-const rariSrc = path.join(rootDir, 'packages/rari/src')
+const reactSrc = path.join(rootDir, 'packages/react/src')
+const coreSrc = path.join(rootDir, 'packages/core/src')
 const useCacheSrc = path.join(rootDir, 'packages/use-cache/src')
 
 function resolvePackageInternal(subpath: string, baseDir: string) {
@@ -29,8 +30,11 @@ function packageInternalAlias() {
       if (importer.includes(`${path.sep}packages${path.sep}use-cache${path.sep}`))
         return resolvePackageInternal(subpath, useCacheSrc)
 
-      if (importer.includes(`${path.sep}packages${path.sep}rari${path.sep}`))
-        return resolvePackageInternal(subpath, rariSrc)
+      if (importer.includes(`${path.sep}packages${path.sep}react${path.sep}`))
+        return resolvePackageInternal(subpath, reactSrc)
+
+      if (importer.includes(`${path.sep}packages${path.sep}core${path.sep}`))
+        return resolvePackageInternal(subpath, coreSrc)
 
       return null
     },
@@ -64,8 +68,21 @@ export default defineConfig({
       ),
       '@rari/use-cache': fileURLToPath(new URL('./packages/use-cache/src', import.meta.url)),
       '@rari/logger': fileURLToPath(new URL('./packages/logger/src', import.meta.url)),
-      '@rari': fileURLToPath(new URL('./packages/rari/src', import.meta.url)),
-      '@rari/runtime': fileURLToPath(new URL('./packages/rari/src/runtime', import.meta.url)),
+      // The CLI lives in the rari package; binary resolution moved to @rari/core.
+      '@rari/cli/platform': fileURLToPath(
+        new URL('./packages/core/src/platform.ts', import.meta.url),
+      ),
+      '@rari/cli': fileURLToPath(new URL('./packages/rari/src/cli/index.ts', import.meta.url)),
+      // @rari/core subpaths mirror its src layout, so tests run against sources.
+      '@rari/core/router': fileURLToPath(new URL('./packages/core/src/router', import.meta.url)),
+      '@rari/core/regex-constants': fileURLToPath(
+        new URL('./packages/core/src/regex-constants.ts', import.meta.url),
+      ),
+      '@rari/core/utils': fileURLToPath(new URL('./packages/core/src/utils', import.meta.url)),
+      '@rari/core': fileURLToPath(new URL('./packages/core/src', import.meta.url)),
+      // Tests address the React adapter's internals as `@rari/<dir>`.
+      '@rari': fileURLToPath(new URL('./packages/react/src', import.meta.url)),
+      '@rari/runtime': fileURLToPath(new URL('./packages/react/src/runtime', import.meta.url)),
     },
   },
   test: {

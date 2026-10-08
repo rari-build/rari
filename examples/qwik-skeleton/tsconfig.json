@@ -1,0 +1,11 @@
+{
+  "extends": "../../.config/typescript/app.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@qwik.dev/core",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
