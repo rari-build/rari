@@ -348,6 +348,7 @@ impl RariRuntime {
                                         if is_runtime_restart_needed(&e) {
                                             break;
                                         }
+                                        event_loop_busy = true;
                                     }
                                 }
                             }
