@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './view-transitions.css';
 
 :root {
   color-scheme: dark;
