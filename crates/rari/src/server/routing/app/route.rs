@@ -727,7 +727,7 @@ pub async fn handle_app_route(
                             }
                         };
 
-                    let final_html = wrap_html_with_metadata(&html_with_assets, &state);
+                    let final_html = wrap_html_with_metadata(html_with_assets, &state);
 
                     let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
 
@@ -749,7 +749,7 @@ pub async fn handle_app_route(
                                 .await;
                         }
                     };
-                    let final_html = wrap_html_with_metadata(&html, &state);
+                    let final_html = wrap_html_with_metadata(html, &state);
                     let etag = response::ResponseCache::generate_etag(final_html.as_bytes());
                     (final_html, etag)
                 }

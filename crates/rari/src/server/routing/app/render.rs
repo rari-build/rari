@@ -1,6 +1,6 @@
 #![expect(clippy::missing_errors_doc, clippy::too_many_lines)]
 
-use std::{env, io::Error, str, string::String, sync::Arc, time::Instant};
+use std::{env, io::Error, string::String, sync::Arc, time::Instant};
 
 use axum::{
     body::Body,
@@ -29,13 +29,7 @@ use crate::{
         ServerState,
         compression::{CompressionEncoding, compress_stream},
         config::Config,
-        document::{
-            pretty_html::{
-                VoidSolidusStripState, pretty_print_html, strip_html5_void_solidus,
-                strip_html5_void_solidus_with_state,
-            },
-            utils::inject_assets_into_html,
-        },
+        document::{pretty_html::pretty_print_html, utils::inject_assets_into_html},
         error_response,
         host::utils::http::merge_vary_with_accept,
         image::schedule_image_prewarm,
@@ -48,10 +42,9 @@ use crate::{
     utils::path::path_to_file_url,
 };
 
-pub fn wrap_html_with_metadata(html_content: &str, state: &ServerState) -> String {
-    schedule_image_prewarm(state, html_content);
-    let html = strip_html5_void_solidus(html_content);
-    if state.config.is_development() { pretty_print_html(&html) } else { html }
+pub fn wrap_html_with_metadata(html_content: String, state: &ServerState) -> String {
+    schedule_image_prewarm(state, &html_content);
+    if state.config.is_development() { pretty_print_html(&html_content) } else { html_content }
 }
 
 pub fn should_use_streaming(route_match: &AppRouteMatch, config: &Config) -> bool {
@@ -464,9 +457,8 @@ fn render_chunked_response(
 
                 let t0 = Instant::now();
                 let mut finished = false;
-                let mut void_solidus_state = VoidSolidusStripState::default();
 
-                yield Ok::<_, Error>(normalize_html_chunk(shell, &mut void_solidus_state));
+                yield Ok::<_, Error>(shell);
 
                 while !finished {
                     match time::timeout(stall_timeout, chunks.recv()).await {
@@ -538,10 +530,7 @@ fn render_chunked_response(
                                 }
                             }
 
-                            yield Ok(normalize_html_chunk(
-                                Bytes::from(buf),
-                                &mut void_solidus_state,
-                            ));
+                            yield Ok(Bytes::from(buf));
 
                             if let Some(e) = stream_error {
                                 tracing::error!("Error in chunked HTML stream: {}", e);
@@ -570,7 +559,7 @@ fn render_chunked_response(
                 }
 
                 if !closing.is_empty() {
-                    yield Ok(normalize_html_chunk(closing, &mut void_solidus_state));
+                    yield Ok(closing);
                 }
             }
             ChunkedContentType::RscFlight => {
@@ -763,7 +752,7 @@ pub async fn render_synchronous(
                 }
             };
 
-            let final_html = wrap_html_with_metadata(&html_with_assets, &state);
+            let final_html = wrap_html_with_metadata(html_with_assets, &state);
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
             let cache_control = state.config.get_cache_control_for_route(&context.pathname);
@@ -901,7 +890,7 @@ pub async fn render_streaming_with_layout(
                 }
             };
 
-            let final_html = wrap_html_with_metadata(&html_with_assets, &state);
+            let final_html = wrap_html_with_metadata(html_with_assets, &state);
 
             let status_code = if is_not_found { StatusCode::NOT_FOUND } else { StatusCode::OK };
             let cache_control = state.config.get_cache_control_for_route(&context.pathname);
@@ -955,19 +944,12 @@ fn emergency_fallback_shell(client_head: &str) -> String {
         r#"<!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 {client_head}</head>
 <body></body>
 </html>"#
     )
-}
-
-fn normalize_html_chunk(bytes: Bytes, state: &mut VoidSolidusStripState) -> Bytes {
-    match str::from_utf8(&bytes) {
-        Ok(html) => Bytes::from(strip_html5_void_solidus_with_state(html, state)),
-        Err(_) => bytes,
-    }
 }
 
 pub async fn render_fallback_html(
@@ -990,7 +972,7 @@ pub async fn render_fallback_html(
             .unwrap_or_default()
     };
 
-    let mut html_shell = strip_html5_void_solidus(&emergency_fallback_shell(&client_head));
+    let mut html_shell = emergency_fallback_shell(&client_head);
 
     if state.config.is_development() {
         html_shell = pretty_print_html(&html_shell);
