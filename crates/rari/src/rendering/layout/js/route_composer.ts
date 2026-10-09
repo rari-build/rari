@@ -383,46 +383,53 @@
   type CreatePageElementFn = NonNullable<NonNullable<(typeof g)['~rari']>['createPageElement']>
   type CreatePageElementOptions = Parameters<CreatePageElementFn>[0]
 
+  function requireNamedComponent(
+    id: string,
+    label: 'Page' | 'Loading',
+    filePath: string | undefined,
+  ): unknown {
+    const Component = g[id]
+    if (typeof Component === 'function') return Component
+    const hint = filePath != null && filePath !== '' ? ` in route ${filePath}` : ''
+    throw new TypeError(`${label} component ${id} not found${hint}`)
+  }
+
+  function keyedPageProps(options: CreatePageElementOptions): object {
+    const pageKey =
+      typeof options.pageKey === 'string' && options.pageKey !== '' ? options.pageKey : undefined
+    const baseProps =
+      options.pageProps != null && typeof options.pageProps === 'object' ? options.pageProps : {}
+    return pageKey != null ? Object.assign({}, baseProps, { key: pageKey }) : baseProps
+  }
+
   function createPageElement(options: CreatePageElementOptions): unknown {
     const createElement = requireCreateElement()
-    const PageComponent = g[options.pageComponentId]
-    if (typeof PageComponent !== 'function') {
-      const routeHint =
-        options.routeFilePath != null && options.routeFilePath !== ''
-          ? ` in route ${options.routeFilePath}`
-          : ''
-      throw new TypeError(`Page component ${options.pageComponentId} not found${routeHint}`)
-    }
-
-    const pageProps = options.pageProps ?? {}
+    const PageComponent = requireNamedComponent(
+      options.pageComponentId,
+      'Page',
+      options.routeFilePath,
+    )
+    const pageProps = keyedPageProps(options)
     const loadingId = options.loadingComponentId
     if (loadingId == null || loadingId === '') {
       return createElement(PageComponent, pageProps)
     }
 
-    const LoadingComponent = g[loadingId]
-    if (typeof LoadingComponent !== 'function') {
-      const loadingHint =
-        options.loadingFilePath != null && options.loadingFilePath !== ''
-          ? ` in route ${options.loadingFilePath}`
-          : ''
-      throw new TypeError(`Loading component ${loadingId} not found${loadingHint}`)
+    const LoadingComponent = requireNamedComponent(loadingId, 'Loading', options.loadingFilePath)
+    if (options.useSuspense !== true) {
+      return createElement(PageComponent, pageProps)
     }
 
-    if (options.useSuspense === true) {
-      const react = g.React
-      const Suspense = react != null ? Reflect.get(react, 'Suspense') : undefined
-      if (Suspense == null) {
-        throw new TypeError('[rari] Suspense is not available')
-      }
-      return createElement(
-        Suspense,
-        { fallback: createElement(LoadingComponent, {}) },
-        createElement(PageComponent, pageProps),
-      )
+    const react = g.React
+    const Suspense = react != null ? Reflect.get(react, 'Suspense') : undefined
+    if (Suspense == null) {
+      throw new TypeError('[rari] Suspense is not available')
     }
-
-    return createElement(PageComponent, pageProps)
+    return createElement(
+      Suspense,
+      { fallback: createElement(LoadingComponent, {}) },
+      createElement(PageComponent, pageProps),
+    )
   }
 
   rari.createPageElement = createPageElement

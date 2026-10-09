@@ -95,10 +95,11 @@ describe('flightDocument soft-nav fill', () => {
     })
     expect(isValidElement(rendered)).toBe(true)
     if (!isValidElement(rendered)) return
-    expect(rendered.key).toBe('/about')
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    expect(rendered.props).toEqual({ children: createElement('section', null, 'about') })
     expect(rendered.type).not.toBe(LAYOUT_SLOT_ELEMENT)
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    expect((rendered.props as { children?: unknown }).children).toEqual(
+      createElement('section', null, 'about'),
+    )
   })
 
   it('flightDocument returns filled tree when ok', () => {

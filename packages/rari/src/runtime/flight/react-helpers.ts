@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode, ReactPromise } from 'react'
-import { isValidElement, Suspense } from 'react'
+import { cloneElement, isValidElement, Suspense } from 'react'
 import { isFlightThenable, isRecord } from '@/shared/utils/type-guards'
 
 export type FlightContent = ReactNode | ReactPromise<ReactNode>
@@ -23,16 +23,133 @@ export function childList(children: ReactNode): ReactNode[] {
   return out
 }
 
-function isSuspenseElement(element: ReactElement): boolean {
+export function isSuspenseElement(element: ReactElement): boolean {
   if (element.type === Suspense) return true
   const type: unknown = element.type
   if (type === REACT_SUSPENSE_TYPE) return true
   return isRecord(type) && type.$$typeof === REACT_SUSPENSE_TYPE
 }
 
+function isErrorBoundaryWrapper(element: ReactElement): boolean {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return isRecord(element.props) && 'errorComponentId' in (element.props as object)
+}
+
+function isLayoutReuseElement(element: ReactElement): boolean {
+  return element.type === 'rari-layout-reuse'
+}
+
+export function unwrapLoadingSuspense(node: ReactNode): {
+  readonly fallback: ReactNode
+  readonly content: ReactNode
+} {
+  if (!isValidElement(node)) {
+    return { fallback: null, content: node }
+  }
+
+  if (isSuspenseElement(node)) {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const props = node.props as { fallback?: ReactNode; children?: ReactNode }
+    return { fallback: props.fallback ?? null, content: props.children }
+  }
+
+  if (isLayoutReuseElement(node) || isErrorBoundaryWrapper(node)) {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const props = node.props as { children?: ReactNode }
+    const inner = unwrapLoadingSuspense(props.children)
+    if (inner.fallback == null && Object.is(inner.content, props.children)) {
+      return { fallback: null, content: node }
+    }
+    // oxlint-disable-next-line react/no-clone-element
+    return { fallback: inner.fallback, content: cloneElement(node, undefined, inner.content) }
+  }
+
+  return { fallback: null, content: node }
+}
+
+export function leafHasLoadingFallback(node: ReactNode): boolean {
+  return unwrapLoadingSuspense(node).fallback != null
+}
+
+function isLazyType(value: unknown): boolean {
+  return value === REACT_LAZY_TYPE || (isRecord(value) && value.$$typeof === REACT_LAZY_TYPE)
+}
+
 function isLazyElement(element: ReactElement): boolean {
+  return isLazyType(element.type)
+}
+
+function isSettledFlightStatus(status: unknown): boolean {
+  return status === 'fulfilled' || status === 'rejected' || status === 'errored'
+}
+
+function lazyPayloadIsPending(payload: unknown): boolean {
+  if (isRecord(payload) && isSettledFlightStatus(payload.status)) return false
+  if (isPendingFlightThenable(payload)) return true
+  if (isRecord(payload) && typeof payload._status === 'number') {
+    return payload._status === -1 || payload._status === 0
+  }
+  if (isRecord(payload) && typeof payload.status === 'string') {
+    return (
+      payload.status === 'pending' ||
+      payload.status === 'pending_weak' ||
+      payload.status === 'blocked' ||
+      payload.status === 'halted' ||
+      payload.status === 'resolved_model' ||
+      payload.status === 'resolved_module'
+    )
+  }
+  return false
+}
+
+function lazyElementPayloadIsPending(element: ReactElement): boolean {
+  if (!isLazyElement(element)) return false
   const type: unknown = element.type
-  return type === REACT_LAZY_TYPE || (isRecord(type) && type.$$typeof === REACT_LAZY_TYPE)
+  if (!isRecord(type)) return false
+  return lazyPayloadIsPending(type._payload)
+}
+
+function isPendingBareLazyHole(value: unknown): boolean {
+  if (!isLazyType(value) || !isRecord(value)) return false
+  return lazyPayloadIsPending(value._payload)
+}
+
+function hasReadyChild(children: ReactNode): boolean {
+  for (const child of childList(children)) {
+    if (child == null || child === false || child === true) continue
+    if (isPendingFlightThenable(child) || isPendingBareLazyHole(child)) continue
+    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') {
+      return true
+    }
+    if (isValidElement(child)) return true
+  }
+  return false
+}
+
+function elementChildren(element: ReactElement): ReactNode {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return (element.props as { children?: ReactNode }).children
+}
+
+function lazyElementMaySuspend(element: ReactElement): boolean {
+  const nested = elementChildren(element)
+  if (suspenseBoundaryMaySuspend(nested)) return true
+  return lazyElementPayloadIsPending(element) && !hasReadyChild(nested)
+}
+
+function suspenseBoundaryMaySuspend(children: ReactNode): boolean {
+  for (const child of childList(children)) {
+    if (isPendingFlightThenable(child) || isPendingBareLazyHole(child)) return true
+    if (!isValidElement(child)) continue
+    if (
+      isLazyElement(child)
+        ? lazyElementMaySuspend(child)
+        : suspenseBoundaryMaySuspend(elementChildren(child))
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 export function containsSuspense(node: ReactNode): boolean {
@@ -51,7 +168,7 @@ export function containsSuspense(node: ReactNode): boolean {
 
 export function flightTreeMaySuspend(node: ReactNode): boolean {
   if (node == null || node === false || node === true) return false
-  if (isPendingFlightThenable(node)) return true
+  if (isPendingFlightThenable(node) || isPendingBareLazyHole(node)) return true
   if (Array.isArray(node)) {
     for (const child of childList(node)) {
       if (flightTreeMaySuspend(child)) return true
@@ -59,6 +176,12 @@ export function flightTreeMaySuspend(node: ReactNode): boolean {
     return false
   }
   if (!isValidElement(node)) return false
+  if (isSuspenseElement(node)) {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const children = (node.props as { children?: ReactNode }).children
+    if (suspenseBoundaryMaySuspend(children)) return true
+    return flightTreeMaySuspend(children)
+  }
   if (isLazyElement(node)) {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return flightTreeMaySuspend((node.props as { children?: ReactNode }).children)
@@ -70,6 +193,6 @@ export function flightTreeMaySuspend(node: ReactNode): boolean {
 function isPendingFlightThenable(value: unknown): boolean {
   if (!isFlightThenable(value)) return false
   if (!isRecord(value)) return true
-  if (value.status === 'fulfilled' || value.status === 'rejected') return false
+  if (isSettledFlightStatus(value.status)) return false
   return true
 }

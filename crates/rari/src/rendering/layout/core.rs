@@ -1306,6 +1306,7 @@ impl LayoutRenderer {
 
         let pathname_json =
             serde_json::to_string(&context.pathname).unwrap_or_else(|_| "\"/\"".to_string());
+        let template_key_json = utils::template_key_json(context);
 
         let page_render_script = if route_match.not_found.is_some() {
             let page_component_id_json =
@@ -1315,6 +1316,7 @@ impl LayoutRenderer {
                 const pageElement = globalThis['~rari'].createPageElement({{
                     pageComponentId: {page_component_id_json},
                     pageProps: {{}},
+                    pageKey: {template_key_json},
                 }});
                 timings.pageRender = performance.now() - startPageRender;
                 "
@@ -1336,6 +1338,7 @@ impl LayoutRenderer {
                 const pageElement = globalThis['~rari'].createPageElement({{
                     pageComponentId: {page_component_id_json},
                     pageProps: {page_props_json},
+                    pageKey: {template_key_json},
                     loadingComponentId: {loading_id_json},
                     useSuspense: {use_suspense_js},
                     routeFilePath: {route_file_json},
@@ -1352,13 +1355,12 @@ impl LayoutRenderer {
                 const pageElement = globalThis['~rari'].createPageElement({{
                     pageComponentId: {page_component_id_json},
                     pageProps: {page_props_json},
+                    pageKey: {template_key_json},
                 }});
                 timings.pageRender = performance.now() - startPageRender;
                 "
             )
         };
-
-        let template_key_json = utils::template_key_json(context);
         let action_post_url =
             utils::format_action_post_url(&context.pathname, &context.search_params);
         let action_post_url_json =

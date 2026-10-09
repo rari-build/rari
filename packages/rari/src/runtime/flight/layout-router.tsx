@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
-import { cloneElement, createElement, Fragment, isValidElement, useSyncExternalStore } from 'react'
+import { cloneElement, createElement, isValidElement, Suspense, useSyncExternalStore } from 'react'
 import { isLayoutReuseMarker, layoutPathOf } from './merge-refresh'
-import { childList } from './react-helpers'
+import { childList, unwrapLoadingSuspense } from './react-helpers'
 import { containsLayoutSlot, flightRouteCache, isLayoutSlot } from './route-cache'
 
 export interface FlightLayoutRouterProps {
@@ -60,34 +60,35 @@ function fillLayoutSlots(node: ReactNode, pathname: string, search: string): Rea
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function renderFlightLayoutRouter({
-  layoutPath,
-  pathname,
-  search,
-}: FlightLayoutRouterProps): ReactNode {
+export function renderFlightLayoutRouter(
+  { layoutPath, pathname, search }: FlightLayoutRouterProps,
+  _cacheVersion?: number,
+): ReactNode {
+  void _cacheVersion
   const snapshot = flightRouteCache.readSegmentSnapshot(layoutPath, { pathname, search })
 
   if (snapshot == null) return null
   if (isValidElement(snapshot) && isLayoutSlot(snapshot)) return null
 
   if (flightRouteCache.isDeepestLayout(layoutPath, pathname)) {
-    return createElement(Fragment, { key: `${pathname}${search}` }, snapshot)
+    const { fallback, content } = unwrapLoadingSuspense(snapshot)
+    return createElement(Suspense, { fallback }, content)
   }
 
   return fillLayoutSlots(snapshot, pathname, search)
 }
 
 export function FlightLayoutRouter(props: FlightLayoutRouterProps): ReactNode {
-  useFlightCacheVersion()
-  return renderFlightLayoutRouter(props)
+  const cacheVersion = useFlightCacheVersion()
+  return renderFlightLayoutRouter(props, cacheVersion)
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function renderFlightDocument({
-  fallback = null,
-  pathname,
-  search,
-}: FlightDocumentProps): ReactElement | null {
+export function renderFlightDocument(
+  { fallback = null, pathname, search }: FlightDocumentProps,
+  _cacheVersion?: number,
+): ReactElement | null {
+  void _cacheVersion
   const shell = flightRouteCache.getShell()
 
   if (shell != null) {
@@ -101,6 +102,6 @@ export function renderFlightDocument({
 }
 
 export function FlightDocument(props: FlightDocumentProps): ReactElement | null {
-  useFlightCacheVersion()
-  return renderFlightDocument(props)
+  const cacheVersion = useFlightCacheVersion()
+  return renderFlightDocument(props, cacheVersion)
 }

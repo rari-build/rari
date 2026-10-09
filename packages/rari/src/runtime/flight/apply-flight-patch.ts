@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { isValidElement } from 'react'
 import { isLayoutReuseMarker, mergeFlightRefresh } from './merge-refresh'
-import { flightTreeMaySuspend, isDocumentRoot } from './react-helpers'
+import { flightTreeMaySuspend, isDocumentRoot, leafHasLoadingFallback } from './react-helpers'
 import { flightRouteCache } from './route-cache'
 
 export interface PendingLeafEviction {
@@ -14,6 +14,7 @@ export type SoftNavFlightPatchResult =
       readonly kind: 'merged'
       readonly element: ReactElement
       readonly maySuspend: boolean
+      readonly hasLoadingFallback?: boolean
       readonly pendingEvictLeaf?: PendingLeafEviction
     }
   | { readonly kind: 'hard-nav' }
@@ -69,12 +70,28 @@ export function applySoftNavFlightPatch(options: {
     return { kind: 'hard-nav' }
   }
 
-  const maySuspend = flightTreeMaySuspend(options.refresh)
+  const leaf = flightRouteCache.readLeaf(options.toPathname, options.search)
+  const maySuspend =
+    flightTreeMaySuspend(options.refresh) || (leaf != null && flightTreeMaySuspend(leaf))
+  const hasLoadingFallback =
+    (leaf != null && leafHasLoadingFallback(leaf)) || leafHasLoadingFallback(options.refresh)
   const pendingEvictLeaf = pendingEvictForSoftNav(options)
   if (isDocumentRoot(options.refresh)) {
-    return { kind: 'merged', element: options.refresh, maySuspend, pendingEvictLeaf }
+    return {
+      kind: 'merged',
+      element: options.refresh,
+      maySuspend,
+      hasLoadingFallback,
+      pendingEvictLeaf,
+    }
   }
-  return { kind: 'merged', element: options.previousDocument, maySuspend, pendingEvictLeaf }
+  return {
+    kind: 'merged',
+    element: options.previousDocument,
+    maySuspend,
+    hasLoadingFallback,
+    pendingEvictLeaf,
+  }
 }
 
 function ingestActionRefresh(
@@ -104,9 +121,12 @@ function actionPatchElement(
   previousDocument: ReactNode | null,
 ): SoftNavFlightPatchResult {
   const maySuspend = flightTreeMaySuspend(refresh)
-  if (isDocumentRoot(refresh)) return { kind: 'merged', element: refresh, maySuspend }
+  const hasLoadingFallback = leafHasLoadingFallback(refresh)
+  if (isDocumentRoot(refresh)) {
+    return { kind: 'merged', element: refresh, maySuspend, hasLoadingFallback }
+  }
   if (isDocumentRoot(previousDocument)) {
-    return { kind: 'merged', element: previousDocument, maySuspend }
+    return { kind: 'merged', element: previousDocument, maySuspend, hasLoadingFallback }
   }
   return { kind: 'hard-nav' }
 }
