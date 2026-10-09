@@ -56,31 +56,9 @@ interface BundleEntry {
   readonly patchCjsSource?: (source: string) => string
 }
 
-/** Client-only react-dom exports stubbed for SSR module evaluation. */
-const REACT_DOM_CLIENT_STUBS = [
-  'createPortal',
-  'preload',
-  'preloadModule',
-  'preinit',
-  'preinitModule',
-] as const
-
 function createReactDomShimSource(): string {
-  const stubExports = REACT_DOM_CLIENT_STUBS.map(
-    name => `export function ${name}() {
-  return null
-}`,
-  ).join('\n\n')
-
-  const defaultFields = [
-    'browser',
-    ...REACT_DOM_CLIENT_STUBS,
-    '__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE: Internals',
-  ].join(',\n  ')
-
   // Must match react-dom.production.js Internals so Flight Hint (`H`) rows and
-  // react-dom-server can share one `.d` dispatcher. Fizz replaces `.d` with
-  // real prefetch/preconnect implementations at module init.
+  // react-dom-server can share one `.d` dispatcher.
   return `function noop() {}
 
 const Internals = {
@@ -105,18 +83,115 @@ const Internals = {
 
 const REACT_RECOVERABLE_TYPE = Symbol.for('react.recoverable')
 
+function getCrossOriginStringAs(as, input) {
+  if (as === 'font') return ''
+  if (typeof input === 'string') return input === 'use-credentials' ? input : ''
+}
+
 /** SSR-relevant: marks work that should only run in the browser. */
 export function browser(reason) {
   return { $$typeof: REACT_RECOVERABLE_TYPE, _reason: reason }
 }
 
-/** Client-only APIs - safe no-ops during SSR module evaluation. */
-${stubExports}
+/** Client-only: no DOM during SSR module evaluation. */
+export function createPortal() {
+  return null
+}
+
+/** Forwards to Internals.d (Fizz installs real hint emitters). */
+export function preload(href, options) {
+  if (
+    typeof href === 'string' &&
+    typeof options === 'object' &&
+    options !== null &&
+    typeof options.as === 'string'
+  ) {
+    const as = options.as
+    const crossOrigin = getCrossOriginStringAs(as, options.crossOrigin)
+    Internals.d.L(href, as, {
+      crossOrigin,
+      integrity: typeof options.integrity === 'string' ? options.integrity : undefined,
+      nonce: typeof options.nonce === 'string' ? options.nonce : undefined,
+      type: typeof options.type === 'string' ? options.type : undefined,
+      fetchPriority:
+        typeof options.fetchPriority === 'string' ? options.fetchPriority : undefined,
+      referrerPolicy:
+        typeof options.referrerPolicy === 'string' ? options.referrerPolicy : undefined,
+      imageSrcSet: typeof options.imageSrcSet === 'string' ? options.imageSrcSet : undefined,
+      imageSizes: typeof options.imageSizes === 'string' ? options.imageSizes : undefined,
+      media: typeof options.media === 'string' ? options.media : undefined,
+    })
+  }
+}
+
+export function preloadModule(href, options) {
+  if (typeof href !== 'string') return
+  if (options) {
+    const crossOrigin = getCrossOriginStringAs(options.as, options.crossOrigin)
+    Internals.d.m(href, {
+      as: typeof options.as === 'string' && options.as !== 'script' ? options.as : undefined,
+      crossOrigin,
+      integrity: typeof options.integrity === 'string' ? options.integrity : undefined,
+      nonce: typeof options.nonce === 'string' ? options.nonce : undefined,
+      fetchPriority:
+        typeof options.fetchPriority === 'string' ? options.fetchPriority : undefined,
+    })
+  } else {
+    Internals.d.m(href)
+  }
+}
+
+export function preinit(href, options) {
+  if (typeof href !== 'string' || !options || typeof options.as !== 'string') return
+  const as = options.as
+  const crossOrigin = getCrossOriginStringAs(as, options.crossOrigin)
+  const integrity = typeof options.integrity === 'string' ? options.integrity : undefined
+  const fetchPriority =
+    typeof options.fetchPriority === 'string' ? options.fetchPriority : undefined
+  if (as === 'style') {
+    Internals.d.S(href, typeof options.precedence === 'string' ? options.precedence : undefined, {
+      crossOrigin,
+      integrity,
+      fetchPriority,
+    })
+  } else if (as === 'script') {
+    Internals.d.X(href, {
+      crossOrigin,
+      integrity,
+      fetchPriority,
+      nonce: typeof options.nonce === 'string' ? options.nonce : undefined,
+    })
+  }
+}
+
+export function preinitModule(href, options) {
+  if (typeof href !== 'string') return
+  if (typeof options === 'object' && options !== null) {
+    if (options.as == null || options.as === 'script') {
+      const crossOrigin = getCrossOriginStringAs(options.as, options.crossOrigin)
+      Internals.d.M(href, {
+        crossOrigin,
+        integrity: typeof options.integrity === 'string' ? options.integrity : undefined,
+        nonce: typeof options.nonce === 'string' ? options.nonce : undefined,
+        fetchPriority:
+          typeof options.fetchPriority === 'string' ? options.fetchPriority : undefined,
+      })
+    }
+  } else if (options == null) {
+    Internals.d.M(href)
+  }
+}
 
 export const __DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = Internals
 
 export default {
-  ${defaultFields},
+  browser,
+  createPortal,
+  preload,
+  preloadModule,
+  preinit,
+  preinitModule,
+  __DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE: Internals,
 }`
 }
 
