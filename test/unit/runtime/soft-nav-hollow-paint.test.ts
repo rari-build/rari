@@ -168,6 +168,33 @@ describe('soft-nav hollow-shell paint', () => {
     expect(leafHasLoadingFallback(refresh)).toBe(true)
   })
 
+  it('detects loading.tsx through template-style composite wrappers', async () => {
+    const { leafHasLoadingFallback, unwrapLoadingSuspense } =
+      await import('@rari/runtime/flight/react-helpers')
+    function Template({ children }: { readonly children?: ReactNode }): ReactElement {
+      return createElement('div', { 'data-template': true }, children)
+    }
+    const leaf = createElement(
+      Template,
+      null,
+      createElement(Suspense, { fallback: createElement('div', null, 'loading') }, page('about')),
+    )
+    expect(leafHasLoadingFallback(leaf)).toBe(true)
+    const unwrapped = unwrapLoadingSuspense(leaf)
+    expect(unwrapped.fallback).not.toBeNull()
+    expect(isValidElement(unwrapped.content) && unwrapped.content.type === Template).toBe(true)
+  })
+
+  it('does not hoist loading Suspense above host DOM chrome', async () => {
+    const { leafHasLoadingFallback } = await import('@rari/runtime/flight/react-helpers')
+    const leaf = createElement(
+      'div',
+      { className: 'chrome' },
+      createElement(Suspense, { fallback: createElement('div', null, 'loading') }, page('about')),
+    )
+    expect(leafHasLoadingFallback(leaf)).toBe(false)
+  })
+
   it('soft-nav leaf is not clobbered when previousDocument would be re-set under the new path', () => {
     const home = playgroundDoc(page('home'))
     flightRouteCache.set('/', '', home)

@@ -39,6 +39,18 @@ function isLayoutReuseElement(element: ReactElement): boolean {
   return element.type === 'rari-layout-reuse'
 }
 
+function elementChildren(element: ReactElement): ReactNode {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return (element.props as { children?: ReactNode }).children
+}
+
+function shouldUnwrapThrough(element: ReactElement): boolean {
+  if (isLayoutReuseElement(element) || isErrorBoundaryWrapper(element)) return true
+  if (isSuspenseElement(element)) return false
+  if (typeof element.type === 'string') return false
+  return true
+}
+
 export function unwrapLoadingSuspense(node: ReactNode): {
   readonly fallback: ReactNode
   readonly content: ReactNode
@@ -53,18 +65,17 @@ export function unwrapLoadingSuspense(node: ReactNode): {
     return { fallback: props.fallback ?? null, content: props.children }
   }
 
-  if (isLayoutReuseElement(node) || isErrorBoundaryWrapper(node)) {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const props = node.props as { children?: ReactNode }
-    const inner = unwrapLoadingSuspense(props.children)
-    if (inner.fallback == null && Object.is(inner.content, props.children)) {
-      return { fallback: null, content: node }
-    }
-    // oxlint-disable-next-line react/no-clone-element
-    return { fallback: inner.fallback, content: cloneElement(node, undefined, inner.content) }
+  if (!shouldUnwrapThrough(node)) {
+    return { fallback: null, content: node }
   }
 
-  return { fallback: null, content: node }
+  const children = elementChildren(node)
+  const inner = unwrapLoadingSuspense(children)
+  if (inner.fallback == null && Object.is(inner.content, children)) {
+    return { fallback: null, content: node }
+  }
+  // oxlint-disable-next-line react/no-clone-element
+  return { fallback: inner.fallback, content: cloneElement(node, undefined, inner.content) }
 }
 
 export function leafHasLoadingFallback(node: ReactNode): boolean {
@@ -124,11 +135,6 @@ function hasReadyChild(children: ReactNode): boolean {
     if (isValidElement(child)) return true
   }
   return false
-}
-
-function elementChildren(element: ReactElement): ReactNode {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return (element.props as { children?: ReactNode }).children
 }
 
 function lazyElementMaySuspend(element: ReactElement): boolean {
