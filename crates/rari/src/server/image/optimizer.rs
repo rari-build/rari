@@ -155,7 +155,7 @@ impl ImageOptimizer {
             .iter()
             .map(|img| {
                 format!(
-                    r#"<link rel="preload" as="image" href="/_image?url={}&w={}&q={}&f={}">"#,
+                    r#"<link rel="preload" as="image" href="/_rari/image?url={}&w={}&q={}&f={}">"#,
                     urlencoding::encode(&img.url),
                     img.width,
                     img.quality,

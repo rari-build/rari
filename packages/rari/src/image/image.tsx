@@ -3,12 +3,8 @@
 import type { CSSProperties, ReactElement, RefObject, SyntheticEvent } from 'react'
 import type { ImageFormat } from './constants'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import {
-  BLUR_PLACEHOLDER_QUALITY,
-  BLUR_PLACEHOLDER_WIDTH,
-  DEFAULT_DEVICE_SIZES,
-  DEFAULT_FORMATS,
-} from './constants'
+import { preload as preloadResource } from 'react-dom'
+import { BLUR_PLACEHOLDER_QUALITY, BLUR_PLACEHOLDER_WIDTH, DEFAULT_FORMATS } from './constants'
 import { resolveOptimizedSizePlan } from './size-plan'
 
 export interface ImageProps {
@@ -71,58 +67,66 @@ function resolveDefaultSizes(
   return useResponsive || fill ? '100vw' : undefined
 }
 
-function configureImagePreloadLink(options: {
-  readonly link: HTMLElement
+function primaryOptimizerFormat(loader: ImageProps['loader']): ImageFormat | undefined {
+  if (loader != null) return undefined
+  if (DEFAULT_FORMATS.length === 1 && DEFAULT_FORMATS[0] === 'avif') return 'avif'
+  return undefined
+}
+
+function preloadImageResource(options: {
+  readonly enabled: boolean
   readonly finalSrc: string
   readonly defaultWidth: number
+  readonly widths: readonly number[]
   readonly quality: number
   readonly sizes: string | undefined
   readonly loader: ImageProps['loader']
   readonly unoptimized: boolean
   readonly fill: boolean
   readonly shouldUseSrcSet: boolean
+  readonly format: ImageFormat | undefined
 }): void {
+  if (!options.enabled) return
+
   const {
-    link,
     finalSrc,
     defaultWidth,
+    widths,
     quality,
     sizes,
     loader,
     unoptimized,
     fill,
     shouldUseSrcSet,
+    format,
   } = options
-  const useResponsivePreload = shouldUseSrcSet && !unoptimized
-  const preloadSizes = resolveDefaultSizes(sizes, useResponsivePreload, fill)
-  const preloadAvifOnly =
-    loader == null && DEFAULT_FORMATS.length === 1 && DEFAULT_FORMATS[0] === 'avif'
-  const preloadFormat: ImageFormat | undefined = preloadAvifOnly ? 'avif' : undefined
 
   if (unoptimized) {
-    link.setAttribute(
-      'href',
+    preloadResource(
       loader != null ? loader({ src: finalSrc, width: defaultWidth, quality }) : finalSrc,
+      { as: 'image' },
     )
     return
   }
+
+  const href = resolveLoaderOrBuiltUrl(loader, finalSrc, defaultWidth, quality, format)
+  const useResponsivePreload = shouldUseSrcSet
+  const preloadSizes = resolveDefaultSizes(sizes, useResponsivePreload, fill)
 
   if (useResponsivePreload) {
-    const srcSet = DEFAULT_DEVICE_SIZES.map(
-      w => `${resolveLoaderOrBuiltUrl(loader, finalSrc, w, quality, preloadFormat)} ${w}w`,
-    ).join(', ')
-    link.setAttribute(
-      'href',
-      resolveLoaderOrBuiltUrl(loader, finalSrc, defaultWidth, quality, preloadFormat),
-    )
-    link.setAttribute('imagesrcset', srcSet)
-    if (preloadSizes != null) link.setAttribute('imagesizes', preloadSizes)
-    if (preloadAvifOnly) link.setAttribute('type', 'image/avif')
+    preloadResource(href, {
+      as: 'image',
+      imageSrcSet: buildOptimizedSrcSet(loader, finalSrc, widths, quality, format),
+      ...(preloadSizes != null ? { imageSizes: preloadSizes } : {}),
+      ...(format === 'avif' ? { type: 'image/avif' } : {}),
+    })
     return
   }
 
-  link.setAttribute('href', resolveLoaderOrBuiltUrl(loader, finalSrc, defaultWidth, quality))
-  if (preloadSizes != null) link.setAttribute('imagesizes', preloadSizes)
+  preloadResource(href, {
+    as: 'image',
+    ...(format === 'avif' ? { type: 'image/avif' } : {}),
+  })
 }
 
 function pickExplicitOrIntrinsic(
@@ -241,44 +245,11 @@ function resolveDisplaySrc(options: {
   readonly finalSrc: string
   readonly width: number
   readonly quality: number
+  readonly format?: ImageFormat
 }): string {
-  const { unoptimized, loader, finalSrc, width, quality } = options
-  if (!unoptimized) return resolveLoaderOrBuiltUrl(loader, finalSrc, width, quality)
+  const { unoptimized, loader, finalSrc, width, quality, format } = options
+  if (!unoptimized) return resolveLoaderOrBuiltUrl(loader, finalSrc, width, quality, format)
   return loader != null ? loader({ src: finalSrc, width, quality }) : finalSrc
-}
-
-function attachImagePreloadLink(options: {
-  readonly enabled: boolean
-  readonly finalSrc: string
-  readonly defaultWidth: number
-  readonly quality: number
-  readonly sizes: string | undefined
-  readonly loader: ImageProps['loader']
-  readonly unoptimized: boolean
-  readonly fill: boolean
-  readonly shouldUseSrcSet: boolean
-}): (() => void) | undefined {
-  if (!options.enabled) return undefined
-
-  const link = document.createElement('link')
-  link.rel = 'preload'
-  link.as = 'image'
-  configureImagePreloadLink({
-    link,
-    finalSrc: options.finalSrc,
-    defaultWidth: options.defaultWidth,
-    quality: options.quality,
-    sizes: options.sizes,
-    loader: options.loader,
-    unoptimized: options.unoptimized,
-    fill: options.fill,
-    shouldUseSrcSet: options.shouldUseSrcSet,
-  })
-  document.head.appendChild(link)
-
-  return () => {
-    if (link.parentNode === document.head) document.head.removeChild(link)
-  }
 }
 
 function observeNearViewport(
@@ -424,6 +395,7 @@ export function Image({
   })
   const shouldUseSrcSet = sizePlan.widths.length > 1 || sizePlan.widths[0] !== sizePlan.defaultWidth
   const shouldEagerBlur = preload || loading === 'eager'
+  const optimizerFormat = primaryOptimizerFormat(loader)
 
   const [showAltText, setShowAltText] = useState(false)
   const onLoadRef = useRef(onLoad)
@@ -463,32 +435,6 @@ export function Image({
     [placeholder, onError, setBlurComplete],
   )
 
-  useEffect(
-    () =>
-      attachImagePreloadLink({
-        enabled: preload,
-        finalSrc,
-        defaultWidth: sizePlan.defaultWidth,
-        quality,
-        sizes,
-        loader,
-        unoptimized,
-        fill,
-        shouldUseSrcSet,
-      }),
-    [
-      preload,
-      finalSrc,
-      sizePlan.defaultWidth,
-      quality,
-      sizes,
-      loader,
-      unoptimized,
-      fill,
-      shouldUseSrcSet,
-    ],
-  )
-
   const imgStyle = buildImageStyle({
     style,
     fill,
@@ -503,12 +449,27 @@ export function Image({
     finalSrc,
     width: sizePlan.defaultWidth,
     quality,
+    format: optimizerFormat,
   })
-  const resolvedSizes = resolveDefaultSizes(sizes, shouldUseSrcSet)
+  const resolvedSizes = resolveDefaultSizes(sizes, shouldUseSrcSet, fill)
   const srcSet =
     !unoptimized && shouldUseSrcSet
-      ? buildOptimizedSrcSet(loader, finalSrc, sizePlan.widths, quality)
+      ? buildOptimizedSrcSet(loader, finalSrc, sizePlan.widths, quality, optimizerFormat)
       : undefined
+
+  preloadImageResource({
+    enabled: preload,
+    finalSrc,
+    defaultWidth: sizePlan.defaultWidth,
+    widths: sizePlan.widths,
+    quality,
+    sizes: resolvedSizes,
+    loader,
+    unoptimized,
+    fill,
+    shouldUseSrcSet,
+    format: optimizerFormat,
+  })
 
   const imgElement = (
     <img
