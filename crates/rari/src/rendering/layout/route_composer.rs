@@ -761,4 +761,64 @@ mod tests {
             .expect("full layout stamp compose should execute");
         assert_eq!(result, serde_json::Value::Bool(true));
     }
+
+    #[tokio::test]
+    async fn test_create_page_element_applies_page_key() {
+        use std::sync::Arc;
+
+        use crate::runtime::JsExecutionRuntime;
+
+        let runtime = Arc::new(JsExecutionRuntime::new(None));
+        runtime
+            .execute_script("route_composer.ts".to_string(), ROUTE_COMPOSER_SCRIPT.to_string())
+            .await
+            .expect("route composer should load");
+
+        let script = r"
+            globalThis.React = {
+              createElement(type, props, ...children) {
+                return { type, props, children };
+              },
+              Suspense: function Suspense() { return null; },
+            };
+            function Page() { return null; }
+            function Loading() { return null; }
+            globalThis['page:test'] = Page;
+            globalThis['loading:test'] = Loading;
+
+            const plain = globalThis['~rari'].createPageElement({
+              pageComponentId: 'page:test',
+              pageProps: { id: 1 },
+              pageKey: '/about:7',
+            });
+            if (plain.type !== Page || plain.props.key !== '/about:7' || plain.props.id !== 1) {
+              throw new Error('page element missing pageKey');
+            }
+
+            const suspended = globalThis['~rari'].createPageElement({
+              pageComponentId: 'page:test',
+              pageProps: { id: 2 },
+              pageKey: '/about:8',
+              loadingComponentId: 'loading:test',
+              useSuspense: true,
+            });
+            if (suspended.type !== globalThis.React.Suspense) {
+              throw new Error('expected Suspense boundary');
+            }
+            if (suspended.props.key != null) {
+              throw new Error('Suspense must not be keyed (keeps old content during loading)');
+            }
+            const pageChild = suspended.children?.[0] ?? suspended.props?.children;
+            if (pageChild?.type !== Page || pageChild?.props?.key !== '/about:8') {
+              throw new Error('page inside Suspense missing pageKey');
+            }
+            true
+            ";
+
+        let result = runtime
+            .execute_script("create_page_element_page_key".to_string(), script.to_string())
+            .await
+            .expect("createPageElement pageKey script should execute");
+        assert_eq!(result, serde_json::Value::Bool(true));
+    }
 }

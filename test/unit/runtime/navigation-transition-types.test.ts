@@ -85,7 +85,7 @@ describe('commitNavigationPayload', () => {
     ])
   })
 
-  it('paints suspending routes sync then finishes in a typed transition', () => {
+  it('keeps prior UI via typed startTransition when suspending without loading.tsx', () => {
     const order: string[] = []
     const pushState = vi.fn(() => {
       order.push('pushState')
@@ -101,8 +101,9 @@ describe('commitNavigationPayload', () => {
       navigationId: 4,
       transitionTypes: ['nav', 'nav-forward'],
       maySuspend: true,
-      pendingHistory: { url: '/server-data', state: {} },
-      routeLocation: { pathname: '/server-data', search: '' },
+      hasLoadingFallback: false,
+      pendingHistory: { url: '/react-19', state: {} },
+      routeLocation: { pathname: '/react-19', search: '' },
       startTransition: scope => {
         order.push('transition-start')
         void scope()
@@ -133,6 +134,58 @@ describe('commitNavigationPayload', () => {
       'setRscPayload',
       'clearHmrError',
       'transition-end',
+    ])
+  })
+
+  it('commits urgently when suspending with loading.tsx so the fallback can paint', () => {
+    const order: string[] = []
+    const pushState = vi.fn(() => {
+      order.push('pushState')
+    })
+    const startTransition = vi.fn((scope: () => void) => {
+      order.push('transition-start')
+      scope()
+      order.push('transition-end')
+    })
+    vi.stubGlobal('window', {
+      history: { pushState, replaceState: vi.fn() },
+      dispatchEvent: vi.fn(),
+    })
+
+    commitNavigationPayload({
+      parsedPayload: { element: 'next' },
+      shouldScrollToTop: false,
+      navigationId: 5,
+      transitionTypes: ['nav', 'nav-forward'],
+      maySuspend: true,
+      hasLoadingFallback: true,
+      pendingHistory: { url: '/server-data', state: {} },
+      routeLocation: { pathname: '/server-data', search: '' },
+      startTransition,
+      currentNavigationIdRef: { current: 5 },
+      pendingScrollPayloadRef: { current: null },
+      setRenderKey: () => {
+        order.push('setRenderKey')
+      },
+      setRscPayload: () => {
+        order.push('setRscPayload')
+      },
+      setRouteLocation: () => {
+        order.push('setRouteLocation')
+      },
+      clearHmrError: () => {
+        order.push('clearHmrError')
+      },
+      pendingNavigateCommittedIdRef: { current: null },
+    })
+
+    expect(startTransition).not.toHaveBeenCalled()
+    expect(order).toEqual([
+      'pushState',
+      'setRouteLocation',
+      'setRenderKey',
+      'setRscPayload',
+      'clearHmrError',
     ])
   })
 

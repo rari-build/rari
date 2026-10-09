@@ -22,6 +22,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly navigationId: number
   readonly transitionTypes?: readonly string[]
   readonly maySuspend?: boolean
+  readonly hasLoadingFallback?: boolean
   readonly pendingHistory?: PendingHistoryUpdate
   readonly routeLocation?: RouteLocation
   readonly startTransition?: (scope: TransitionFunction) => void
@@ -81,6 +82,7 @@ export function commitNavigationPayload<T extends object>(
     navigationId,
     transitionTypes,
     maySuspend = false,
+    hasLoadingFallback = false,
     pendingHistory,
     routeLocation,
     startTransition: startNavTransition = defaultStartTransition,
@@ -96,16 +98,12 @@ export function commitNavigationPayload<T extends object>(
 
   if (currentNavigationIdRef.current !== navigationId) return
 
+  const showLoadingFallback = maySuspend && hasLoadingFallback
+
   if (maySuspend) applyPendingHistory(pendingHistory)
 
-  startNavTransition(() => {
+  const commit = (): void => {
     if (currentNavigationIdRef.current !== navigationId) return
-
-    if (transitionTypes != null) {
-      for (const type of transitionTypes) {
-        addTransitionType(type)
-      }
-    }
 
     if (!maySuspend) applyPendingHistory(pendingHistory)
     if (routeLocation != null) setRouteLocation?.(routeLocation)
@@ -123,5 +121,19 @@ export function commitNavigationPayload<T extends object>(
     setRscPayload(parsedPayload)
     clearHmrError()
     pendingNavigateCommittedIdRef.current = navigationId
+  }
+
+  if (showLoadingFallback) {
+    commit()
+    return
+  }
+
+  startNavTransition(() => {
+    if (transitionTypes != null) {
+      for (const type of transitionTypes) {
+        addTransitionType(type)
+      }
+    }
+    commit()
   })
 }

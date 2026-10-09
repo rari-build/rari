@@ -7,19 +7,12 @@ const navEnterExit = {
   'nav-forward': 'rari-page-vt',
   'nav-traverse': 'rari-page-vt',
   'nav-replace': 'rari-page-vt',
-  'default': 'rari-page-vt',
+  'default': 'none',
 } as const
 
 export function PageTransition({ children }: { readonly children: ReactNode }): ReactNode {
   return (
-    <ViewTransition
-      name="rari-page"
-      default="rari-page-vt"
-      enter={navEnterExit}
-      exit={navEnterExit}
-      share={navEnterExit}
-      update={navEnterExit}
-    >
+    <ViewTransition enter={navEnterExit} exit={navEnterExit} default="none">
       <ViewTransition enter="rari-reveal-enter" default="none">
         <div className="rari-page-shell">{children}</div>
       </ViewTransition>

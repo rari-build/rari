@@ -25,7 +25,7 @@ interface TopNavItem {
 }
 
 interface SidebarProps {
-  readonly version: string
+  readonly version: ReactNode
 }
 
 const navigation: readonly TopNavItem[] = [
@@ -283,15 +283,15 @@ export default function Sidebar({ version }: SidebarProps) {
       <label
         htmlFor="mobile-menu-toggle"
         className="peer-checked:fixed peer-checked:inset-0 peer-checked:bg-overlay peer-checked:z-20 hidden peer-checked:block lg:hidden"
-        aria-label="Close navigation menu"
-      />
+      >
+        <span className="sr-only">Close navigation menu</span>
+      </label>
 
       <label
         htmlFor="mobile-menu-toggle"
         className="fixed top-4 left-4 z-50 lg:hidden bg-surface border border-edge rounded-md p-2 text-fg-muted hover:text-fg hover:bg-hover transition-colors duration-200 cursor-pointer peer-checked:hidden"
-        aria-label="Open navigation menu"
       >
-        <Menu className="w-6 h-6" />
+        <Menu className="w-6 h-6" aria-hidden="true" />
         <span className="sr-only">Open navigation menu</span>
       </label>
 
@@ -299,9 +299,8 @@ export default function Sidebar({ version }: SidebarProps) {
         <label
           htmlFor="mobile-menu-toggle"
           className="absolute top-4 right-4 lg:hidden bg-surface border border-edge rounded-md p-2 text-fg-muted hover:text-fg hover:bg-hover transition-colors duration-200 cursor-pointer z-10"
-          aria-label="Close navigation menu"
         >
-          <Close className="w-6 h-6" />
+          <Close className="w-6 h-6" aria-hidden="true" />
           <span className="sr-only">Close navigation menu</span>
         </label>
 
@@ -312,7 +311,7 @@ export default function Sidebar({ version }: SidebarProps) {
               <Rari className="w-14 h-8 text-fg" aria-hidden="true" />
             </a>
             <div className="px-2 py-1 bg-muted border border-accent/40 rounded-md text-xs text-fg font-mono font-medium w-fit">
-              v{version}
+              {version}
             </div>
           </div>
 

@@ -38,7 +38,7 @@ import { FlightDocument } from './layout-router'
 import { isLayoutReuseMarker } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
 import { resolvePendingScrollToTop } from './pending-scroll'
-import { flightTreeMaySuspend, isDocumentRoot } from './react-helpers'
+import { flightTreeMaySuspend, isDocumentRoot, leafHasLoadingFallback } from './react-helpers'
 import { resolvePreviousDocument } from './resolve-previous-document'
 import { containsLayoutSlot, currentRouteLocation, flightRouteCache } from './route-cache'
 
@@ -69,6 +69,7 @@ interface RscPayload {
   readonly element: FlightContent
   readonly flightProtocol?: string
   readonly maySuspend?: boolean
+  readonly hasLoadingFallback?: boolean
   readonly pendingEvictLeaf?: PendingLeafEviction
 }
 
@@ -254,6 +255,7 @@ async function mergeNavigatedFlightPayload(
         ...parsedPayload,
         element: resolvedElement,
         maySuspend: flightTreeMaySuspend(resolvedElement),
+        hasLoadingFallback: leafHasLoadingFallback(resolvedElement),
       },
     }
   }
@@ -274,6 +276,7 @@ async function mergeNavigatedFlightPayload(
       ...parsedPayload,
       element: patched.element,
       maySuspend: patched.maySuspend,
+      hasLoadingFallback: patched.hasLoadingFallback === true,
       pendingEvictLeaf: patched.pendingEvictLeaf,
     },
   }
@@ -358,6 +361,10 @@ export function AppRouterProvider({
       if (containsLayoutSlot(element)) return
 
       const { pathname, search } = routeLocation
+
+      if (flightRouteCache.getShell() != null && flightRouteCache.hasRoute(pathname, search)) {
+        return
+      }
       flightRouteCache.set(pathname, search, element)
     },
     [routeLocation],
@@ -739,6 +746,7 @@ export function AppRouterProvider({
           replace: detail.options.replace,
         }),
         maySuspend: resolvedPayload.maySuspend === true,
+        hasLoadingFallback: resolvedPayload.hasLoadingFallback === true,
         pendingHistory: detail.pendingHistory,
         routeLocation: nextLocation,
         pendingEvictLeaf: resolvedPayload.pendingEvictLeaf,
@@ -848,7 +856,16 @@ export function AppRouterProvider({
       if (`${currentPath}${currentSearch}` !== expectedRoute) return false
       if (seqMap.get(expectedRoute) !== seq) return false
 
-      if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
+      const element = parsed?.element
+      if (
+        element != null &&
+        !isFlightThenable(element) &&
+        isValidElement(element) &&
+        (element.type === 'html' || element.type === 'HTML') &&
+        !containsLayoutSlot(element)
+      ) {
+        flightRouteCache.set(pathname, search, element)
+      }
       return true
     }
 

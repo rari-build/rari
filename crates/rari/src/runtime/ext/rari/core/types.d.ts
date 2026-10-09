@@ -282,6 +282,7 @@ declare global {
         options: Readonly<{
           readonly pageComponentId: string
           readonly pageProps?: unknown
+          readonly pageKey?: string
           readonly loadingComponentId?: string | null
           readonly useSuspense?: boolean
           readonly routeFilePath?: string

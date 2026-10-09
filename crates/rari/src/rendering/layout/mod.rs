@@ -138,6 +138,7 @@ mod tests {
         assert!(script.contains("createPageElement"));
         assert!(script.contains("useSuspense: true"));
         assert!(script.contains("loadingComponentId:"));
+        assert!(script.contains("pageKey: \"/test\""));
         assert!(!script.contains("AsyncFunction"));
         assert!(
             !script.contains("React.ViewTransition"),
@@ -451,5 +452,47 @@ mod tests {
         assert!(script_rsc.contains("createPageElement"));
         assert!(script_ssr.contains("pageComponentId:"));
         assert!(script_rsc.contains("pageComponentId:"));
+        assert!(script_ssr.contains("pageKey:"));
+        assert!(script_rsc.contains("pageKey:"));
+    }
+
+    #[test]
+    fn test_compose_route_script_keys_page_with_navigation_id() {
+        let route_match = AppRouteMatch {
+            route: AppRouteEntry {
+                path: "/about".to_string(),
+                file_path: "app/about/page.tsx".to_string(),
+                component_id: None,
+                css: vec![],
+                segments: vec![],
+                params: vec![],
+                is_dynamic: false,
+                static_params: None,
+            },
+            params: FxHashMap::default(),
+            layouts: vec![],
+            loading: None,
+            error: None,
+            not_found: None,
+            templates: vec![],
+            pathname: "/about".to_string(),
+        };
+
+        let context = LayoutRenderContext {
+            params: FxHashMap::default(),
+            search_params: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            pathname: "/about".to_string(),
+            template_navigation_id: Some(7),
+            metadata: None,
+            reuse_layout_paths: Vec::new(),
+        };
+
+        let script =
+            LayoutRenderer::compose_route_script(&route_match, &context, None, true, false)
+                .unwrap();
+
+        assert!(script.contains("pageKey: \"/about:7\""));
+        assert!(script.contains("templateKey: \"/about:7\""));
     }
 }
