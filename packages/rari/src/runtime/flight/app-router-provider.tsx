@@ -856,7 +856,16 @@ export function AppRouterProvider({
       if (`${currentPath}${currentSearch}` !== expectedRoute) return false
       if (seqMap.get(expectedRoute) !== seq) return false
 
-      if (parsed?.element != null) rememberRouteCacheRef.current(parsed.element)
+      const element = parsed?.element
+      if (
+        element != null &&
+        !isFlightThenable(element) &&
+        isValidElement(element) &&
+        (element.type === 'html' || element.type === 'HTML') &&
+        !containsLayoutSlot(element)
+      ) {
+        flightRouteCache.set(pathname, search, element)
+      }
       return true
     }
 

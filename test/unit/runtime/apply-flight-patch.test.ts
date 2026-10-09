@@ -54,6 +54,7 @@ describe('applySoftNavFlightPatch', () => {
       kind: 'merged',
       element: previous,
       maySuspend: false,
+      hasLoadingFallback: false,
       pendingEvictLeaf: { pathname: '/home', search: '' },
     })
   })
