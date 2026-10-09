@@ -9,9 +9,8 @@ import { Providers } from '@/providers'
 import { ThemeInitScript } from '@/providers/ThemeInitScript'
 import './globals.css'
 
-async function SidebarWithVersion() {
-  const version = await getLatestRariVersion()
-  return <Sidebar version={version} />
+async function SidebarVersion() {
+  return <>v{await getLatestRariVersion()}</>
 }
 
 export default function Layout({ children, pathname }: LayoutProps) {
@@ -29,9 +28,13 @@ export default function Layout({ children, pathname }: LayoutProps) {
             }
           >
             <div className="flex min-h-screen">
-              <Suspense fallback={<Sidebar version="" />}>
-                <SidebarWithVersion />
-              </Suspense>
+              <Sidebar
+                version={
+                  <Suspense fallback={null}>
+                    <SidebarVersion />
+                  </Suspense>
+                }
+              />
               <div className="flex-1 flex flex-col min-h-screen min-w-0 gap-0.5 md:pl-0.5 md:pr-0.5">
                 <main className="flex-1 min-w-0 bg-canvas rounded-b-md overflow-hidden">
                   {children}
