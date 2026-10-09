@@ -334,7 +334,7 @@ impl RscHtmlRenderer {
                 } else {
                     format!("http://{host}:{vite_port}/{href}")
                 };
-                let _ = write!(head, r#"<link rel="stylesheet" href="{url}" />"#);
+                let _ = write!(head, r#"<link rel="stylesheet" href="{url}">"#);
                 head.push('\n');
             }
         }
@@ -819,10 +819,10 @@ mod tests {
             Some("/src/app/globals.css,/src/app/blog/theme.css"),
         );
         assert!(template.contains(
-            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/globals.css" />"#
+            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/globals.css">"#
         ));
         assert!(template.contains(
-            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/blog/theme.css" />"#
+            r#"<link rel="stylesheet" href="http://localhost:5173/src/app/blog/theme.css">"#
         ));
         assert!(
             template.find("rel=\"stylesheet\"").expect("css")

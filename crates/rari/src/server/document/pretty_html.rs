@@ -11,6 +11,66 @@ const VOID_ELEMENTS: &[&str] = &[
 
 const RAW_TEXT_ELEMENTS: &[&str] = &["script", "style", "pre", "textarea"];
 
+pub fn strip_html5_void_solidus(html: &str) -> String {
+    if html.is_empty() || !html.as_bytes().contains(&b'<') {
+        return html.to_string();
+    }
+
+    let bytes = html.as_bytes();
+    let mut out = String::with_capacity(html.len());
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if bytes[i] != b'<' {
+            let next = html[i..].find('<').map_or(html.len(), |n| i + n);
+            out.push_str(&html[i..next]);
+            i = next;
+            continue;
+        }
+
+        let Some(tag_end) = find_tag_end(bytes, i) else {
+            out.push_str(&html[i..]);
+            break;
+        };
+        let tag = &html[i..=tag_end];
+        let tag_name = parse_tag_name(tag);
+
+        if tag.starts_with("<!--") || tag.starts_with("<!") || tag.starts_with("</") {
+            out.push_str(tag);
+            i = tag_end + 1;
+            continue;
+        }
+
+        if is_raw_text_element(tag_name) {
+            out.push_str(tag);
+            i = tag_end + 1;
+            if let Some(close_abs) = find_closing_tag(html, i, tag_name) {
+                out.push_str(&html[i..close_abs]);
+                if let Some(close_end) = find_tag_end(bytes, close_abs) {
+                    out.push_str(&html[close_abs..=close_end]);
+                    i = close_end + 1;
+                } else {
+                    i = close_abs;
+                }
+            }
+            continue;
+        }
+
+        if is_void_element(tag_name)
+            && tag.as_bytes().get(tag.len().saturating_sub(2)) == Some(&b'/')
+        {
+            let without_solidus = tag.trim_end_matches('>').trim_end_matches('/').trim_end();
+            out.push_str(without_solidus);
+            out.push('>');
+        } else {
+            out.push_str(tag);
+        }
+        i = tag_end + 1;
+    }
+
+    out
+}
+
 /// Pretty-print HTML with 2-space indentation.
 ///
 /// Returns the input unchanged when it is empty or does not look like HTML.
@@ -231,6 +291,17 @@ mod tests {
         assert!(out.contains("    <link rel=\"stylesheet\" href=\"/a.css\">\n"));
         // head children should be at same indent; body follows head close
         assert!(out.contains("  </head>\n  <body>\n"));
+    }
+
+    #[test]
+    fn strips_void_trailing_solidus() {
+        let input = "<head><meta charSet=\"UTF-8\" data-rari-meta=\"1\"/><link rel=\"icon\" href=\"/f.ico\" /><br/></head><script>const x=\"<meta/>\";</script>";
+        let out = strip_html5_void_solidus(input);
+        assert!(out.contains("<meta charSet=\"UTF-8\" data-rari-meta=\"1\">"));
+        assert!(out.contains("<link rel=\"icon\" href=\"/f.ico\">"));
+        assert!(out.contains("<br>"));
+        assert!(!out.contains("<meta charSet=\"UTF-8\" data-rari-meta=\"1\"/>"));
+        assert!(out.contains("const x=\"<meta/>\";"));
     }
 
     #[test]
