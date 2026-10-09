@@ -57,7 +57,13 @@ interface BundleEntry {
 }
 
 /** Client-only react-dom exports stubbed for SSR module evaluation. */
-const REACT_DOM_CLIENT_STUBS = ['createPortal'] as const
+const REACT_DOM_CLIENT_STUBS = [
+  'createPortal',
+  'preload',
+  'preloadModule',
+  'preinit',
+  'preinitModule',
+] as const
 
 function createReactDomShimSource(): string {
   const stubExports = REACT_DOM_CLIENT_STUBS.map(

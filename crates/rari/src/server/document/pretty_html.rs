@@ -11,14 +11,52 @@ const VOID_ELEMENTS: &[&str] = &[
 
 const RAW_TEXT_ELEMENTS: &[&str] = &["script", "style", "pre", "textarea"];
 
+#[derive(Debug, Default, Clone)]
+pub struct VoidSolidusStripState {
+    raw_text_tag: Option<String>,
+}
+
 pub fn strip_html5_void_solidus(html: &str) -> String {
-    if html.is_empty() || !html.as_bytes().contains(&b'<') {
-        return html.to_string();
+    let mut state = VoidSolidusStripState::default();
+    strip_html5_void_solidus_with_state(html, &mut state)
+}
+
+pub fn strip_html5_void_solidus_with_state(
+    html: &str,
+    state: &mut VoidSolidusStripState,
+) -> String {
+    if html.is_empty() {
+        return String::new();
     }
 
     let bytes = html.as_bytes();
     let mut out = String::with_capacity(html.len());
     let mut i = 0;
+
+    if let Some(tag_name) = state.raw_text_tag.clone() {
+        match find_closing_tag(html, 0, &tag_name) {
+            Some(close_abs) => {
+                out.push_str(&html[..close_abs]);
+                if let Some(close_end) = find_tag_end(bytes, close_abs) {
+                    out.push_str(&html[close_abs..=close_end]);
+                    i = close_end + 1;
+                } else {
+                    out.push_str(&html[close_abs..]);
+                    return out;
+                }
+                state.raw_text_tag = None;
+            }
+            None => {
+                out.push_str(html);
+                return out;
+            }
+        }
+    }
+
+    if !bytes[i..].contains(&b'<') {
+        out.push_str(&html[i..]);
+        return out;
+    }
 
     while i < bytes.len() {
         if bytes[i] != b'<' {
@@ -50,8 +88,14 @@ pub fn strip_html5_void_solidus(html: &str) -> String {
                     out.push_str(&html[close_abs..=close_end]);
                     i = close_end + 1;
                 } else {
-                    i = close_abs;
+                    out.push_str(&html[close_abs..]);
+                    state.raw_text_tag = Some(tag_name.to_ascii_lowercase());
+                    break;
                 }
+            } else {
+                out.push_str(&html[i..]);
+                state.raw_text_tag = Some(tag_name.to_ascii_lowercase());
+                break;
             }
             continue;
         }
@@ -302,6 +346,23 @@ mod tests {
         assert!(out.contains("<br>"));
         assert!(!out.contains("<meta charSet=\"UTF-8\" data-rari-meta=\"1\"/>"));
         assert!(out.contains("const x=\"<meta/>\";"));
+    }
+
+    #[test]
+    fn does_not_rewrite_unclosed_raw_text() {
+        let input = "<script>const x=\"<meta/>\";";
+        let out = strip_html5_void_solidus(input);
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn preserves_raw_text_across_streamed_chunks() {
+        let mut state = VoidSolidusStripState::default();
+        let part1 = strip_html5_void_solidus_with_state("<script>const x=\"", &mut state);
+        let part2 = strip_html5_void_solidus_with_state("<meta/>\";</script><br/>", &mut state);
+        assert_eq!(part1, "<script>const x=\"");
+        assert_eq!(part2, "<meta/>\";</script><br>");
+        assert!(state.raw_text_tag.is_none());
     }
 
     #[test]

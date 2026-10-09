@@ -30,7 +30,10 @@ use crate::{
         compression::{CompressionEncoding, compress_stream},
         config::Config,
         document::{
-            pretty_html::{pretty_print_html, strip_html5_void_solidus},
+            pretty_html::{
+                VoidSolidusStripState, pretty_print_html, strip_html5_void_solidus,
+                strip_html5_void_solidus_with_state,
+            },
             utils::inject_assets_into_html,
         },
         error_response,
@@ -461,8 +464,9 @@ fn render_chunked_response(
 
                 let t0 = Instant::now();
                 let mut finished = false;
+                let mut void_solidus_state = VoidSolidusStripState::default();
 
-                yield Ok::<_, Error>(normalize_html_chunk(shell));
+                yield Ok::<_, Error>(normalize_html_chunk(shell, &mut void_solidus_state));
 
                 while !finished {
                     match time::timeout(stall_timeout, chunks.recv()).await {
@@ -534,7 +538,10 @@ fn render_chunked_response(
                                 }
                             }
 
-                            yield Ok(normalize_html_chunk(Bytes::from(buf)));
+                            yield Ok(normalize_html_chunk(
+                                Bytes::from(buf),
+                                &mut void_solidus_state,
+                            ));
 
                             if let Some(e) = stream_error {
                                 tracing::error!("Error in chunked HTML stream: {}", e);
@@ -563,7 +570,7 @@ fn render_chunked_response(
                 }
 
                 if !closing.is_empty() {
-                    yield Ok(normalize_html_chunk(closing));
+                    yield Ok(normalize_html_chunk(closing, &mut void_solidus_state));
                 }
             }
             ChunkedContentType::RscFlight => {
@@ -956,9 +963,9 @@ fn emergency_fallback_shell(client_head: &str) -> String {
     )
 }
 
-fn normalize_html_chunk(bytes: Bytes) -> Bytes {
+fn normalize_html_chunk(bytes: Bytes, state: &mut VoidSolidusStripState) -> Bytes {
     match str::from_utf8(&bytes) {
-        Ok(html) => Bytes::from(strip_html5_void_solidus(html)),
+        Ok(html) => Bytes::from(strip_html5_void_solidus_with_state(html, state)),
         Err(_) => bytes,
     }
 }
