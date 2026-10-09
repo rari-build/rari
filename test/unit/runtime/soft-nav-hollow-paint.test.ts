@@ -370,7 +370,7 @@ describe('soft-nav hollow-shell paint', () => {
     expect(flightTreeMaySuspend(leaf)).toBe(false)
   })
 
-  it('does not mark maySuspend for pending client wrappers with ready children', async () => {
+  it('marks maySuspend for pending client wrappers with ready children', async () => {
     const { Suspense } = await import('react')
     const { flightTreeMaySuspend } = await import('@rari/runtime/flight/react-helpers')
     const clientLazy = {
@@ -390,7 +390,7 @@ describe('soft-nav hollow-shell paint', () => {
           ),
         ),
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('does not mark maySuspend for fulfilled lazy holes', async () => {
