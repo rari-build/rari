@@ -1,10 +1,19 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { addTransitionType } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { getNavigationTransitionSnapshot } from '../../../packages/rari/src/router/navigation/navigation-transition-store'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
 } from '../../../packages/rari/src/runtime/flight/commit-navigation-payload'
+
+vi.mock('react', async importOriginal => {
+  const actual = await importOriginal<typeof import('react')>()
+  return {
+    ...actual,
+    addTransitionType: vi.fn(),
+  }
+})
 
 interface Payload {
   readonly element: string
@@ -30,6 +39,7 @@ describe('resolveNavigationTransitionTypes', () => {
 
 describe('commitNavigationPayload', () => {
   afterEach(() => {
+    vi.mocked(addTransitionType).mockClear()
     vi.restoreAllMocks()
   })
 
@@ -187,6 +197,10 @@ describe('commitNavigationPayload', () => {
     })
 
     expect(startTransition).toHaveBeenCalledOnce()
+    expect(vi.mocked(addTransitionType).mock.calls.map(call => call[0])).toEqual([
+      'nav',
+      'nav-forward',
+    ])
     expect(order).toEqual([
       'pushState',
       'setRouteLocation',

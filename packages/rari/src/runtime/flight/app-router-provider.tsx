@@ -74,7 +74,7 @@ interface RscPayload {
   readonly maySuspend?: boolean
   readonly hasLoadingFallback?: boolean
   readonly pendingEvictLeaf?: PendingLeafEviction
-  readonly bodyComplete?: Promise<void>
+  readonly bodyComplete?: Promise<boolean>
 }
 
 const LOADING_SETTLE_MS = 100
@@ -96,10 +96,7 @@ async function refineMaySuspendAfterSettle(
   }
 
   const winner = await Promise.race([
-    payload.bodyComplete.then(
-      () => 'body' as const,
-      () => 'body' as const,
-    ),
+    payload.bodyComplete.then(ok => (ok ? ('body' as const) : ('failed' as const))),
     sleep(LOADING_SETTLE_MS).then(() => 'timeout' as const),
   ])
 
@@ -546,11 +543,9 @@ export function AppRouterProvider({
       .then(async flightProtocol => {
         await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
         if (flightProtocol !== '') lastSuccessfulPayloadRef.current = flightProtocol
+        return true
       })
-      .then(
-        () => undefined,
-        () => undefined,
-      )
+      .catch(() => false)
 
     return {
       element,
