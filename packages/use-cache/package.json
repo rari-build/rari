@@ -1,7 +1,7 @@
 {
   "name": "@rari/use-cache",
   "type": "module",
-  "version": "0.17.3",
+  "version": "0.17.4",
   "description": "Native 'use cache' directive transform addon for rari",
   "author": "Ryan Skinner",
   "license": "MIT",
