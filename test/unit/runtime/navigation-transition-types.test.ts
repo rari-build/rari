@@ -137,7 +137,7 @@ describe('commitNavigationPayload', () => {
     ])
   })
 
-  it('commits urgently when suspending with loading.tsx so the fallback can paint', () => {
+  it('paints loading.tsx urgently then commits the leaf inside a typed transition', () => {
     const order: string[] = []
     const pushState = vi.fn(() => {
       order.push('pushState')
@@ -173,19 +173,31 @@ describe('commitNavigationPayload', () => {
       setRouteLocation: () => {
         order.push('setRouteLocation')
       },
+      setPendingLoadingLeaf: value => {
+        order.push(
+          value == null || typeof value === 'function'
+            ? 'pendingLoading:clear'
+            : 'pendingLoading:set',
+        )
+      },
       clearHmrError: () => {
         order.push('clearHmrError')
       },
       pendingNavigateCommittedIdRef: { current: null },
     })
 
-    expect(startTransition).not.toHaveBeenCalled()
+    expect(startTransition).toHaveBeenCalledOnce()
     expect(order).toEqual([
       'pushState',
+      'setRouteLocation',
+      'pendingLoading:set',
+      'transition-start',
+      'pendingLoading:clear',
       'setRouteLocation',
       'setRenderKey',
       'setRscPayload',
       'clearHmrError',
+      'transition-end',
     ])
   })
 

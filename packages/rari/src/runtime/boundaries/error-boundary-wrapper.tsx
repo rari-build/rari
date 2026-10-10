@@ -3,7 +3,7 @@
 import type { ComponentType, ErrorInfo, ReactNode } from 'react'
 import { Component } from 'react'
 import { clearTimer } from '../../shared/utils/timer'
-import { isComponentType, isRecord } from '../../shared/utils/type-guards'
+import { isAbortError, isComponentType, isRecord } from '../../shared/utils/type-guards'
 import { getClientComponents } from '../shared/rari-global'
 
 interface ErrorBoundaryWrapperProps {
@@ -43,6 +43,7 @@ export class ErrorBoundaryWrapper extends Component<
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryWrapperState> {
+    if (isAbortError(error)) return { hasError: false, error: null }
     return { hasError: true, error }
   }
 
@@ -56,6 +57,8 @@ export class ErrorBoundaryWrapper extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    if (isAbortError(error)) return
+
     console.error('[rari] Error boundary caught error:', error, errorInfo)
 
     const errorComponentId = this.props.errorComponentId

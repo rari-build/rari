@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingLeafEviction } from './apply-flight-patch'
+import type { PendingLoadingLeaf } from './pending-loading'
 import type { PendingScrollToTop } from './pending-scroll'
 import type { FlightContent } from './react-helpers'
 import {
@@ -20,6 +21,7 @@ import { captureIndexedFormData, restoreIndexedFormData } from '@/shared/form-st
 import {
   errorMessage,
   getCustomEventDetail,
+  isAbortError,
   isError,
   isFlightThenable,
   isRecord,
@@ -37,6 +39,7 @@ import {
 import { FlightDocument } from './layout-router'
 import { isLayoutReuseMarker } from './merge-refresh'
 import { normalizeFlightContent } from './normalize-flight-content'
+import { PendingLoadingLeafContext } from './pending-loading'
 import { resolvePendingScrollToTop } from './pending-scroll'
 import { flightTreeMaySuspend, isDocumentRoot, leafHasLoadingFallback } from './react-helpers'
 import { resolvePreviousDocument } from './resolve-previous-document'
@@ -49,7 +52,7 @@ const HMR_REFETCH_RETRY_MS = 150
 
 function isTransientHmrFetchError(error: unknown): boolean {
   if (!isError(error)) return false
-  if (error.name === 'AbortError') return false
+  if (isAbortError(error)) return false
   const message = error.message
   return (
     message === 'Failed to fetch' ||
@@ -71,6 +74,44 @@ interface RscPayload {
   readonly maySuspend?: boolean
   readonly hasLoadingFallback?: boolean
   readonly pendingEvictLeaf?: PendingLeafEviction
+  readonly bodyComplete?: Promise<void>
+}
+
+const LOADING_SETTLE_MS = 100
+
+async function refineMaySuspendAfterSettle(
+  payload: RscPayload,
+  pathname: string,
+  search: string,
+): Promise<RscPayload> {
+  if (payload.maySuspend !== true || payload.hasLoadingFallback !== true) return payload
+
+  if (payload.bodyComplete == null) {
+    await Promise.resolve()
+    const leaf = flightRouteCache.readLeaf(pathname, search)
+    if (leaf != null && !flightTreeMaySuspend(leaf)) {
+      return { ...payload, maySuspend: false }
+    }
+    return payload
+  }
+
+  const winner = await Promise.race([
+    payload.bodyComplete.then(
+      () => 'body' as const,
+      () => 'body' as const,
+    ),
+    sleep(LOADING_SETTLE_MS).then(() => 'timeout' as const),
+  ])
+
+  if (winner === 'body') {
+    return { ...payload, maySuspend: false }
+  }
+
+  const leaf = flightRouteCache.readLeaf(pathname, search)
+  if (leaf != null && !flightTreeMaySuspend(leaf)) {
+    return { ...payload, maySuspend: false }
+  }
+  return payload
 }
 
 interface NavigationOptions {
@@ -249,15 +290,17 @@ async function mergeNavigatedFlightPayload(
       }
     }
     flightRouteCache.set(toPathname, search, resolvedElement)
-    return {
-      kind: 'payload',
-      payload: {
+    const fullDocumentPayload = await refineMaySuspendAfterSettle(
+      {
         ...parsedPayload,
         element: resolvedElement,
         maySuspend: flightTreeMaySuspend(resolvedElement),
         hasLoadingFallback: leafHasLoadingFallback(resolvedElement),
       },
-    }
+      toPathname,
+      search,
+    )
+    return { kind: 'payload', payload: fullDocumentPayload }
   }
 
   const patched = applySoftNavFlightPatch({
@@ -270,16 +313,18 @@ async function mergeNavigatedFlightPayload(
   })
   if (patched.kind === 'hard-nav') return { kind: 'hard-nav' }
 
-  return {
-    kind: 'payload',
-    payload: {
+  const softNavPayload = await refineMaySuspendAfterSettle(
+    {
       ...parsedPayload,
       element: patched.element,
       maySuspend: patched.maySuspend,
       hasLoadingFallback: patched.hasLoadingFallback === true,
       pendingEvictLeaf: patched.pendingEvictLeaf,
     },
-  }
+    toPathname,
+    search,
+  )
+  return { kind: 'payload', payload: softNavPayload }
 }
 
 async function unwrapFlightContent(content: FlightContent): Promise<ReactNode> {
@@ -303,6 +348,7 @@ export function AppRouterProvider({
   const rscPayloadRef = useRef(initialPayload)
   const [renderKey, setRenderKey] = useState(0)
   const [routeLocation, setRouteLocation] = useState(() => currentRouteLocation())
+  const [pendingLoadingLeaf, setPendingLoadingLeaf] = useState<PendingLoadingLeaf | null>(null)
   const routeLocationRef = useRef(routeLocation)
   const scrollPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const pendingScrollPayloadRef = useRef<PendingScrollToTop<RscPayload> | null>(null)
@@ -495,17 +541,21 @@ export function AppRouterProvider({
     const protocolClone = response.clone()
     const element = createFromFetch<ReactNode>(Promise.resolve(response))
 
-    void protocolClone
+    const bodyComplete = protocolClone
       .text()
       .then(async flightProtocol => {
         await preloadModulesFromFlightProtocol(flightProtocol, preloadedModuleIdsRef.current)
         if (flightProtocol !== '') lastSuccessfulPayloadRef.current = flightProtocol
       })
-      .catch(() => {})
+      .then(
+        () => undefined,
+        () => undefined,
+      )
 
     return {
       element,
       flightProtocol: '',
+      bodyComplete,
     }
   }
 
@@ -514,18 +564,15 @@ export function AppRouterProvider({
     requestKey: string,
   ): Promise<RscPayload | Error | 'stale'> => {
     try {
-      const protocolClone = response.clone()
-      const rscFlightProtocol = await protocolClone.text()
+      const rscFlightProtocol = await response.text()
 
       if (isStaleContent(rscFlightProtocol)) {
         pendingFetchesRef.current.delete(requestKey)
         return 'stale'
       }
 
-      await preloadModulesFromFlightProtocol(rscFlightProtocol, preloadedModuleIdsRef.current)
-
-      const element = createFromFetch<ReactNode>(Promise.resolve(response))
-      const resolvedElement = await unwrapFlightContent(element)
+      const parsed = parseRscFlightProtocol(rscFlightProtocol)
+      const resolvedElement = await unwrapFlightContent(parsed.element)
       if (!isDocumentRoot(resolvedElement)) {
         throw new Error(
           '[rari] AppRouter: refetched Flight content did not resolve to an <html> document root',
@@ -536,7 +583,7 @@ export function AppRouterProvider({
         flightProtocol: rscFlightProtocol,
       }
     } catch (parseError) {
-      if (isError(parseError) && parseError.name === 'AbortError') throw parseError
+      if (isAbortError(parseError)) throw parseError
       const error = toError(parseError)
       const wrapped = new Error(`Failed to parse RSC Flight protocol: ${error.message}`, {
         cause: error,
@@ -617,7 +664,7 @@ export function AppRouterProvider({
         pendingFetchesRef.current.delete(requestKey)
         if (
           isError(error) &&
-          error.name !== 'AbortError' &&
+          !isAbortError(error) &&
           !error.message.includes('Failed to fetch RSC data') &&
           !error.message.includes('Failed to parse')
         ) {
@@ -756,6 +803,7 @@ export function AppRouterProvider({
         setRenderKey,
         setRscPayload,
         setRouteLocation,
+        setPendingLoadingLeaf,
         clearHmrError: () => {
           setHmrError(null)
         },
@@ -780,7 +828,7 @@ export function AppRouterProvider({
       try {
         return { kind: 'payload', payload: await loadNavigationPayload(detail) }
       } catch (error) {
-        if (isError(error) && error.name === 'AbortError') return { kind: 'aborted' }
+        if (isAbortError(error)) return { kind: 'aborted' }
         return { kind: 'error', error: toError(error) }
       }
     }
@@ -1031,6 +1079,7 @@ export function AppRouterProvider({
       actionRefreshGenerationRef.current += 1
       pendingScrollPayloadRef.current = null
       pendingFormScrollRestoreRef.current = null
+      setPendingLoadingLeaf(null)
     }
 
     const handleManifestUpdated = async () => {
@@ -1135,7 +1184,7 @@ export function AppRouterProvider({
   const documentFallback = usableFallback
 
   return (
-    <>
+    <PendingLoadingLeafContext value={pendingLoadingLeaf}>
       {hmrError != null && (
         <HmrFailureBanner
           failure={hmrError}
@@ -1153,6 +1202,6 @@ export function AppRouterProvider({
         pathname={routeLocation.pathname}
         search={routeLocation.search}
       />
-    </>
+    </PendingLoadingLeafContext>
   )
 }

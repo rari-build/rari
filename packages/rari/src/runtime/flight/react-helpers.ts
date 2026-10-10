@@ -125,8 +125,21 @@ function isPendingBareLazyHole(value: unknown): boolean {
   return lazyPayloadIsPending(value._payload)
 }
 
+function hasReadyChild(children: ReactNode): boolean {
+  for (const child of childList(children)) {
+    if (child == null || child === false || child === true) continue
+    if (isPendingFlightThenable(child) || isPendingBareLazyHole(child)) continue
+    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') {
+      return true
+    }
+    if (isValidElement(child)) return true
+  }
+  return false
+}
+
 function lazyElementMaySuspend(element: ReactElement): boolean {
   const nested = elementChildren(element)
+  if (hasReadyChild(nested)) return false
   if (suspenseBoundaryMaySuspend(nested)) return true
   return lazyElementPayloadIsPending(element)
 }
