@@ -1,10 +1,19 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { addTransitionType } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { getNavigationTransitionSnapshot } from '../../../packages/rari/src/router/navigation/navigation-transition-store'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
 } from '../../../packages/rari/src/runtime/flight/commit-navigation-payload'
+
+vi.mock('react', async importOriginal => {
+  const actual = await importOriginal<typeof import('react')>()
+  return {
+    ...actual,
+    addTransitionType: vi.fn(),
+  }
+})
 
 interface Payload {
   readonly element: string
@@ -30,6 +39,7 @@ describe('resolveNavigationTransitionTypes', () => {
 
 describe('commitNavigationPayload', () => {
   afterEach(() => {
+    vi.mocked(addTransitionType).mockClear()
     vi.restoreAllMocks()
   })
 
@@ -137,7 +147,7 @@ describe('commitNavigationPayload', () => {
     ])
   })
 
-  it('commits urgently when suspending with loading.tsx so the fallback can paint', () => {
+  it('paints loading.tsx urgently then commits the leaf inside a typed transition', () => {
     const order: string[] = []
     const pushState = vi.fn(() => {
       order.push('pushState')
@@ -173,19 +183,35 @@ describe('commitNavigationPayload', () => {
       setRouteLocation: () => {
         order.push('setRouteLocation')
       },
+      setPendingLoadingLeaf: value => {
+        order.push(
+          value == null || typeof value === 'function'
+            ? 'pendingLoading:clear'
+            : 'pendingLoading:set',
+        )
+      },
       clearHmrError: () => {
         order.push('clearHmrError')
       },
       pendingNavigateCommittedIdRef: { current: null },
     })
 
-    expect(startTransition).not.toHaveBeenCalled()
+    expect(startTransition).toHaveBeenCalledOnce()
+    expect(vi.mocked(addTransitionType).mock.calls.map(call => call[0])).toEqual([
+      'nav',
+      'nav-forward',
+    ])
     expect(order).toEqual([
       'pushState',
+      'setRouteLocation',
+      'pendingLoading:set',
+      'transition-start',
+      'pendingLoading:clear',
       'setRouteLocation',
       'setRenderKey',
       'setRscPayload',
       'clearHmrError',
+      'transition-end',
     ])
   })
 

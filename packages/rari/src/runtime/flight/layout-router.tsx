@@ -1,6 +1,8 @@
 import type { ReactElement, ReactNode } from 'react'
+import type { PendingLoadingLeaf } from './pending-loading'
 import { cloneElement, createElement, isValidElement, Suspense, useSyncExternalStore } from 'react'
 import { isLayoutReuseMarker, layoutPathOf } from './merge-refresh'
+import { isPendingLoadingLeaf, usePendingLoadingLeaf } from './pending-loading'
 import { childList, unwrapLoadingSuspense } from './react-helpers'
 import { containsLayoutSlot, flightRouteCache, isLayoutSlot } from './route-cache'
 
@@ -63,6 +65,7 @@ function fillLayoutSlots(node: ReactNode, pathname: string, search: string): Rea
 export function renderFlightLayoutRouter(
   { layoutPath, pathname, search }: FlightLayoutRouterProps,
   _cacheVersion?: number,
+  pendingLoading: PendingLoadingLeaf | null = null,
 ): ReactNode {
   void _cacheVersion
   const snapshot = flightRouteCache.readSegmentSnapshot(layoutPath, { pathname, search })
@@ -72,6 +75,9 @@ export function renderFlightLayoutRouter(
 
   if (flightRouteCache.isDeepestLayout(layoutPath, pathname)) {
     const { fallback, content } = unwrapLoadingSuspense(snapshot)
+    if (isPendingLoadingLeaf(pathname, search, pendingLoading) && fallback != null) {
+      return fallback
+    }
     return createElement(Suspense, { fallback }, content)
   }
 
@@ -80,7 +86,8 @@ export function renderFlightLayoutRouter(
 
 export function FlightLayoutRouter(props: FlightLayoutRouterProps): ReactNode {
   const cacheVersion = useFlightCacheVersion()
-  return renderFlightLayoutRouter(props, cacheVersion)
+  const pendingLoading = usePendingLoadingLeaf()
+  return renderFlightLayoutRouter(props, cacheVersion, pendingLoading)
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

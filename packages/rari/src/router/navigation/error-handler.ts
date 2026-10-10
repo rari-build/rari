@@ -1,4 +1,4 @@
-import { asError, isError } from '@/shared/utils/type-guards'
+import { asError, isAbortError, isError } from '@/shared/utils/type-guards'
 
 export type NavigationErrorType =
   | 'fetch-error'
@@ -120,7 +120,7 @@ function handleUnknownError(error: unknown, url?: string): NavigationError {
 }
 
 export function createNavigationError(error: unknown, url?: string): NavigationError {
-  if (isError(error) && error.name === 'AbortError') return handleAbortError(error, url)
+  if (isAbortError(error)) return handleAbortError(asError(error) ?? new Error('Aborted'), url)
 
   if (isError(error) && (error.name === 'TimeoutError' || error.message.includes('timeout')))
     return handleTimeoutError(error, url)

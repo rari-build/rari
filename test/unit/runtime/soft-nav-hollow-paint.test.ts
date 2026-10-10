@@ -370,7 +370,7 @@ describe('soft-nav hollow-shell paint', () => {
     expect(flightTreeMaySuspend(leaf)).toBe(false)
   })
 
-  it('marks maySuspend for pending client wrappers with ready children', async () => {
+  it('does not mark maySuspend for pending client wrappers with ready children', async () => {
     const { Suspense } = await import('react')
     const { flightTreeMaySuspend } = await import('@rari/runtime/flight/react-helpers')
     const clientLazy = {
@@ -387,6 +387,69 @@ describe('soft-nav hollow-shell paint', () => {
             { fallback: createElement('div', null, 'loading') },
             // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             createElement(clientLazy as never, null, page('blog')),
+          ),
+        ),
+      ),
+    ).toBe(false)
+  })
+
+  it('does not mark maySuspend for pending client leaves beside ready RSC siblings', async () => {
+    const { Suspense } = await import('react')
+    const { flightTreeMaySuspend } = await import('@rari/runtime/flight/react-helpers')
+    const pageTransition = {
+      $$typeof: Symbol.for('react.lazy'),
+      _payload: Object.assign(Promise.resolve('PageTransition'), { status: 'pending' }),
+      _init: () => 'PageTransition',
+    }
+    const counter = {
+      $$typeof: Symbol.for('react.lazy'),
+      _payload: Object.assign(Promise.resolve('Counter'), { status: 'pending' }),
+      _init: () => 'Counter',
+    }
+    expect(
+      flightTreeMaySuspend(
+        reuse(
+          '/',
+          createElement(
+            Suspense,
+            { fallback: createElement('div', null, 'loading') },
+            createElement(
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              pageTransition as never,
+              null,
+              page('interactive'),
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              createElement(counter as never),
+            ),
+          ),
+        ),
+      ),
+    ).toBe(false)
+  })
+
+  it('marks maySuspend for pending server thenables beside ready RSC siblings', async () => {
+    const { Suspense } = await import('react')
+    const { flightTreeMaySuspend } = await import('@rari/runtime/flight/react-helpers')
+    const pageTransition = {
+      $$typeof: Symbol.for('react.lazy'),
+      _payload: Object.assign(Promise.resolve('PageTransition'), { status: 'pending' }),
+      _init: () => 'PageTransition',
+    }
+    const slow = Object.assign(Promise.resolve(page('slow')), { status: 'pending' })
+    expect(
+      flightTreeMaySuspend(
+        reuse(
+          '/',
+          createElement(
+            Suspense,
+            { fallback: createElement('div', null, 'loading') },
+            createElement(
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              pageTransition as never,
+              null,
+              page('ready'),
+              slow,
+            ),
           ),
         ),
       ),

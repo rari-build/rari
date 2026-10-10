@@ -16,6 +16,10 @@ export function isError(value: unknown): value is Error {
   return typeof Error.isError === 'function' ? Error.isError(value) : value instanceof Error
 }
 
+export function isAbortError(value: unknown): boolean {
+  return isRecord(value) && value.name === 'AbortError'
+}
+
 export function asError(value: unknown): Error | undefined {
   return isError(value) ? value : undefined
 }

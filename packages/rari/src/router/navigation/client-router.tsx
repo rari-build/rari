@@ -6,7 +6,12 @@ import type { NavigationOptions } from './types'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { serializeRouterState } from '@/runtime/flight/route-cache'
 import { normalizePath } from '@/shared/utils/path'
-import { getCustomEventDetail, isError, isHistoryState, isRecord } from '@/shared/utils/type-guards'
+import {
+  getCustomEventDetail,
+  isAbortError,
+  isHistoryState,
+  isRecord,
+} from '@/shared/utils/type-guards'
 import { debounce } from './debounce'
 import { NavigationErrorHandler } from './error-handler'
 import { extractPathname, isExternalUrl } from './match'
@@ -105,6 +110,7 @@ interface PendingNavigation {
   navigationId: number
   promise: Promise<void>
   abortController: AbortController
+  bodyHandedOff: boolean
 }
 
 interface HistoryState {
@@ -174,8 +180,20 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
   }
 
   const cancelAllPendingNavigations = () => {
-    for (const [, pending] of pendingNavigationsRef.current.entries())
-      pending.abortController.abort()
+    for (const [, pending] of pendingNavigationsRef.current.entries()) {
+      if (pending.bodyHandedOff) {
+        window.dispatchEvent(
+          new CustomEvent('rari:navigate-error', {
+            detail: {
+              navigationId: pending.navigationId,
+              error: new DOMException('Aborted', 'AbortError'),
+            },
+          }),
+        )
+      } else {
+        pending.abortController.abort()
+      }
+    }
 
     pendingNavigationsRef.current.clear()
   }
@@ -266,7 +284,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
     fromRoute: string,
     options: { readonly emitEvent?: boolean } = {},
   ) => {
-    if (isError(error) && error.name === 'AbortError') {
+    if (isAbortError(error)) {
       cleanupAbortedNavigation(targetPath, navigationId)
       return
     }
@@ -385,6 +403,10 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
 
         const settlement = waitForNavigationSettlement(navigationId, abortController.signal)
 
+        const pending = pendingNavigationsRef.current.get(targetPath)
+        if (pending != null) pending.bodyHandedOff = true
+        if (abortControllerRef.current === abortController) abortControllerRef.current = null
+
         window.dispatchEvent(
           new CustomEvent('rari:navigate', {
             detail: {
@@ -404,7 +426,14 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
         )
 
         if (navigationIdCounterRef.current !== navigationId) {
-          abortController.abort()
+          window.dispatchEvent(
+            new CustomEvent('rari:navigate-error', {
+              detail: {
+                navigationId,
+                error: new DOMException('Aborted', 'AbortError'),
+              },
+            }),
+          )
           return
         }
 
@@ -432,6 +461,7 @@ export function ClientRouter({ children, initialRoute }: ClientRouterProps): Rea
       navigationId,
       promise: navigationPromise,
       abortController,
+      bodyHandedOff: false,
     })
 
     return navigationPromise

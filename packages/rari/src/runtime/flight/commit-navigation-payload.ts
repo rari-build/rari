@@ -1,6 +1,7 @@
 // oxlint-disable typescript/prefer-readonly-parameter-types
 import type { Dispatch, RefObject, SetStateAction, TransitionFunction } from 'react'
 import type { PendingLeafEviction } from './apply-flight-patch'
+import type { PendingLoadingLeaf } from './pending-loading'
 import type { PendingScrollToTop } from './pending-scroll'
 import { addTransitionType, startTransition as defaultStartTransition } from 'react'
 import { flightRouteCache } from './route-cache'
@@ -31,6 +32,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly setRenderKey: Dispatch<SetStateAction<number>>
   readonly setRscPayload: Dispatch<SetStateAction<T | undefined>>
   readonly setRouteLocation?: Dispatch<SetStateAction<RouteLocation>>
+  readonly setPendingLoadingLeaf?: Dispatch<SetStateAction<PendingLoadingLeaf | null>>
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
   readonly pendingEvictLeaf?: PendingLeafEviction
@@ -91,6 +93,7 @@ export function commitNavigationPayload<T extends object>(
     setRenderKey,
     setRscPayload,
     setRouteLocation,
+    setPendingLoadingLeaf,
     clearHmrError,
     pendingNavigateCommittedIdRef,
     pendingEvictLeaf,
@@ -102,9 +105,15 @@ export function commitNavigationPayload<T extends object>(
 
   if (maySuspend) applyPendingHistory(pendingHistory)
 
+  if (showLoadingFallback && routeLocation != null) {
+    setRouteLocation?.(routeLocation)
+    setPendingLoadingLeaf?.(routeLocation)
+  }
+
   const commit = (): void => {
     if (currentNavigationIdRef.current !== navigationId) return
 
+    setPendingLoadingLeaf?.(null)
     if (!maySuspend) applyPendingHistory(pendingHistory)
     if (routeLocation != null) setRouteLocation?.(routeLocation)
     if (pendingEvictLeaf != null) {
@@ -121,11 +130,6 @@ export function commitNavigationPayload<T extends object>(
     setRscPayload(parsedPayload)
     clearHmrError()
     pendingNavigateCommittedIdRef.current = navigationId
-  }
-
-  if (showLoadingFallback) {
-    commit()
-    return
   }
 
   startNavTransition(() => {
