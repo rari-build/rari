@@ -43,7 +43,6 @@ export class ErrorBoundaryWrapper extends Component<
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryWrapperState> {
-    if (isAbortError(error)) return { hasError: false, error: null }
     return { hasError: true, error }
   }
 
@@ -106,6 +105,8 @@ export class ErrorBoundaryWrapper extends Component<
 
   render(): ReactNode {
     if (this.state.hasError && this.state.error) {
+      if (isAbortError(this.state.error)) return null
+
       const { ErrorComponent } = this.state
       if (ErrorComponent) {
         return <ErrorComponent error={this.state.error} reset={this.reset} />
