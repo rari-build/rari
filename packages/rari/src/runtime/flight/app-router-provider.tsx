@@ -752,6 +752,7 @@ export function AppRouterProvider({
         )
         if (merged.kind === 'superseded') return null
         if (merged.kind === 'hard-nav') {
+          if (currentNavigationIdRef.current !== detail.navigationId) return null
           const href =
             detail.pendingHistory?.url != null && detail.pendingHistory.url !== ''
               ? detail.pendingHistory.url
