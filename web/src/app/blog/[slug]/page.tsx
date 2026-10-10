@@ -4,6 +4,7 @@ import { notFound } from 'rari'
 import MdxRenderer from '@/components/mdx/MdxRenderer'
 import { contentFileExists, getBlogDir, getBlogFilePath, isValidSlug } from '@/lib/content'
 import { extractBasicMetadata } from '@/lib/content/metadata'
+import { PageTransition } from '../../page-transition'
 
 const DEFAULT_METADATA = {
   title: 'rari Blog',
@@ -16,9 +17,11 @@ export default async function BlogPage({ params }: PageProps) {
   if (!(await contentFileExists(await getBlogFilePath(slug)))) notFound()
 
   return (
-    <article className="max-w-4xl mx-auto px-4 lg:px-8 py-8 lg:py-12 pt-16 lg:pt-12 w-full">
-      <MdxRenderer filePath={`blog/${slug}.mdx`} />
-    </article>
+    <PageTransition>
+      <article className="max-w-4xl mx-auto px-4 lg:px-8 py-8 lg:py-12 pt-16 lg:pt-12 w-full">
+        <MdxRenderer filePath={`blog/${slug}.mdx`} />
+      </article>
+    </PageTransition>
   )
 }
 

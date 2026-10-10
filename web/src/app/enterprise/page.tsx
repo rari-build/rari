@@ -2,253 +2,260 @@ import type { Metadata } from 'rari'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import TrailCard from '@/components/TrailCard'
 import { container } from '@/lib/site/styles'
+import { PageTransition } from '../page-transition'
 
 export default function EnterprisePage() {
   return (
-    <div className="min-h-screen bg-canvas text-fg">
-      <div className="relative overflow-hidden w-full min-h-[70vh] flex items-center">
-        <div className="absolute inset-0 bg-linear-to-b from-surface/30 via-transparent to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-canvas to-transparent pointer-events-none" />
+    <PageTransition>
+      <div className="min-h-screen bg-canvas text-fg">
+        <div className="relative overflow-hidden w-full min-h-[70vh] flex items-center">
+          <div className="absolute inset-0 bg-linear-to-b from-surface/30 via-transparent to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-canvas to-transparent pointer-events-none" />
 
-        <div className={`relative ${container.marketing} py-20 w-full`}>
-          <div className="text-center mb-12">
-            <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-4 max-w-3xl mx-auto leading-none">
-              <span className="block">Build faster.</span>
-              <span className="block text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                Ship with confidence.
-              </span>
-            </h1>
+          <div className={`relative ${container.marketing} py-20 w-full`}>
+            <div className="text-center mb-12">
+              <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-4 max-w-3xl mx-auto leading-none">
+                <span className="block">Build faster.</span>
+                <span className="block text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  Ship with confidence.
+                </span>
+              </h1>
 
-            <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
-              rari gives your team the performance of Rust with the productivity of React.
-              Open-source, production-ready, and backed by dedicated enterprise support.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <a
-                href="/enterprise/sponsors"
-                className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
-              >
-                View sponsorship tiers
-                <ArrowNarrowRight className="w-5 h-5" />
-              </a>
-
-              <a
-                href="/docs/getting-started"
-                className="group w-full sm:w-auto px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
-              >
-                Read the docs
-                <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </a>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {[
-              {
-                id: 'prod-ready',
-                label: 'Production-Ready',
-                bg: 'bg-[#D34516]/10',
-                text: 'text-[#D34516]',
-                border: 'border-[#D34516]/20',
-              },
-              {
-                id: 'open-source',
-                label: '100% Open Source',
-                bg: 'bg-[#61dafb]/10',
-                text: 'text-[#61dafb]',
-                border: 'border-[#61dafb]/20',
-              },
-              {
-                id: 'enterprise',
-                label: 'Enterprise Support',
-                bg: 'bg-yellow-500/10',
-                text: 'text-yellow-600',
-                border: 'border-yellow-500/20',
-              },
-              {
-                id: 'mit',
-                label: 'MIT Licensed',
-                bg: 'bg-purple-500/10',
-                text: 'text-purple-400',
-                border: 'border-purple-500/20',
-              },
-            ].map(feature => (
-              <div
-                key={feature.id}
-                className={`px-4 py-2 ${feature.bg} border ${feature.border} rounded-full text-xs font-medium ${feature.text} backdrop-blur-sm`}
-              >
-                {feature.label}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
-            <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12">
-              <div className="grid md:grid-cols-3 gap-8">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
-                    &lt;50ms
-                  </div>
-                  <div className="text-fg-muted">Average response time</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
-                    100%
-                  </div>
-                  <div className="text-fg-muted">Open source, MIT licensed</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
-                    0
-                  </div>
-                  <div className="text-fg-muted">Config needed to start</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Enterprise{' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                benefits
-              </span>
-            </h2>
-            <p className="text-xl text-fg-muted max-w-2xl mx-auto">
-              Everything your team needs to build and ship with confidence on rari
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                id: 'performance',
-                title: 'Production-Ready Performance',
-                description:
-                  'Rust-powered runtime delivers consistent sub-50ms response times. Built for scale from day one.',
-              },
-              {
-                id: 'support',
-                title: 'Enterprise Support',
-                description:
-                  'Priority bug fixes, production issue support, and direct access to the core team. SLAs from 48hr to 24hr.',
-              },
-              {
-                id: 'roadmap',
-                title: 'Roadmap Influence',
-                description:
-                  'Vote on priorities, request features, and shape the framework to meet your business needs.',
-              },
-              {
-                id: 'migration',
-                title: 'Migration Consulting',
-                description:
-                  'Get expert guidance moving from Next.js, Remix, or other frameworks. We help you ship faster.',
-              },
-              {
-                id: 'custom-dev',
-                title: 'Custom Development',
-                description:
-                  'Need a specific feature? Higher tiers include custom development hours aligned with the roadmap.',
-              },
-              {
-                id: 'partnership',
-                title: 'Technology Partnership',
-                description:
-                  'Co-marketing opportunities, case studies, and joint speaking engagements to showcase your success.',
-              },
-            ].map(feature => (
-              <TrailCard key={feature.id} title={feature.title} description={feature.description} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Why{' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                rari
-              </span>{' '}
-              for enterprise?
-            </h2>
-          </div>
-
-          <div className="space-y-6">
-            {[
-              {
-                id: 'performance',
-                title: 'Performance at Scale',
-                body: "Unlike JavaScript-based frameworks, rari's Rust runtime eliminates the overhead of Node.js. Your React Server Components execute in an embedded V8 engine managed by Rust, giving you predictable performance even under heavy load.",
-              },
-              {
-                id: 'costs',
-                title: 'Lower Infrastructure Costs',
-                body: "Rust's memory efficiency means you can handle more traffic with fewer servers. The runtime uses ~50% less memory than Node.js for equivalent workloads.",
-              },
-              {
-                id: 'dx',
-                title: 'Developer Experience',
-                body: "Your team writes React. That's it. No new languages to learn, no complex build configs. Full TypeScript support, instant HMR, and detailed error overlays keep developers productive.",
-              },
-            ].map(section => (
-              <div
-                key={section.id}
-                className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8"
-              >
-                <h3 className="text-2xl font-bold text-fg mb-4">{section.title}</h3>
-                <p className="text-fg-muted leading-relaxed">{section.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="relative">
-            <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
-            <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12 text-center">
-              <h2 className="text-3xl lg:text-4xl font-bold text-fg mb-4">
-                Ready to accelerate your development?
-              </h2>
-              <p className="text-xl text-fg-muted mb-8 max-w-2xl mx-auto text-balance">
-                Choose a sponsorship tier that fits your needs, or reach out to discuss custom
-                partnerships.
+              <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
+                rari gives your team the performance of Rust with the productivity of React.
+                Open-source, production-ready, and backed by dedicated enterprise support.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
                 <a
                   href="/enterprise/sponsors"
-                  className="group relative px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 inline-flex items-center justify-center gap-2"
+                  className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
                 >
                   View sponsorship tiers
                   <ArrowNarrowRight className="w-5 h-5" />
                 </a>
+
                 <a
-                  href="mailto:enterprise@rari.build"
-                  className="group px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
+                  href="/docs/getting-started"
+                  className="group w-full sm:w-auto px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
                 >
-                  Contact us
+                  Read the docs
                   <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </a>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {[
+                {
+                  id: 'prod-ready',
+                  label: 'Production-Ready',
+                  bg: 'bg-[#D34516]/10',
+                  text: 'text-[#D34516]',
+                  border: 'border-[#D34516]/20',
+                },
+                {
+                  id: 'open-source',
+                  label: '100% Open Source',
+                  bg: 'bg-[#61dafb]/10',
+                  text: 'text-[#61dafb]',
+                  border: 'border-[#61dafb]/20',
+                },
+                {
+                  id: 'enterprise',
+                  label: 'Enterprise Support',
+                  bg: 'bg-yellow-500/10',
+                  text: 'text-yellow-600',
+                  border: 'border-yellow-500/20',
+                },
+                {
+                  id: 'mit',
+                  label: 'MIT Licensed',
+                  bg: 'bg-purple-500/10',
+                  text: 'text-purple-400',
+                  border: 'border-purple-500/20',
+                },
+              ].map(feature => (
+                <div
+                  key={feature.id}
+                  className={`px-4 py-2 ${feature.bg} border ${feature.border} rounded-full text-xs font-medium ${feature.text} backdrop-blur-sm`}
+                >
+                  {feature.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="relative">
+              <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
+              <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12">
+                <div className="grid md:grid-cols-3 gap-8">
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
+                      &lt;50ms
+                    </div>
+                    <div className="text-fg-muted">Average response time</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
+                      100%
+                    </div>
+                    <div className="text-fg-muted">Open source, MIT licensed</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover mb-2">
+                      0
+                    </div>
+                    <div className="text-fg-muted">Config needed to start</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
+                Enterprise{' '}
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  benefits
+                </span>
+              </h2>
+              <p className="text-xl text-fg-muted max-w-2xl mx-auto">
+                Everything your team needs to build and ship with confidence on rari
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                {
+                  id: 'performance',
+                  title: 'Production-Ready Performance',
+                  description:
+                    'Rust-powered runtime delivers consistent sub-50ms response times. Built for scale from day one.',
+                },
+                {
+                  id: 'support',
+                  title: 'Enterprise Support',
+                  description:
+                    'Priority bug fixes, production issue support, and direct access to the core team. SLAs from 48hr to 24hr.',
+                },
+                {
+                  id: 'roadmap',
+                  title: 'Roadmap Influence',
+                  description:
+                    'Vote on priorities, request features, and shape the framework to meet your business needs.',
+                },
+                {
+                  id: 'migration',
+                  title: 'Migration Consulting',
+                  description:
+                    'Get expert guidance moving from Next.js, Remix, or other frameworks. We help you ship faster.',
+                },
+                {
+                  id: 'custom-dev',
+                  title: 'Custom Development',
+                  description:
+                    'Need a specific feature? Higher tiers include custom development hours aligned with the roadmap.',
+                },
+                {
+                  id: 'partnership',
+                  title: 'Technology Partnership',
+                  description:
+                    'Co-marketing opportunities, case studies, and joint speaking engagements to showcase your success.',
+                },
+              ].map(feature => (
+                <TrailCard
+                  key={feature.id}
+                  title={feature.title}
+                  description={feature.description}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
+                Why{' '}
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  rari
+                </span>{' '}
+                for enterprise?
+              </h2>
+            </div>
+
+            <div className="space-y-6">
+              {[
+                {
+                  id: 'performance',
+                  title: 'Performance at Scale',
+                  body: "Unlike JavaScript-based frameworks, rari's Rust runtime eliminates the overhead of Node.js. Your React Server Components execute in an embedded V8 engine managed by Rust, giving you predictable performance even under heavy load.",
+                },
+                {
+                  id: 'costs',
+                  title: 'Lower Infrastructure Costs',
+                  body: "Rust's memory efficiency means you can handle more traffic with fewer servers. The runtime uses ~50% less memory than Node.js for equivalent workloads.",
+                },
+                {
+                  id: 'dx',
+                  title: 'Developer Experience',
+                  body: "Your team writes React. That's it. No new languages to learn, no complex build configs. Full TypeScript support, instant HMR, and detailed error overlays keep developers productive.",
+                },
+              ].map(section => (
+                <div
+                  key={section.id}
+                  className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8"
+                >
+                  <h3 className="text-2xl font-bold text-fg mb-4">{section.title}</h3>
+                  <p className="text-fg-muted leading-relaxed">{section.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="relative">
+              <div className="absolute -inset-0.5 bg-linear-to-r from-accent to-accent-hover rounded-2xl blur opacity-20" />
+              <div className="relative bg-linear-to-br from-surface to-canvas border border-edge rounded-2xl p-8 lg:p-12 text-center">
+                <h2 className="text-3xl lg:text-4xl font-bold text-fg mb-4">
+                  Ready to accelerate your development?
+                </h2>
+                <p className="text-xl text-fg-muted mb-8 max-w-2xl mx-auto text-balance">
+                  Choose a sponsorship tier that fits your needs, or reach out to discuss custom
+                  partnerships.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <a
+                    href="/enterprise/sponsors"
+                    className="group relative px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 inline-flex items-center justify-center gap-2"
+                  >
+                    View sponsorship tiers
+                    <ArrowNarrowRight className="w-5 h-5" />
+                  </a>
+                  <a
+                    href="mailto:enterprise@rari.build"
+                    className="group px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
+                  >
+                    Contact us
+                    <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   )
 }
 

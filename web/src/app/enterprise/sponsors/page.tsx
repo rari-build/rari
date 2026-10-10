@@ -3,6 +3,7 @@ import type { ComponentType, SVGProps } from 'react'
 import ArrowNarrowRight from '@/components/icons/ArrowNarrowRight'
 import Check from '@/components/icons/Check'
 import { container } from '@/lib/site/styles'
+import { PageTransition } from '../../page-transition'
 import Cloudflare from './_components/Cloudflare'
 import Namespace from './_components/Namespace'
 import Neon from './_components/Neon'
@@ -271,151 +272,153 @@ function OneTimeTierCard({ tier }: Readonly<{ readonly tier: Tier }>) {
 
 export default function SponsorsPage() {
   return (
-    <div className="min-h-screen bg-canvas text-fg">
-      <div className="relative overflow-hidden w-full flex items-center">
-        <div className="absolute inset-0 bg-linear-to-b from-surface/30 via-transparent to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-canvas to-transparent pointer-events-none" />
+    <PageTransition>
+      <div className="min-h-screen bg-canvas text-fg">
+        <div className="relative overflow-hidden w-full flex items-center">
+          <div className="absolute inset-0 bg-linear-to-b from-surface/30 via-transparent to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 h-40 bg-linear-to-t from-canvas to-transparent pointer-events-none" />
 
-        <div className={`relative ${container.marketing} py-20 w-full`}>
-          <div className="text-center">
-            <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-6 max-w-3xl mx-auto leading-tight">
-              Partner with{' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                rari
-              </span>
-            </h1>
+          <div className={`relative ${container.marketing} py-20 w-full`}>
+            <div className="text-center">
+              <h1 className="text-4xl lg:text-6xl font-bold text-fg mb-6 max-w-3xl mx-auto leading-tight">
+                Partner with{' '}
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  rari
+                </span>
+              </h1>
 
-            <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
-              Support rari's development while getting the tools and support your team needs. From
-              individual developers to enterprise teams, we have a tier that fits.
-            </p>
+              <p className="text-lg lg:text-xl text-fg-muted mb-12 max-w-3xl mx-auto leading-relaxed text-balance">
+                Support rari's development while getting the tools and support your team needs. From
+                individual developers to enterprise teams, we have a tier that fits.
+              </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <a
-                href={SPONSOR_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
-              >
-                Become a sponsor
-              </a>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a
+                  href={SPONSOR_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative w-full sm:w-auto px-8 py-4 bg-linear-to-r from-accent to-accent-hover text-accent-fg rounded-lg font-semibold text-lg transition-transform duration-200 hover:scale-105 flex items-center justify-center gap-2"
+                >
+                  Become a sponsor
+                </a>
 
-              <a
-                href="mailto:enterprise@rari.build"
-                className="group w-full sm:w-auto px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
-              >
-                Custom partnership
-                <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </a>
+                <a
+                  href="mailto:enterprise@rari.build"
+                  className="group w-full sm:w-auto px-8 py-4 border-2 border-edge text-fg-muted hover:text-fg hover:border-accent rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-surface/50 backdrop-blur-sm inline-flex items-center justify-center gap-2"
+                >
+                  Custom partnership
+                  <ArrowNarrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
+                Monthly{' '}
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  sponsorship
+                </span>
+              </h2>
+              <p className="text-xl text-fg-muted max-w-2xl mx-auto">
+                Ongoing support with increasing benefits at every tier
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {recurringTiers.slice(0, 3).map(tier => (
+                <TierCard key={tier.name} tier={tier} />
+              ))}
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {recurringTiers.slice(3).map(tier => (
+                <TierCard key={tier.name} tier={tier} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
+                One-time{' '}
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  contributions
+                </span>
+              </h2>
+              <p className="text-xl text-fg-muted max-w-2xl mx-auto">
+                A quick way to show your support
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {oneTimeTiers.map(tier => (
+                <OneTimeTierCard key={tier.name} tier={tier} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={container.section}>
+          <div className={container.marketing}>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
+                Infrastructure{' '}
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
+                  partners
+                </span>
+              </h2>
+              <p className="text-xl text-fg-muted max-w-2xl mx-auto text-balance">
+                These companies provide infrastructure and services that power rari's development
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {infrastructurePartners.map(partner => {
+                const { href, label, Icon, color, secondaryColor, description } = partner
+                return (
+                  <a
+                    key={href}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    className="relative group h-full overflow-hidden rounded-xl p-px block w-full"
+                  >
+                    <div className="relative z-10 h-full bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
+                      <div
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"
+                        style={{
+                          background:
+                            secondaryColor != null && secondaryColor !== ''
+                              ? `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(secondaryColor, '0d')}, transparent)`
+                              : `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(color, '0d')}, transparent)`,
+                        }}
+                      ></div>
+                      <div className="relative z-10 flex flex-col items-center justify-center text-center gap-4 min-h-30">
+                        <div className="transform group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+                          <Icon
+                            className={`text-fg ${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`}
+                          />
+                        </div>
+                        <p className="text-sm text-fg-muted group-hover:text-fg-muted transition-colors duration-300">
+                          {description}
+                        </p>
+                      </div>
+                    </div>
+                  </a>
+                )
+              })}
             </div>
           </div>
         </div>
       </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Monthly{' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                sponsorship
-              </span>
-            </h2>
-            <p className="text-xl text-fg-muted max-w-2xl mx-auto">
-              Ongoing support with increasing benefits at every tier
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {recurringTiers.slice(0, 3).map(tier => (
-              <TierCard key={tier.name} tier={tier} />
-            ))}
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {recurringTiers.slice(3).map(tier => (
-              <TierCard key={tier.name} tier={tier} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              One-time{' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                contributions
-              </span>
-            </h2>
-            <p className="text-xl text-fg-muted max-w-2xl mx-auto">
-              A quick way to show your support
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {oneTimeTiers.map(tier => (
-              <OneTimeTierCard key={tier.name} tier={tier} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className={container.section}>
-        <div className={container.marketing}>
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-5xl font-bold text-fg mb-4">
-              Infrastructure{' '}
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-accent to-accent-hover">
-                partners
-              </span>
-            </h2>
-            <p className="text-xl text-fg-muted max-w-2xl mx-auto text-balance">
-              These companies provide infrastructure and services that power rari's development
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {infrastructurePartners.map(partner => {
-              const { href, label, Icon, color, secondaryColor, description } = partner
-              return (
-                <a
-                  key={href}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={label}
-                  className="relative group h-full overflow-hidden rounded-xl p-px block w-full"
-                >
-                  <div className="relative z-10 h-full bg-linear-to-br from-surface to-canvas border border-edge rounded-xl p-8 transition-all duration-300 group-hover:border-transparent">
-                    <div
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"
-                      style={{
-                        background:
-                          secondaryColor != null && secondaryColor !== ''
-                            ? `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(secondaryColor, '0d')}, transparent)`
-                            : `linear-gradient(to bottom right, ${hexWithAlpha(color, '1a')}, ${hexWithAlpha(color, '0d')}, transparent)`,
-                      }}
-                    ></div>
-                    <div className="relative z-10 flex flex-col items-center justify-center text-center gap-4 min-h-30">
-                      <div className="transform group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-                        <Icon
-                          className={`text-fg ${label.includes('Sanity') ? 'h-8 w-auto' : 'h-10 w-auto'}`}
-                        />
-                      </div>
-                      <p className="text-sm text-fg-muted group-hover:text-fg-muted transition-colors duration-300">
-                        {description}
-                      </p>
-                    </div>
-                  </div>
-                </a>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
+    </PageTransition>
   )
 }
 

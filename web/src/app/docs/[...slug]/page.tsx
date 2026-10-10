@@ -6,6 +6,7 @@ import MdxRenderer from '@/components/mdx/MdxRenderer'
 import { contentFileExists, getDocsDir, getDocsFilePath, isValidSlugArray } from '@/lib/content'
 import { extractMetadataWithFallback } from '@/lib/content/metadata'
 import { container } from '@/lib/site/styles'
+import { PageTransition } from '../../page-transition'
 
 const DEFAULT_METADATA = {
   title: 'rari Docs',
@@ -21,9 +22,11 @@ export default async function DocPage({ params }: PageProps) {
   const pathname = `/docs/${slugPath}`
 
   return (
-    <div className={container.base}>
-      <MdxRenderer filePath={`docs/${slugPath}.mdx`} pathname={pathname} />
-    </div>
+    <PageTransition>
+      <div className={container.base}>
+        <MdxRenderer filePath={`docs/${slugPath}.mdx`} pathname={pathname} />
+      </div>
+    </PageTransition>
   )
 }
 
