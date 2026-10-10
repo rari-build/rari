@@ -1,3 +1,31 @@
+## [rari@0.17.4] - 2026-10-10
+
+### 🚀 Features
+
+- *(flight)* improve unwrapLoadingSuspense and add tests for template-style wrappers by @skiniks
+- *(html)* enhance HTML processing with stateful void solidus stripping by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(flight)* align soft-nav loading with Suspense semantics by @skiniks
+- *(flight)* enhance route caching logic for valid HTML elements by @skiniks
+- *(html)* standardize self-closing tags and improve HTML processing by @skiniks
+- *(image)* correct image preloading logic and update preload link format by @skiniks
+- *(flight)* simplify hasReadyChild logic and update test for pending client wrappers by @skiniks
+- *(html)* revert void-solidus stripping by @skiniks
+- *(flight)* show loading.tsx on slow soft navs without warm flashes by @skiniks
+- *(flight)* prevent navigation when current ID does not match during hard navigation by @skiniks
+- *(flight)* update bodyComplete promise type and handle transition type in tests by @skiniks
+- *(error-boundary)* handle AbortError gracefully by returning null instead of setting error state by @skiniks
+- *(flight)* add hasPendingServerHole function to detect pending server thenables in flight trees by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- *(rari)* bump version to 0.17.4 by @skiniks
+- *(rari)* update optional dependencies to version 0.17.4
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.3...rari@0.17.4
 ## [rari@0.17.3] - 2026-10-08
 
 ### 🚀 Features
