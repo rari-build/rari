@@ -427,6 +427,35 @@ describe('soft-nav hollow-shell paint', () => {
     ).toBe(false)
   })
 
+  it('marks maySuspend for pending server thenables beside ready RSC siblings', async () => {
+    const { Suspense } = await import('react')
+    const { flightTreeMaySuspend } = await import('@rari/runtime/flight/react-helpers')
+    const pageTransition = {
+      $$typeof: Symbol.for('react.lazy'),
+      _payload: Object.assign(Promise.resolve('PageTransition'), { status: 'pending' }),
+      _init: () => 'PageTransition',
+    }
+    const slow = Object.assign(Promise.resolve(page('slow')), { status: 'pending' })
+    expect(
+      flightTreeMaySuspend(
+        reuse(
+          '/',
+          createElement(
+            Suspense,
+            { fallback: createElement('div', null, 'loading') },
+            createElement(
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              pageTransition as never,
+              null,
+              page('ready'),
+              slow,
+            ),
+          ),
+        ),
+      ),
+    ).toBe(true)
+  })
+
   it('does not mark maySuspend for fulfilled lazy holes', async () => {
     const { Suspense } = await import('react')
     const { flightTreeMaySuspend } = await import('@rari/runtime/flight/react-helpers')
