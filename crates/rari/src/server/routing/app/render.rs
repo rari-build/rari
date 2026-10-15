@@ -11,7 +11,10 @@ use bytes::Bytes;
 use rari_error::RariError;
 use tokio::{
     fs,
-    sync::mpsc::{Receiver, error::TryRecvError},
+    sync::{
+        mpsc::{Receiver, error::TryRecvError},
+        oneshot,
+    },
     time::{self, Duration},
 };
 
@@ -261,6 +264,7 @@ pub async fn render_with_fallback(
     context: LayoutRenderContext,
     accept_encoding: Option<&str>,
     request_context: Arc<RequestContext>,
+    metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> Result<Response, StatusCode> {
     let layout_renderer = LayoutRenderer::with_shared_cache(
         Arc::clone(&state.renderer),
@@ -274,6 +278,7 @@ pub async fn render_with_fallback(
         &layout_renderer,
         accept_encoding,
         Arc::clone(&request_context),
+        metadata_rx,
     )
     .await
     {
@@ -815,6 +820,7 @@ pub async fn render_streaming_with_layout(
     layout_renderer: &LayoutRenderer,
     accept_encoding: Option<&str>,
     request_context: Arc<RequestContext>,
+    metadata_rx: Option<oneshot::Receiver<Option<PageMetadata>>>,
 ) -> Result<Response, StatusCode> {
     let layout_count = route_match.layouts.len();
     let is_not_found = route_match.not_found.is_some();
@@ -825,7 +831,7 @@ pub async fn render_streaming_with_layout(
             &context,
             Some(Arc::clone(&request_context)),
             false,
-            None,
+            metadata_rx,
         )
         .await
     {

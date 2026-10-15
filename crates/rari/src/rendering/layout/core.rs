@@ -250,6 +250,72 @@ fn stream_composition_check_script(composition_script: &str) -> String {
     )
 }
 
+async fn queue_streaming_script(
+    runtime: &Arc<JsExecutionRuntime>,
+    request_context: Option<Arc<RequestContext>>,
+    script_name: String,
+    stream_id: String,
+    script: String,
+    chunk_sender: mpsc::Sender<Result<Vec<u8>, RariError>>,
+) -> Result<
+    (Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>, StreamingSlotGuard),
+    RariError,
+> {
+    let err_sender = chunk_sender.clone();
+    let (handle, stream_lease) = match runtime.pick_runtime_for_streaming().await {
+        Ok(picked) => picked,
+        Err(e) => {
+            let _ = err_sender.send(Err(e.clone())).await;
+            return Err(e);
+        }
+    };
+
+    let request_id = request_context.as_ref().map(|ctx| ctx.request_id().to_string());
+
+    if let Some(context) = request_context.as_ref()
+        && let Err(e) = handle.register_request_context(Arc::clone(context)).await
+    {
+        let _ = err_sender.send(Err(e.clone())).await;
+        return Err(e);
+    }
+
+    let wrapped = wrap_streaming_script(request_id.as_deref(), &stream_id, &script);
+    let completion = match handle
+        .queue_script_for_streaming(
+            stream_id,
+            script_name,
+            wrapped,
+            chunk_sender,
+            request_context.clone(),
+        )
+        .await
+    {
+        Ok(completion) => completion,
+        Err(e) => {
+            if let Some(request_id) = request_id.as_deref() {
+                let _ = handle.unregister_request_context(request_id).await;
+            }
+            let _ = err_sender.send(Err(e.clone())).await;
+            return Err(e);
+        }
+    };
+
+    let completion = if let Some(request_id) = request_id {
+        Box::pin(async move {
+            let result = completion.await;
+            let clear_result = handle.unregister_request_context(&request_id).await;
+            result?;
+            clear_result
+        }) as Pin<Box<dyn Future<Output = Result<(), RariError>> + Send>>
+    } else {
+        completion
+    };
+    Ok((completion, stream_lease))
+}
+
+/// Compose on the isolate before queueing the pump (RSC soft-nav needs notFound
+/// before headers). HTML hard-nav prefers [`queue_streaming_script`] with compose
+/// inlined in the pump so Suspense timers start without a Rust round-trip.
 async fn compose_then_queue_streaming_script(
     runtime: &Arc<JsExecutionRuntime>,
     request_context: Option<Arc<RequestContext>>,
@@ -814,7 +880,34 @@ impl LayoutRenderer {
                     }
                 }
 
-                let composition_script = Self::compose_route_script_with_stream(
+                let route_match_for_prep = route_match.clone();
+                let prepared = run_with_renderer_result(renderer, move |renderer| async move {
+                    renderer.ensure_streaming_pipeline().await?;
+
+                    let html_renderer = RscHtmlRenderer::with_public_dir(
+                        Arc::clone(&renderer.runtime),
+                        config.public_dir().clone(),
+                    );
+                    let css_links = RscHtmlRenderer::css_links_for_route(&route_match_for_prep);
+                    let cache_template = config.rsc_html.cache_template;
+                    let is_dev_mode = config.is_development();
+                    let vite_host = config.vite.host.clone();
+                    let vite_port = config.vite.port;
+                    let template = html_renderer
+                        .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
+                        .await?;
+                    let template = inject_css_links(&template, &css_links);
+
+                    let head_content = RscHtmlRenderer::client_head_fragment(&template).to_string();
+
+                    let head_content_json =
+                        serde_json::to_string(&head_content).unwrap_or_else(|_| "\"\"".to_string());
+
+                    Ok((Arc::clone(&renderer.runtime), head_content_json))
+                })
+                .await;
+
+                let composition_script = match Self::compose_route_script_with_stream(
                     &route_match,
                     &context,
                     loading_component_id.as_deref(),
@@ -822,37 +915,45 @@ impl LayoutRenderer {
                     true,
                     Some(&stream_id),
                     true,
-                )?;
+                ) {
+                    Ok(script) => script,
+                    Err(e) => {
+                        tracing::error!("Fizz streaming composition error: {e}");
+                        let _ = chunk_sender
+                            .send(Err(RariError::internal(format!(
+                                "Fizz streaming composition failed: {e}"
+                            ))))
+                            .await;
+                        return Ok(RenderResult::Chunked {
+                            content_type: ChunkedContentType::Html,
+                            shell,
+                            closing,
+                            chunks: chunk_receiver,
+                        });
+                    }
+                };
 
-                let prepared = run_with_renderer_result(renderer, move |renderer| {
-                    async move {
-                        renderer.ensure_streaming_pipeline().await?;
-
-                        let html_renderer = RscHtmlRenderer::with_public_dir(
-                            Arc::clone(&renderer.runtime),
-                            config.public_dir().clone(),
-                        );
-                        let css_links = RscHtmlRenderer::css_links_for_route(&route_match);
-                        let cache_template = config.rsc_html.cache_template;
-                        let is_dev_mode = config.is_development();
-                        let vite_host = config.vite.host.clone();
-                        let vite_port = config.vite.port;
-                        let template = html_renderer
-                            .load_template(cache_template, is_dev_mode, &vite_host, vite_port)
-                            .await?;
-                        let template = inject_css_links(&template, &css_links);
-
-                        let head_content =
-                            RscHtmlRenderer::client_head_fragment(&template).to_string();
-
-                        let head_content_json = serde_json::to_string(&head_content)
-                            .unwrap_or_else(|_| "\"\"".to_string());
-
+                match prepared {
+                    Ok((runtime, head_content_json)) => {
                         let pump_script = format!(
                             r"(async function() {{
                         let caughtErrors = [];
                         {FIZZ_STREAM_ERROR_HELPER}
                         try {{
+                        try {{
+                            const compositionResult = await ({composition_script});
+                            if (compositionResult?.notFound === true) {{
+                                Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
+                                return;
+                            }}
+                        }} catch (e) {{
+                            if (e?.digest === 'RARI_NOT_FOUND' || e?.message === 'RARI_NOT_FOUND') {{
+                                Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
+                                return;
+                            }}
+                            console.error('[rari] Composition error in streaming:', e);
+                        }}
+
                         const byStream = globalThis['~rari']?.capturedByStream;
                         const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
                             ? byStream[__RARI_STREAM_ID__]
@@ -897,29 +998,38 @@ impl LayoutRenderer {
                     }})()",
                         );
 
-                        Ok((Arc::clone(&renderer.runtime), pump_script))
+                        match queue_streaming_script(
+                            &runtime,
+                            request_context_for_stream,
+                            "fizz_direct_stream".to_string(),
+                            stream_id,
+                            pump_script,
+                            chunk_sender,
+                        )
+                        .await
+                        {
+                            Ok((completion, stream_lease)) => {
+                                tokio::spawn(async move {
+                                    let _stream_lease = stream_lease;
+                                    if let Err(e) = completion.await {
+                                        tracing::error!("Fizz direct streaming error: {e}");
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                tracing::error!("Fizz streaming queue error: {e}");
+                            }
+                        }
                     }
-                })
-                .await?;
-
-                let (runtime, pump_script) = prepared;
-                let (completion, stream_lease) = compose_then_queue_streaming_script(
-                    &runtime,
-                    request_context_for_stream,
-                    "fizz_direct_stream".to_string(),
-                    stream_id,
-                    composition_script,
-                    pump_script,
-                    chunk_sender,
-                )
-                .await?;
-
-                tokio::spawn(async move {
-                    let _stream_lease = stream_lease;
-                    if let Err(e) = completion.await {
-                        tracing::error!("Fizz direct streaming error: {e}");
+                    Err(e) => {
+                        tracing::error!("Fizz streaming setup error: {e}");
+                        let _ = chunk_sender
+                            .send(Err(RariError::internal(format!(
+                                "Fizz streaming setup failed: {e}"
+                            ))))
+                            .await;
                     }
-                });
+                }
 
                 return Ok(RenderResult::Chunked {
                     content_type: ChunkedContentType::Html,

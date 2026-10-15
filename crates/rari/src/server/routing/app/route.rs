@@ -12,7 +12,7 @@ use axum::{
 use bytes::Bytes;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
-use tokio::fs;
+use tokio::{fs, sync::oneshot};
 
 use super::{
     cache::{
@@ -38,7 +38,7 @@ use crate::{
         actions::parse_action_form_state_from_cookie,
         cache::{merge_page_cache_tags, response},
         compression::{CompressionEncoding, compress_all_encodings, compress_body},
-        document::{metadata::apply_page_metadata, utils::inject_assets_into_html},
+        document::utils::inject_assets_into_html,
         error_response,
         host::{
             types::request::{RenderMode, detect_render_mode},
@@ -510,15 +510,23 @@ pub async fn handle_app_route(
             let use_streaming = should_use_streaming(&route_match, &state.config);
 
             if use_streaming {
-                let mut context = context.clone();
-                let metadata = collect_page_metadata(&state, &route_match, &context).await;
-                apply_page_metadata(&mut context, metadata);
+                let (metadata_tx, metadata_rx) = oneshot::channel();
+                let state_meta = state.clone();
+                let route_match_meta = route_match.clone();
+                let context_meta = context.clone();
+                tokio::spawn(async move {
+                    let metadata =
+                        collect_page_metadata(&state_meta, &route_match_meta, &context_meta).await;
+                    let _ = metadata_tx.send(metadata);
+                });
+
                 let response = render_with_fallback(
                     Arc::new(state.clone()),
                     route_match.clone(),
-                    context,
+                    context.clone(),
                     accept_encoding,
                     Arc::clone(&request_context),
+                    Some(metadata_rx),
                 )
                 .await?;
 
