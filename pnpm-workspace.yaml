@@ -8,13 +8,13 @@ minimumReleaseAgeExclude:
   - '@rari/use-cache-linux-x64@0.17.5'
   - '@rari/use-cache-win32-arm64@0.17.5'
   - '@rari/use-cache-win32-x64@0.17.5'
-  - '@rari/use-cache@0.17.4'
-  - rari-darwin-arm64@0.17.4
-  - rari-darwin-x64@0.17.4
-  - rari-linux-arm64@0.17.4
-  - rari-linux-x64@0.17.4
-  - rari-win32-arm64@0.17.4
-  - rari-win32-x64@0.17.4
+  - '@rari/use-cache@0.17.5'
+  - rari-darwin-arm64@0.17.5
+  - rari-darwin-x64@0.17.5
+  - rari-linux-arm64@0.17.5
+  - rari-linux-x64@0.17.5
+  - rari-win32-arm64@0.17.5
+  - rari-win32-x64@0.17.5
   - rari@0.17.4
   - '@voidzero-dev/vite-plus-core@1.0.0'
   - '@voidzero-dev/vite-plus-darwin-arm64@1.0.0'
@@ -94,7 +94,7 @@ catalogs:
   monitoring:
     '@sentry/react': ^11.4.0
   rari:
-    '@rari/use-cache': ^0.17.4
+    '@rari/use-cache': ^0.17.5
     rari: ^0.17.4
   react:
     '@types/react': ^19.3.0
