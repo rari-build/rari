@@ -1,3 +1,23 @@
+## [rari@0.17.5] - 2026-10-15
+
+### 🐛 Bug Fixes
+
+- restore streaming TTFB by flushing the shell before metadata and compose by @skiniks
+- enhance metadata retrieval in rendering fallback logic by @skiniks
+- improve error handling and metadata management in streaming layout rendering by @skiniks
+- implement streaming page metadata management and enhance error handling in layout rendering by @skiniks
+
+### 🚜 Refactor
+
+- improve metadata handling and streamline rendering process by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari to version 0.17.5 by @skiniks
+- update rari and related dependencies to version 0.17.5
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.4...rari@0.17.5
 ## [rari@0.17.4] - 2026-10-10
 
 ### 🚀 Features
