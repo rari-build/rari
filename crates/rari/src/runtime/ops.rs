@@ -3,7 +3,7 @@ use std::{
     cmp::Ordering,
     collections::BTreeMap,
     rc::Rc,
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
 
@@ -14,7 +14,7 @@ use deno_runtime::BootstrapOptions;
 use rari_error::RariError;
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     rendering::base,
@@ -69,6 +69,26 @@ pub struct StreamOpState {
     /// Filled by `op_stream_promise_settled` so the isolate worker can complete
     /// pending streams without polling V8 via `execute_script` every pump tick.
     pub settled: FxHashMap<String, Result<(), String>>,
+}
+
+fn streaming_page_metadata_waiters() -> &'static Mutex<FxHashMap<String, oneshot::Receiver<String>>>
+{
+    static WAITERS: OnceLock<Mutex<FxHashMap<String, oneshot::Receiver<String>>>> = OnceLock::new();
+    WAITERS.get_or_init(|| Mutex::new(FxHashMap::default()))
+}
+
+pub fn register_streaming_page_metadata(stream_id: String, rx: oneshot::Receiver<String>) {
+    if let Ok(mut waiters) = streaming_page_metadata_waiters().lock() {
+        waiters.insert(stream_id, rx);
+    }
+}
+
+fn take_streaming_page_metadata(stream_id: &str) -> Option<oneshot::Receiver<String>> {
+    streaming_page_metadata_waiters().lock().ok().and_then(|mut waiters| waiters.remove(stream_id))
+}
+
+pub fn cancel_streaming_page_metadata(stream_id: &str) {
+    let _ = take_streaming_page_metadata(stream_id);
 }
 
 impl StreamOpState {
@@ -336,6 +356,7 @@ pub fn get_streaming_ops() -> Vec<OpDecl> {
         op_fizz_chunk_try(),
         op_fizz_chunk(),
         op_fizz_done(),
+        op_streaming_page_metadata(),
         op_stream_promise_settled(),
         op_internal_log(),
         op_sanitize_html(),
@@ -405,8 +426,18 @@ pub async fn op_fizz_chunk(
 
 #[op2(fast)]
 pub fn op_fizz_done(state: &mut OpState, #[string] stream_id: &str) {
+    cancel_streaming_page_metadata(stream_id);
     if let Some(stream_op_state) = state.try_borrow_mut::<StreamOpState>() {
         stream_op_state.take_sender(stream_id);
+    }
+}
+
+#[op2]
+#[string]
+pub async fn op_streaming_page_metadata(#[string] stream_id: String) -> String {
+    match take_streaming_page_metadata(&stream_id) {
+        Some(rx) => rx.await.unwrap_or_else(|_| "{}".to_string()),
+        None => "{}".to_string(),
     }
 }
 
