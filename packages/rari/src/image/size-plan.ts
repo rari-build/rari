@@ -1,4 +1,8 @@
-import { getAllImageSizes, getImageDeviceSizes, getMaxOptimizedWidth } from './runtime-config'
+import {
+  getAllImageSizes,
+  getImageDeviceSizes,
+  getMaxOptimizedWidth,
+} from 'rari/image/runtime-config'
 
 function clampOptimizedWidth(width: number): number {
   return Math.min(Math.max(width, 1), getMaxOptimizedWidth())
@@ -11,7 +15,7 @@ function nearestOptimizedSize(target: number): number {
 }
 
 function widthsForSizesProp(sizes: string): number[] {
-  const viewportWidthRe = /(^|\s)(1?\d?\d)vw/g
+  const viewportWidthRe = /(^|[,\s])(1?\d?\d)vw/g
   const percentSizes: number[] = []
   for (
     let match = viewportWidthRe.exec(sizes);

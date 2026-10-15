@@ -87,7 +87,6 @@ function preloadImageResource(options: {
   readonly sizes: string | undefined
   readonly loader: ImageProps['loader']
   readonly unoptimized: boolean
-  readonly fill: boolean
   readonly shouldUseSrcSet: boolean
   readonly format: ImageFormat | undefined
 }): void {
@@ -101,7 +100,6 @@ function preloadImageResource(options: {
     sizes,
     loader,
     unoptimized,
-    fill,
     shouldUseSrcSet,
     format,
   } = options
@@ -115,15 +113,13 @@ function preloadImageResource(options: {
   }
 
   const href = resolveLoaderOrBuiltUrl(loader, finalSrc, defaultWidth, quality, format)
-  const useResponsivePreload = shouldUseSrcSet
-  const preloadSizes = resolveDefaultSizes(sizes, useResponsivePreload, fill, defaultWidth)
 
-  if (useResponsivePreload) {
+  if (shouldUseSrcSet) {
     preloadResource(href, {
       as: 'image',
       fetchPriority: 'high',
       imageSrcSet: buildOptimizedSrcSet(loader, finalSrc, widths, quality, format),
-      ...(preloadSizes != null ? { imageSizes: preloadSizes } : {}),
+      ...(sizes != null ? { imageSizes: sizes } : {}),
       ...(format === 'avif' ? { type: 'image/avif' } : {}),
     })
     return
@@ -459,7 +455,12 @@ export function Image({
     quality,
     format: optimizerFormat,
   })
-  const resolvedSizes = resolveDefaultSizes(sizes, shouldUseSrcSet, fill, width)
+  const resolvedSizes = resolveDefaultSizes(
+    sizes,
+    shouldUseSrcSet,
+    fill,
+    width ?? imgWidth ?? sizePlan.defaultWidth,
+  )
   const srcSet =
     !unoptimized && shouldUseSrcSet
       ? buildOptimizedSrcSet(loader, finalSrc, sizePlan.widths, quality, optimizerFormat)
@@ -474,7 +475,6 @@ export function Image({
     sizes: resolvedSizes,
     loader,
     unoptimized,
-    fill,
     shouldUseSrcSet,
     format: optimizerFormat,
   })

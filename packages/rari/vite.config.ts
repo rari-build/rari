@@ -20,6 +20,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      'rari/image/runtime-config': path.resolve(import.meta.dirname, 'src/image/runtime-config.ts'),
     },
   },
   pack: {

@@ -16,10 +16,16 @@ export function configureImageSizes(options: {
   readonly imageSizes?: readonly number[]
 }): void {
   if (options.deviceSizes != null && options.deviceSizes.length > 0) {
-    deviceSizes = sortedUnique(options.deviceSizes)
+    const nextDeviceSizes = sortedUnique(options.deviceSizes)
+    if (nextDeviceSizes.length > 0) {
+      deviceSizes = nextDeviceSizes
+    }
   }
   if (options.imageSizes != null && options.imageSizes.length > 0) {
-    imageSizes = sortedUnique(options.imageSizes)
+    const nextImageSizes = sortedUnique(options.imageSizes)
+    if (nextImageSizes.length > 0) {
+      imageSizes = nextImageSizes
+    }
   }
   allSizes = sortedUnique([...imageSizes, ...deviceSizes])
   maxOptimizedWidth = Math.max(...deviceSizes)

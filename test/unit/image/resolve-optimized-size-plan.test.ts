@@ -70,6 +70,18 @@ describe('resolveOptimizedSizePlan', () => {
     expect(plan.widths[0]).toBeGreaterThanOrEqual(minWidth)
   })
 
+  it('parses comma-delimited vw values without spaces', () => {
+    const plan = resolveOptimizedSizePlan({
+      fill: false,
+      width: 1200,
+      sizes: '100vw,25vw',
+    })
+    const minWidth = DEFAULT_DEVICE_SIZES[0] * 0.25
+
+    expect(plan.widths).toEqual(ALL_SIZES.filter(size => size >= minWidth))
+    expect(plan.widths[0]).toBeGreaterThanOrEqual(minWidth)
+  })
+
   it('uses vite-configured deviceSizes and imageSizes when set', () => {
     configureImageSizes({
       deviceSizes: [640, 750, 828, 1080, 1200, 1600],
