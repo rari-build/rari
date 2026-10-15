@@ -665,6 +665,14 @@ const RUNTIME_DIST_VIRTUALS: ReadonlyMap<string, string> = new Map([
   ['virtual:client-router.tsx', 'ClientRouter.mjs'],
 ])
 
+function buildVirtualImageConfigModule(images: RariOptions['images'] | undefined): string {
+  const deviceSizes = images?.deviceSizes ?? DEFAULT_DEVICE_SIZES
+  const imageSizes = images?.imageSizes ?? DEFAULT_IMAGE_SIZES
+  return `import { configureImageSizes } from 'rari/image/runtime-config'
+configureImageSizes(${JSON.stringify({ deviceSizes, imageSizes })})
+`
+}
+
 async function loadNamedVirtualModule(
   id: string,
   // oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- ctx holds mutable analysis cache
@@ -675,8 +683,13 @@ async function loadNamedVirtualModule(
     moduleAnalysisCache: ModuleAnalysisCache
     getKnownClientComponentPaths: () => ReadonlySet<string>
     environmentMode: string
+    images?: RariOptions['images']
   },
 ): Promise<string | { code: string } | undefined> {
+  if (id === 'virtual:rari-image-config.ts') {
+    return buildVirtualImageConfigModule(ctx.images)
+  }
+
   if (id === 'virtual:rari-mdx-components.ts') return ctx.buildMdxRegistryModule()
 
   if (id === 'virtual:rari-entry-client.ts') {
@@ -838,6 +851,8 @@ const VIRTUAL_MODULE_RESOLUTIONS: ReadonlyMap<string, string> = new Map([
   ['virtual:error-boundary-wrapper.tsx', 'virtual:error-boundary-wrapper.tsx'],
   ['virtual:rari-mdx-components', 'virtual:rari-mdx-components.ts'],
   ['virtual:rari-mdx-components.ts', 'virtual:rari-mdx-components.ts'],
+  ['virtual:rari-image-config', 'virtual:rari-image-config.ts'],
+  ['virtual:rari-image-config.ts', 'virtual:rari-image-config.ts'],
 ])
 
 function resolveVirtualModuleId(id: string): string | null {
@@ -2534,6 +2549,7 @@ ${clientTransformedCode}`
         moduleAnalysisCache,
         getKnownClientComponentPaths,
         environmentMode: this.environment.mode,
+        images: options.images,
       })
       if (virtual !== undefined) return virtual
 

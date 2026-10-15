@@ -69,6 +69,8 @@ declare module 'virtual:app-router-provider' {
   export function AppRouterProvider(props: AppRouterProviderProps): ReactNode
 }
 
+declare module 'virtual:rari-image-config' {}
+
 declare module 'react-server-dom-webpack/client' {
   export type { Thenable } from 'virtual:react-flight-client'
   export {

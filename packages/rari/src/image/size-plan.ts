@@ -1,25 +1,52 @@
-import { DEFAULT_DEVICE_SIZES } from './constants'
-
-const MAX_OPTIMIZED_WIDTH = Math.max(...DEFAULT_DEVICE_SIZES)
+import { getAllImageSizes, getImageDeviceSizes, getMaxOptimizedWidth } from './runtime-config'
 
 function clampOptimizedWidth(width: number): number {
-  return Math.min(Math.max(width, 1), MAX_OPTIMIZED_WIDTH)
+  return Math.min(Math.max(width, 1), getMaxOptimizedWidth())
+}
+
+function nearestOptimizedSize(target: number): number {
+  const allSizes = getAllImageSizes()
+  const clamped = clampOptimizedWidth(target)
+  return allSizes.find(size => size >= clamped) ?? allSizes[allSizes.length - 1]
+}
+
+function widthsForSizesProp(sizes: string): number[] {
+  const viewportWidthRe = /(^|\s)(1?\d?\d)vw/g
+  const percentSizes: number[] = []
+  for (
+    let match = viewportWidthRe.exec(sizes);
+    match != null;
+    match = viewportWidthRe.exec(sizes)
+  ) {
+    percentSizes.push(Number.parseInt(match[2], 10))
+  }
+
+  const allSizes = getAllImageSizes()
+  if (percentSizes.length === 0) {
+    return [...allSizes]
+  }
+
+  const smallestRatio = Math.min(...percentSizes) * 0.01
+  const minWidth = getImageDeviceSizes()[0] * smallestRatio
+  return allSizes.filter(size => size >= minWidth)
 }
 
 export function resolveOptimizedSizePlan(options: {
   readonly fill: boolean
   readonly width?: number
   readonly intrinsicWidth?: number
+  readonly sizes?: string
 }): {
   readonly defaultWidth: number
   readonly widths: readonly number[]
 } {
-  const { fill, width, intrinsicWidth } = options
+  const { fill, width, intrinsicWidth, sizes } = options
+  const deviceSizes = getImageDeviceSizes()
 
   if (fill) {
     return {
-      defaultWidth: MAX_OPTIMIZED_WIDTH,
-      widths: DEFAULT_DEVICE_SIZES,
+      defaultWidth: getMaxOptimizedWidth(),
+      widths: deviceSizes,
     }
   }
 
@@ -30,18 +57,26 @@ export function resolveOptimizedSizePlan(options: {
         ? intrinsicWidth
         : undefined
 
-  if (resolved == null) {
+  if (sizes != null && sizes !== '') {
+    const widths = widthsForSizesProp(sizes)
     return {
-      defaultWidth: 1920,
-      widths: DEFAULT_DEVICE_SIZES,
+      defaultWidth: resolved != null ? nearestOptimizedSize(resolved) : (widths.at(-1) ?? 1920),
+      widths,
     }
   }
 
-  const clamped = clampOptimizedWidth(resolved)
+  if (resolved == null) {
+    return {
+      defaultWidth: 1920,
+      widths: deviceSizes,
+    }
+  }
+
+  const widths = [...new Set([resolved, resolved * 2].map(value => nearestOptimizedSize(value)))]
+  widths.sort((a, b) => a - b)
+
   return {
-    defaultWidth: clamped,
-    widths: [clamped],
+    defaultWidth: widths[0],
+    widths,
   }
 }
-
-export { MAX_OPTIMIZED_WIDTH }

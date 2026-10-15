@@ -11,6 +11,7 @@ export {
 } from './constants'
 export type { ImageFormat } from './constants'
 export type { ImageProps, StaticImageData } from './image'
+export { configureImageSizes } from './runtime-config'
 export type {} from './static-modules'
 
 const isServer = typeof window === 'undefined'
