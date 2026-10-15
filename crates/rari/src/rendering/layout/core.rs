@@ -6,10 +6,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 use rari_error::RariError;
 use serde_json::Value;
-use tokio::{
-    sync::{Mutex, mpsc, oneshot},
-    time::{Duration, timeout},
-};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use uuid::Uuid;
 
 use super::{
@@ -905,7 +902,7 @@ impl LayoutRenderer {
                     .await?;
 
                 if let Some(rx) = metadata_rx
-                    && let Ok(Ok(metadata)) = timeout(Duration::from_millis(50), rx).await
+                    && let Ok(metadata) = rx.await
                 {
                     context.metadata = metadata;
                 }

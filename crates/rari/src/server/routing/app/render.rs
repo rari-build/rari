@@ -285,6 +285,10 @@ pub async fn render_with_fallback(
         Ok(response) => Ok(response),
         Err(e) => {
             tracing::error!("Streaming render failed, falling back to synchronous: {}", e);
+            let mut context = context;
+            if context.metadata.is_none() {
+                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
+            }
             render_synchronous(state, route_match, context, accept_encoding, request_context).await
         }
     }
