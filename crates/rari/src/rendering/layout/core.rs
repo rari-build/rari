@@ -26,6 +26,7 @@ use crate::{
     runtime::{
         JsExecutionRuntime,
         factory::{JsRuntimeInterface, StreamingSlotGuard},
+        ops::{self as runtime_ops},
     },
     server::{
         cache::{
@@ -902,10 +903,36 @@ impl LayoutRenderer {
                     .await?;
 
                 tokio::spawn(async move {
-                    if let Some(rx) = metadata_rx
-                        && let Ok(metadata) = rx.await
-                    {
-                        context.metadata = metadata;
+                    let fallback_metadata = context.metadata.take();
+                    let (meta_tx, meta_rx) = oneshot::channel::<String>();
+                    runtime_ops::register_streaming_page_metadata(stream_id.clone(), meta_rx);
+
+                    let metadata_to_json = |metadata: Option<PageMetadata>| -> String {
+                        metadata
+                            .and_then(|m| serde_json::to_string(&m).ok())
+                            .unwrap_or_else(|| "{}".to_string())
+                    };
+
+                    if let Some(mut rx) = metadata_rx {
+                        match rx.try_recv() {
+                            Ok(metadata) => {
+                                let _ = meta_tx.send(metadata_to_json(metadata));
+                            }
+                            Err(oneshot::error::TryRecvError::Empty) => {
+                                tokio::spawn(async move {
+                                    let metadata = match rx.await {
+                                        Ok(metadata) => metadata,
+                                        Err(_) => fallback_metadata,
+                                    };
+                                    let _ = meta_tx.send(metadata_to_json(metadata));
+                                });
+                            }
+                            Err(oneshot::error::TryRecvError::Closed) => {
+                                let _ = meta_tx.send(metadata_to_json(fallback_metadata));
+                            }
+                        }
+                    } else {
+                        let _ = meta_tx.send(metadata_to_json(fallback_metadata));
                     }
 
                     let composition_script = match Self::compose_route_script_with_stream(
@@ -920,6 +947,7 @@ impl LayoutRenderer {
                         Ok(script) => script,
                         Err(e) => {
                             tracing::error!("Fizz streaming composition error: {e}");
+                            runtime_ops::cancel_streaming_page_metadata(&stream_id);
                             let _ = chunk_sender
                                 .send(Err(RariError::internal(format!(
                                     "Fizz streaming composition failed: {e}"
@@ -934,6 +962,7 @@ impl LayoutRenderer {
                         let caughtErrors = [];
                         {FIZZ_STREAM_ERROR_HELPER}
                         try {{
+                        const metadataPromise = Deno.core.ops.op_streaming_page_metadata(__RARI_STREAM_ID__);
                         try {{
                             const compositionResult = await ({composition_script});
                             if (compositionResult?.notFound === true) {{
@@ -945,7 +974,7 @@ impl LayoutRenderer {
                         }}
 
                         const byStream = globalThis['~rari']?.capturedByStream;
-                        const capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
+                        let capturedElement = (byStream && __RARI_STREAM_ID__ in byStream)
                             ? byStream[__RARI_STREAM_ID__]
                             : undefined;
                         if (byStream && __RARI_STREAM_ID__ in byStream)
@@ -959,6 +988,23 @@ impl LayoutRenderer {
                         if (!capturedElement) {{
                             Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
                             return;
+                        }}
+
+                        let pageMetadata = {{}};
+                        try {{
+                            const metaJson = await metadataPromise;
+                            pageMetadata = JSON.parse(typeof metaJson === 'string' ? metaJson : '{{}}');
+                        }} catch (_) {{
+                            pageMetadata = {{}};
+                        }}
+                        if (pageMetadata && typeof pageMetadata === 'object' && Object.keys(pageMetadata).length > 0) {{
+                            const inject = globalThis['~rari']?.injectMetadataIntoDocument;
+                            if (typeof inject === 'function') {{
+                                const injected = inject(capturedElement, pageMetadata);
+                                capturedElement = (injected && typeof injected.then === 'function')
+                                    ? await injected
+                                    : injected;
+                            }}
                         }}
 
                         const renderStreaming = globalThis['~rari']?.renderStreamingDocument;
@@ -992,7 +1038,7 @@ impl LayoutRenderer {
                         &runtime,
                         request_context_for_stream,
                         "fizz_direct_stream".to_string(),
-                        stream_id,
+                        stream_id.clone(),
                         pump_script,
                         chunk_sender.clone(),
                     )
@@ -1006,6 +1052,7 @@ impl LayoutRenderer {
                         }
                         Err(e) => {
                             tracing::error!("Fizz streaming queue error: {e}");
+                            runtime_ops::cancel_streaming_page_metadata(&stream_id);
                             let _ = chunk_sender.send(Err(e)).await;
                         }
                     }
