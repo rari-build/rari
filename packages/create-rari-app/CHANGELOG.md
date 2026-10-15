@@ -1,3 +1,12 @@
+## [create-rari-app@0.5.32] - 2026-10-15
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari and related dependencies to version 0.17.4 by @skiniks
+- update rari and related dependencies to version 0.17.5
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.31...create-rari-app@0.5.32
 ## [create-rari-app@0.5.31] - 2026-10-08
 
 ### 🐛 Bug Fixes
