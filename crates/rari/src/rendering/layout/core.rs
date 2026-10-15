@@ -901,24 +901,36 @@ impl LayoutRenderer {
                     })
                     .await?;
 
-                if let Some(rx) = metadata_rx
-                    && let Ok(metadata) = rx.await
-                {
-                    context.metadata = metadata;
-                }
+                tokio::spawn(async move {
+                    if let Some(rx) = metadata_rx
+                        && let Ok(metadata) = rx.await
+                    {
+                        context.metadata = metadata;
+                    }
 
-                let composition_script = Self::compose_route_script_with_stream(
-                    &route_match,
-                    &context,
-                    loading_component_id.as_deref(),
-                    true,
-                    true,
-                    Some(&stream_id),
-                    true,
-                )?;
+                    let composition_script = match Self::compose_route_script_with_stream(
+                        &route_match,
+                        &context,
+                        loading_component_id.as_deref(),
+                        true,
+                        true,
+                        Some(&stream_id),
+                        true,
+                    ) {
+                        Ok(script) => script,
+                        Err(e) => {
+                            tracing::error!("Fizz streaming composition error: {e}");
+                            let _ = chunk_sender
+                                .send(Err(RariError::internal(format!(
+                                    "Fizz streaming composition failed: {e}"
+                                ))))
+                                .await;
+                            return;
+                        }
+                    };
 
-                let pump_script = format!(
-                    r"(async function() {{
+                    let pump_script = format!(
+                        r"(async function() {{
                         let caughtErrors = [];
                         {FIZZ_STREAM_ERROR_HELPER}
                         try {{
@@ -974,22 +986,28 @@ impl LayoutRenderer {
                             Deno.core.ops.op_fizz_done(__RARI_STREAM_ID__);
                         }}
                     }})()",
-                );
+                    );
 
-                let (completion, stream_lease) = queue_streaming_script(
-                    &runtime,
-                    request_context_for_stream,
-                    "fizz_direct_stream".to_string(),
-                    stream_id,
-                    pump_script,
-                    chunk_sender,
-                )
-                .await?;
-
-                tokio::spawn(async move {
-                    let _stream_lease = stream_lease;
-                    if let Err(e) = completion.await {
-                        tracing::error!("Fizz direct streaming error: {e}");
+                    match queue_streaming_script(
+                        &runtime,
+                        request_context_for_stream,
+                        "fizz_direct_stream".to_string(),
+                        stream_id,
+                        pump_script,
+                        chunk_sender.clone(),
+                    )
+                    .await
+                    {
+                        Ok((completion, stream_lease)) => {
+                            let _stream_lease = stream_lease;
+                            if let Err(e) = completion.await {
+                                tracing::error!("Fizz direct streaming error: {e}");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Fizz streaming queue error: {e}");
+                            let _ = chunk_sender.send(Err(e)).await;
+                        }
                     }
                 });
 

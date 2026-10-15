@@ -520,14 +520,14 @@ pub async fn handle_app_route(
                     let _ = metadata_tx.send(metadata);
                 });
 
-                let response = render_with_fallback(
+                let response = Box::pin(render_with_fallback(
                     Arc::new(state.clone()),
                     route_match.clone(),
                     context.clone(),
                     accept_encoding,
                     Arc::clone(&request_context),
                     Some(metadata_rx),
-                )
+                ))
                 .await?;
 
                 if response.status() == StatusCode::OK

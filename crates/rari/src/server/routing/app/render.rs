@@ -862,6 +862,11 @@ pub async fn render_streaming_with_layout(
                 );
             }
 
+            let mut context = context;
+            if context.metadata.is_none() {
+                context.metadata = collect_page_metadata(&state, &route_match, &context).await;
+            }
+
             return render_synchronous(
                 state,
                 route_match,
