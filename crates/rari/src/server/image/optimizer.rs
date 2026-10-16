@@ -70,6 +70,8 @@ fn decode_url_path_segments(path: &str) -> String {
 pub struct PreloadImage {
     pub url: String,
     pub width: u32,
+    pub srcset_widths: Vec<u32>,
+    pub sizes: Option<String>,
     pub quality: u8,
     pub format: ImageFormat,
 }
@@ -150,8 +152,13 @@ impl ImageOptimizer {
     }
 
     fn all_configured_widths(config: &ImageConfig) -> Vec<u32> {
-        let mut sizes = config.device_sizes.clone();
-        sizes.extend(config.image_sizes.clone());
+        let mut sizes: Vec<u32> = config
+            .device_sizes
+            .iter()
+            .chain(config.image_sizes.iter())
+            .copied()
+            .filter(|&width| width > 0 && width <= MAX_OUTPUT_WIDTH)
+            .collect();
         if sizes.is_empty() {
             return vec![384, 640, 750, 828, 1080, 1200, 1920];
         }
@@ -182,18 +189,29 @@ impl ImageOptimizer {
 
     pub fn get_preload_links(&self) -> Vec<String> {
         let preload_images = self.preload_images.read().unwrap_or_else(PoisonError::into_inner);
-        preload_images
+        preload_images.iter().map(Self::format_preload_link).collect()
+    }
+
+    fn format_preload_link(img: &PreloadImage) -> String {
+        let encoded_url = urlencoding::encode(&img.url);
+        let ext = img.format.extension();
+        let href =
+            format!("/_rari/image?url={}&w={}&q={}&f={}", encoded_url, img.width, img.quality, ext);
+        if img.srcset_widths.len() <= 1 {
+            return format!(r#"<link rel="preload" as="image" href="{href}" />"#);
+        }
+        let imagesrcset = img
+            .srcset_widths
             .iter()
-            .map(|img| {
-                format!(
-                    r#"<link rel="preload" as="image" href="/_rari/image?url={}&w={}&q={}&f={}" />"#,
-                    urlencoding::encode(&img.url),
-                    img.width,
-                    img.quality,
-                    img.format.extension()
-                )
+            .map(|w| {
+                format!("/_rari/image?url={}&w={w}&q={}&f={} {w}w", encoded_url, img.quality, ext)
             })
-            .collect()
+            .collect::<Vec<_>>()
+            .join(", ");
+        let imagesizes = img.sizes.as_deref().unwrap_or("100vw");
+        format!(
+            r#"<link rel="preload" as="image" href="{href}" imagesrcset="{imagesrcset}" imagesizes="{imagesizes}" />"#
+        )
     }
 
     pub fn clear_preload_images(&self) {
@@ -403,8 +421,9 @@ impl ImageOptimizer {
             }
 
             let should_preload = variant.preload.unwrap_or(false);
+            let declared_width = variant.width;
 
-            let widths: Vec<u32> = if let Some(width) = variant.width {
+            let widths: Vec<u32> = if let Some(width) = declared_width {
                 Self::fixed_layout_preoptimize_widths(width, &self.config)
             } else {
                 Self::all_configured_widths(&self.config)
@@ -413,11 +432,27 @@ impl ImageOptimizer {
             for &width in &widths {
                 for &format in &formats {
                     tasks.push((variant.src.clone(), width, format, quality));
+                }
+            }
 
-                    if should_preload && format == formats[0] {
+            if should_preload && !widths.is_empty() && !formats.is_empty() {
+                let format = formats[0];
+                if let Some(declared) = declared_width {
+                    preload_list.push(PreloadImage {
+                        url: variant.src.clone(),
+                        width: widths[0],
+                        srcset_widths: widths.clone(),
+                        sizes: Some(format!("{declared}px")),
+                        quality,
+                        format,
+                    });
+                } else {
+                    for &width in &widths {
                         preload_list.push(PreloadImage {
                             url: variant.src.clone(),
                             width,
+                            srcset_widths: Vec::new(),
+                            sizes: None,
                             quality,
                             format,
                         });
@@ -1703,6 +1738,34 @@ mod tests {
             vec![1200, 1920]
         );
         assert_eq!(ImageOptimizer::fixed_layout_preoptimize_widths(400, &config), vec![400, 828]);
+    }
+
+    #[test]
+    fn all_configured_widths_drops_sizes_above_output_cap() {
+        let config = ImageConfig {
+            device_sizes: vec![640, 1200, 4096],
+            image_sizes: vec![16, 384],
+            ..ImageConfig::default()
+        };
+        assert_eq!(ImageOptimizer::all_configured_widths(&config), vec![16, 384, 640, 1200]);
+    }
+
+    #[test]
+    fn fixed_layout_preload_link_emits_single_responsive_preload() {
+        let link = ImageOptimizer::format_preload_link(&PreloadImage {
+            url: "/hero.jpg".to_string(),
+            width: 1200,
+            srcset_widths: vec![1200, 1920],
+            sizes: Some("1200px".to_string()),
+            quality: 75,
+            format: ImageFormat::Avif,
+        });
+        assert!(link.contains(r#"rel="preload""#));
+        assert!(link.contains("imagesrcset="));
+        assert!(link.contains("1200w"));
+        assert!(link.contains("1920w"));
+        assert!(link.contains(r#"imagesizes="1200px""#));
+        assert_eq!(link.matches("rel=\"preload\"").count(), 1);
     }
 
     fn expected_manifest_variant_count(config: &ImageConfig) -> usize {

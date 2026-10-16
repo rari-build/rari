@@ -92,7 +92,7 @@ export default Image;
 ";
 
 pub const RARI_IMAGE_CONFIG_VIRTUAL_STUB: &str = r"
-import { configureImageSizes } from 'rari/image/runtime-config';
+import { configureImageSizes } from 'file:///rari_stub/image/runtime-config.js';
 const cfg = globalThis['~rari']?.imageSizeConfig;
 if (cfg != null) configureImageSizes(cfg);
 ";

@@ -33,7 +33,7 @@ use crate::{
     rendering::base::loader::{RscJsLoader, RscModuleOperation},
     rsc::{self, ComponentRegistry},
     runtime::{JsExecutionRuntime, factory::JsRuntimeInterface},
-    server::middleware::request_context::RequestContext,
+    server::{config::Config, middleware::request_context::RequestContext},
 };
 
 #[derive(Clone, Copy)]
@@ -381,6 +381,18 @@ globalThis['~errors'].batch.push({{
     }
 
     pub async fn resync_slot(&self, runtime: Arc<dyn JsRuntimeInterface>) -> Result<(), RariError> {
+        if let Some(config) = Config::get() {
+            runtime
+                .execute_script(
+                    "resync_inject_image_size_config".to_string(),
+                    config.images.runtime_size_config_inject_script(),
+                )
+                .await
+                .map_err(|e| {
+                    RariError::internal(format!("resync: inject imageSizeConfig failed: {e}"))
+                })?;
+        }
+
         let vendors = runtime
             .execute_script(
                 "<resync_load_react_server>".to_string(),
