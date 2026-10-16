@@ -152,15 +152,32 @@ impl ImageOptimizer {
     }
 
     fn all_configured_widths(config: &ImageConfig) -> Vec<u32> {
-        let mut sizes: Vec<u32> = config
-            .device_sizes
+        let defaults = ImageConfig::default();
+        let device = if config.device_sizes.is_empty() {
+            defaults.device_sizes.as_slice()
+        } else {
+            config.device_sizes.as_slice()
+        };
+        let image = if config.image_sizes.is_empty() {
+            defaults.image_sizes.as_slice()
+        } else {
+            config.image_sizes.as_slice()
+        };
+
+        let mut sizes: Vec<u32> = device
             .iter()
-            .chain(config.image_sizes.iter())
+            .chain(image.iter())
             .copied()
             .filter(|&width| width > 0 && width <= MAX_OUTPUT_WIDTH)
             .collect();
         if sizes.is_empty() {
-            return vec![384, 640, 750, 828, 1080, 1200, 1920];
+            sizes = defaults
+                .device_sizes
+                .iter()
+                .chain(defaults.image_sizes.iter())
+                .copied()
+                .filter(|&width| width > 0 && width <= MAX_OUTPUT_WIDTH)
+                .collect();
         }
         sizes.sort_unstable();
         sizes.dedup();
@@ -1748,6 +1765,28 @@ mod tests {
             ..ImageConfig::default()
         };
         assert_eq!(ImageOptimizer::all_configured_widths(&config), vec![16, 384, 640, 1200]);
+    }
+
+    #[test]
+    fn all_configured_widths_fills_empty_list_from_defaults() {
+        let config = ImageConfig {
+            device_sizes: vec![640, 1200],
+            image_sizes: vec![],
+            ..ImageConfig::default()
+        };
+        let widths = ImageOptimizer::all_configured_widths(&config);
+        assert!(widths.contains(&640));
+        assert!(widths.contains(&1200));
+        assert!(widths.contains(&16));
+        assert!(widths.contains(&384));
+        assert!(!widths.contains(&750));
+
+        let both_empty =
+            ImageConfig { device_sizes: vec![], image_sizes: vec![], ..ImageConfig::default() };
+        assert_eq!(
+            ImageOptimizer::all_configured_widths(&both_empty),
+            ImageOptimizer::all_configured_widths(&ImageConfig::default())
+        );
     }
 
     #[test]
