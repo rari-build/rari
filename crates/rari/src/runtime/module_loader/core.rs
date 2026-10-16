@@ -32,8 +32,8 @@ use super::{
     storage::ModuleStorage,
     stubs::{
         FALLBACK_MODULE_TEMPLATE, LOADER_STUB_TEMPLATE, RARI_CACHE_STUB, RARI_CALL_SERVER_STUB,
-        RARI_CLIENT_STUB, RARI_DEFAULT_STUB, RARI_HEADERS_STUB, RARI_IMAGE_STUB, RARI_ROUTER_STUB,
-        create_component_stub,
+        RARI_CLIENT_STUB, RARI_DEFAULT_STUB, RARI_HEADERS_STUB, RARI_IMAGE_RUNTIME_CONFIG_STUB,
+        RARI_IMAGE_STUB, RARI_ROUTER_STUB, create_component_stub,
     },
     transpiler::{needs_jsx_transpilation, needs_typescript_transpilation},
 };
@@ -791,6 +791,7 @@ export default {{}};
             "headers" => RARI_HEADERS_STUB.to_string(),
             "cache" => RARI_CACHE_STUB.to_string(),
             "image" => RARI_IMAGE_STUB.to_string(),
+            "image/runtime-config" => RARI_IMAGE_RUNTIME_CONFIG_STUB.to_string(),
             "client" => RARI_CLIENT_STUB.to_string(),
             "runtime/call-server" => RARI_CALL_SERVER_STUB.to_string(),
             _ => RARI_DEFAULT_STUB.to_string(),

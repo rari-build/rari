@@ -1,8 +1,14 @@
-import { DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from './constants'
+import { DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES, MAX_OPTIMIZED_OUTPUT_WIDTH } from './constants'
 
 function sortedUnique(sizes: readonly number[]): readonly number[] {
   return Object.freeze(
-    [...new Set(sizes.filter(size => Number.isFinite(size) && size > 0))].sort((a, b) => a - b),
+    [
+      ...new Set(
+        sizes.filter(
+          size => Number.isFinite(size) && size > 0 && size <= MAX_OPTIMIZED_OUTPUT_WIDTH,
+        ),
+      ),
+    ].sort((a, b) => a - b),
   )
 }
 

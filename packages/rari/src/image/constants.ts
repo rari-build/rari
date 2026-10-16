@@ -1,5 +1,6 @@
 export type ImageFormat = 'avif' | 'webp' | 'jpeg'
 
+export const MAX_OPTIMIZED_OUTPUT_WIDTH = 3840
 export const DEFAULT_DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840]
 export const DEFAULT_IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384]
 export const DEFAULT_FORMATS: ImageFormat[] = ['avif']

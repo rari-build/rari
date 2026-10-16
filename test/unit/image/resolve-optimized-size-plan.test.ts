@@ -82,6 +82,18 @@ describe('resolveOptimizedSizePlan', () => {
     expect(plan.widths[0]).toBeGreaterThanOrEqual(minWidth)
   })
 
+  it('drops deviceSizes above the optimizer hard cap', () => {
+    configureImageSizes({
+      deviceSizes: [640, 1200, 4096],
+      imageSizes: DEFAULT_IMAGE_SIZES,
+    })
+
+    const fill = resolveOptimizedSizePlan({ fill: true })
+    expect(fill.widths).toEqual([640, 1200])
+    expect(fill.defaultWidth).toBe(1200)
+    expect(fill.widths).not.toContain(4096)
+  })
+
   it('uses vite-configured deviceSizes and imageSizes when set', () => {
     configureImageSizes({
       deviceSizes: [640, 750, 828, 1080, 1200, 1600],

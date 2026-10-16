@@ -87,6 +87,49 @@ export const DEFAULT_MINIMUM_CACHE_TTL = 60;
 export default Image;
 ";
 
+pub const RARI_IMAGE_RUNTIME_CONFIG_STUB: &str = r"
+const DEFAULT_DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
+const DEFAULT_IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384];
+const MAX_OPTIMIZED_OUTPUT_WIDTH = 3840;
+
+function sortedUnique(sizes) {
+  return Object.freeze(
+    [...new Set(sizes.filter((size) => Number.isFinite(size) && size > 0 && size <= MAX_OPTIMIZED_OUTPUT_WIDTH))]
+      .sort((a, b) => a - b),
+  );
+}
+
+let deviceSizes = DEFAULT_DEVICE_SIZES;
+let imageSizes = DEFAULT_IMAGE_SIZES;
+let allSizes = sortedUnique([...DEFAULT_IMAGE_SIZES, ...DEFAULT_DEVICE_SIZES]);
+let maxOptimizedWidth = Math.max(...DEFAULT_DEVICE_SIZES);
+
+export function configureImageSizes(options) {
+  if (options?.deviceSizes?.length) {
+    const next = sortedUnique(options.deviceSizes);
+    if (next.length > 0) deviceSizes = next;
+  }
+  if (options?.imageSizes?.length) {
+    const next = sortedUnique(options.imageSizes);
+    if (next.length > 0) imageSizes = next;
+  }
+  allSizes = sortedUnique([...imageSizes, ...deviceSizes]);
+  maxOptimizedWidth = Math.max(...deviceSizes);
+}
+
+export function getImageDeviceSizes() { return deviceSizes; }
+export function getImageSizes() { return imageSizes; }
+export function getAllImageSizes() { return allSizes; }
+export function getMaxOptimizedWidth() { return maxOptimizedWidth; }
+export default {
+  configureImageSizes,
+  getImageDeviceSizes,
+  getImageSizes,
+  getAllImageSizes,
+  getMaxOptimizedWidth,
+};
+";
+
 pub const RARI_CALL_SERVER_STUB: &str = r"
 export async function callServer() {
   throw new Error('callServer must not be invoked during SSR');

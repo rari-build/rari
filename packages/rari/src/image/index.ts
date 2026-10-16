@@ -8,6 +8,7 @@ export {
   DEFAULT_IMAGE_SIZES,
   DEFAULT_MINIMUM_CACHE_TTL,
   DEFAULT_QUALITY_LEVELS,
+  MAX_OPTIMIZED_OUTPUT_WIDTH,
 } from './constants'
 export type { ImageFormat } from './constants'
 export type { ImageProps, StaticImageData } from './image'
