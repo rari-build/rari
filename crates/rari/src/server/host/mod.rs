@@ -129,6 +129,15 @@ impl Server {
             RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
         renderer.initialize().await?;
 
+        let image_size_config = serde_json::json!({
+            "deviceSizes": config.images.device_sizes,
+            "imageSizes": config.images.image_sizes,
+        });
+        let inject_image_size_config = format!(
+            "(function(){{globalThis['~rari']=globalThis['~rari']||{{}};globalThis['~rari'].imageSizeConfig={image_size_config};}})()"
+        );
+        js_runtime.broadcast_script("inject_image_size_config", &inject_image_size_config).await?;
+
         let server_manifest = if config.is_production() {
             ComponentLoader::load_server_manifest_file().await?
         } else {

@@ -91,6 +91,12 @@ export function configureImageSizes() {}
 export default Image;
 ";
 
+pub const RARI_IMAGE_CONFIG_VIRTUAL_STUB: &str = r"
+import { configureImageSizes } from 'rari/image/runtime-config';
+const cfg = globalThis['~rari']?.imageSizeConfig;
+if (cfg != null) configureImageSizes(cfg);
+";
+
 pub const RARI_IMAGE_RUNTIME_CONFIG_STUB: &str = r"
 const DEFAULT_DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
 const DEFAULT_IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384];

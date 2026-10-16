@@ -149,6 +149,37 @@ impl ImageOptimizer {
         }
     }
 
+    fn all_configured_widths(config: &ImageConfig) -> Vec<u32> {
+        let mut sizes = config.device_sizes.clone();
+        sizes.extend(config.image_sizes.clone());
+        if sizes.is_empty() {
+            return vec![384, 640, 750, 828, 1080, 1200, 1920];
+        }
+        sizes.sort_unstable();
+        sizes.dedup();
+        sizes
+    }
+
+    fn nearest_configured_width(target: u32, sizes: &[u32]) -> u32 {
+        sizes
+            .iter()
+            .copied()
+            .find(|&size| size >= target)
+            .or_else(|| sizes.last().copied())
+            .unwrap_or(target)
+    }
+
+    fn fixed_layout_preoptimize_widths(width: u32, config: &ImageConfig) -> Vec<u32> {
+        let sizes = Self::all_configured_widths(config);
+        let mut widths = vec![
+            Self::nearest_configured_width(width, &sizes),
+            Self::nearest_configured_width(width.saturating_mul(2), &sizes),
+        ];
+        widths.sort_unstable();
+        widths.dedup();
+        widths
+    }
+
     pub fn get_preload_links(&self) -> Vec<String> {
         let preload_images = self.preload_images.read().unwrap_or_else(PoisonError::into_inner);
         preload_images
@@ -374,17 +405,9 @@ impl ImageOptimizer {
             let should_preload = variant.preload.unwrap_or(false);
 
             let widths: Vec<u32> = if let Some(width) = variant.width {
-                vec![width]
+                Self::fixed_layout_preoptimize_widths(width, &self.config)
             } else {
-                let mut sizes = self.config.device_sizes.clone();
-                sizes.extend(self.config.image_sizes.clone());
-                if sizes.is_empty() {
-                    vec![384, 640, 750, 828, 1080, 1200, 1920]
-                } else {
-                    sizes.sort_unstable();
-                    sizes.dedup();
-                    sizes
-                }
+                Self::all_configured_widths(&self.config)
             };
 
             for &width in &widths {
@@ -535,15 +558,7 @@ impl ImageOptimizer {
         urls: Vec<String>,
         dry_run: bool,
     ) -> Result<usize, ImageError> {
-        let mut sizes = self.config.device_sizes.clone();
-        sizes.extend(self.config.image_sizes.clone());
-
-        if sizes.is_empty() {
-            sizes = vec![384, 640, 750, 828, 1080, 1200, 1920];
-        }
-
-        sizes.sort_unstable();
-        sizes.dedup();
+        let sizes = Self::all_configured_widths(&self.config);
 
         let formats = if self.config.formats.is_empty() {
             vec![ImageFormat::Avif]
@@ -1672,32 +1687,32 @@ mod tests {
     }
 
     fn expected_scan_variant_count(config: &ImageConfig, url_count: usize) -> usize {
-        let mut sizes = config.device_sizes.clone();
-        sizes.extend(config.image_sizes.clone());
-        if sizes.is_empty() {
-            sizes = vec![384, 640, 750, 828, 1080, 1200, 1920];
-        }
-        sizes.sort_unstable();
-        sizes.dedup();
         let format_count = if config.formats.is_empty() { 1 } else { config.formats.len() };
-        url_count * sizes.len() * format_count
+        url_count * ImageOptimizer::all_configured_widths(config).len() * format_count
+    }
+
+    #[test]
+    fn fixed_layout_preoptimize_includes_1x_and_2x_snapped_widths() {
+        let config = ImageConfig {
+            device_sizes: vec![640, 750, 828, 1080, 1200, 1920],
+            image_sizes: vec![16, 32, 48, 64, 96, 128, 256, 384, 400, 600],
+            ..ImageConfig::default()
+        };
+        assert_eq!(
+            ImageOptimizer::fixed_layout_preoptimize_widths(1200, &config),
+            vec![1200, 1920]
+        );
+        assert_eq!(ImageOptimizer::fixed_layout_preoptimize_widths(400, &config), vec![400, 828]);
     }
 
     fn expected_manifest_variant_count(config: &ImageConfig) -> usize {
         let format_count = if config.formats.is_empty() { 1 } else { config.formats.len() };
         let mut total = 0usize;
         for variant in &config.preoptimize_manifest {
-            let width_count = if variant.width.is_some() {
-                1
+            let width_count = if let Some(width) = variant.width {
+                ImageOptimizer::fixed_layout_preoptimize_widths(width, config).len()
             } else {
-                let mut sizes = config.device_sizes.clone();
-                sizes.extend(config.image_sizes.clone());
-                if sizes.is_empty() {
-                    sizes = vec![384, 640, 750, 828, 1080, 1200, 1920];
-                }
-                sizes.sort_unstable();
-                sizes.dedup();
-                sizes.len()
+                ImageOptimizer::all_configured_widths(config).len()
             };
             total += width_count * format_count;
         }
