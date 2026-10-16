@@ -79,6 +79,19 @@ impl Default for ImageConfig {
     }
 }
 
+impl ImageConfig {
+    #[must_use]
+    pub fn runtime_size_config_inject_script(&self) -> String {
+        let image_size_config = serde_json::json!({
+            "deviceSizes": self.device_sizes,
+            "imageSizes": self.image_sizes,
+        });
+        format!(
+            "(function(){{globalThis['~rari']=globalThis['~rari']||{{}};globalThis['~rari'].imageSizeConfig={image_size_config};}})()"
+        )
+    }
+}
+
 fn default_device_sizes() -> Vec<u32> {
     vec![640, 750, 828, 1080, 1200, 1920, 2048, 3840]
 }

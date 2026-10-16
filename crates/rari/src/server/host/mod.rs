@@ -129,6 +129,9 @@ impl Server {
             RscRenderer::with_resource_limits(Arc::clone(&js_runtime), resource_limits);
         renderer.initialize().await?;
 
+        let inject_image_size_config = config.images.runtime_size_config_inject_script();
+        js_runtime.broadcast_script("inject_image_size_config", &inject_image_size_config).await?;
+
         let server_manifest = if config.is_production() {
             ComponentLoader::load_server_manifest_file().await?
         } else {

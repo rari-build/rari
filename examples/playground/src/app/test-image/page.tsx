@@ -167,6 +167,7 @@ export default function TestImagePage() {
               src={silhouetteOfTrees}
               alt="Silhouette of palm trees at night"
               fill
+              sizes="100vw"
               style={{ objectFit: 'cover' }}
             />
           </div>
