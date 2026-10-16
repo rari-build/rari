@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { preload as preloadResource } from 'react-dom'
 import { BLUR_PLACEHOLDER_QUALITY, BLUR_PLACEHOLDER_WIDTH, DEFAULT_FORMATS } from './constants'
 import { resolveOptimizedSizePlan } from './size-plan'
+import 'virtual:rari-image-config'
 
 export interface ImageProps {
   readonly src: string | StaticImageData
@@ -62,9 +63,13 @@ function resolveDefaultSizes(
   sizes: string | undefined,
   useResponsive: boolean,
   fill = false,
+  width?: number,
 ): string | undefined {
   if (sizes != null && sizes !== '') return sizes
-  return useResponsive || fill ? '100vw' : undefined
+  if (fill) return '100vw'
+  if (!useResponsive) return undefined
+  if (width != null && width !== 0) return `${width}px`
+  return '100vw'
 }
 
 function primaryOptimizerFormat(loader: ImageProps['loader']): ImageFormat | undefined {
@@ -82,7 +87,6 @@ function preloadImageResource(options: {
   readonly sizes: string | undefined
   readonly loader: ImageProps['loader']
   readonly unoptimized: boolean
-  readonly fill: boolean
   readonly shouldUseSrcSet: boolean
   readonly format: ImageFormat | undefined
 }): void {
@@ -96,7 +100,6 @@ function preloadImageResource(options: {
     sizes,
     loader,
     unoptimized,
-    fill,
     shouldUseSrcSet,
     format,
   } = options
@@ -104,20 +107,19 @@ function preloadImageResource(options: {
   if (unoptimized) {
     preloadResource(
       loader != null ? loader({ src: finalSrc, width: defaultWidth, quality }) : finalSrc,
-      { as: 'image' },
+      { as: 'image', fetchPriority: 'high' },
     )
     return
   }
 
   const href = resolveLoaderOrBuiltUrl(loader, finalSrc, defaultWidth, quality, format)
-  const useResponsivePreload = shouldUseSrcSet
-  const preloadSizes = resolveDefaultSizes(sizes, useResponsivePreload, fill)
 
-  if (useResponsivePreload) {
+  if (shouldUseSrcSet) {
     preloadResource(href, {
       as: 'image',
+      fetchPriority: 'high',
       imageSrcSet: buildOptimizedSrcSet(loader, finalSrc, widths, quality, format),
-      ...(preloadSizes != null ? { imageSizes: preloadSizes } : {}),
+      ...(sizes != null ? { imageSizes: sizes } : {}),
       ...(format === 'avif' ? { type: 'image/avif' } : {}),
     })
     return
@@ -125,6 +127,7 @@ function preloadImageResource(options: {
 
   preloadResource(href, {
     as: 'image',
+    fetchPriority: 'high',
     ...(format === 'avif' ? { type: 'image/avif' } : {}),
   })
 }
@@ -392,6 +395,7 @@ export function Image({
     fill,
     width,
     intrinsicWidth: typeof src !== 'string' ? src.width : undefined,
+    sizes,
   })
   const shouldUseSrcSet = sizePlan.widths.length > 1 || sizePlan.widths[0] !== sizePlan.defaultWidth
   const shouldEagerBlur = preload || loading === 'eager'
@@ -451,7 +455,12 @@ export function Image({
     quality,
     format: optimizerFormat,
   })
-  const resolvedSizes = resolveDefaultSizes(sizes, shouldUseSrcSet, fill)
+  const resolvedSizes = resolveDefaultSizes(
+    sizes,
+    shouldUseSrcSet,
+    fill,
+    width ?? imgWidth ?? sizePlan.defaultWidth,
+  )
   const srcSet =
     !unoptimized && shouldUseSrcSet
       ? buildOptimizedSrcSet(loader, finalSrc, sizePlan.widths, quality, optimizerFormat)
@@ -466,7 +475,6 @@ export function Image({
     sizes: resolvedSizes,
     loader,
     unoptimized,
-    fill,
     shouldUseSrcSet,
     format: optimizerFormat,
   })

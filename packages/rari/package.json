@@ -38,6 +38,10 @@
       "types": "./dist/image.d.mts",
       "default": "./dist/image.mjs"
     },
+    "./image/runtime-config": {
+      "types": "./dist/image/runtime-config.d.mts",
+      "default": "./dist/image/runtime-config.mjs"
+    },
     "./image/static": {
       "types": "./dist/image/static.d.mts"
     },

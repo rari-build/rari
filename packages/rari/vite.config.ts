@@ -20,6 +20,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      'rari/image/runtime-config': path.resolve(import.meta.dirname, 'src/image/runtime-config.ts'),
     },
   },
   pack: {
@@ -30,6 +31,7 @@ export default defineConfig({
       'cli': 'src/cli/index.ts',
       'platform': 'src/cli/platform.ts',
       'image': 'src/image/index.ts',
+      'image/runtime-config': 'src/image/runtime-config.ts',
       'image/static': 'src/image/static.ts',
       'font': 'src/font/index.ts',
       'font/local': 'src/font/local.ts',
@@ -78,6 +80,9 @@ export default defineConfig({
         'virtual:react-flight-client',
         'virtual:react-flight-client.ts',
         'virtual:rsc-integration.ts',
+        'virtual:rari-image-config',
+        'virtual:rari-image-config.ts',
+        'rari/image/runtime-config',
         'rari/router',
         'rari/mdx/registry',
         'rari/mdx/define',

@@ -41,6 +41,12 @@ export default defineConfig({
   plugins: [packageInternalAlias()],
   resolve: {
     alias: {
+      'virtual:rari-image-config': fileURLToPath(
+        new URL('./packages/rari/src/image/virtual-image-config-stub.ts', import.meta.url),
+      ),
+      'rari/image/runtime-config': fileURLToPath(
+        new URL('./packages/rari/src/image/runtime-config.ts', import.meta.url),
+      ),
       '@rari/use-cache/runtime/cache-wrapper': fileURLToPath(
         new URL('./packages/use-cache/dist/runtime/cache-wrapper.mjs', import.meta.url),
       ),
