@@ -1,3 +1,21 @@
+## [rari@0.17.6] - 2026-10-16
+
+### 🚀 Features
+
+- *(image)* add runtime-config for image size management and update imports by @skiniks
+- *(image)* enhance image size configuration with runtime settings and validation by @skiniks
+
+### 🐛 Bug Fixes
+
+- *(image)* responsive srcset for fixed images and wire vite size config by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari to version 0.17.6 and add new image configuration constants by @skiniks
+- update optional dependencies to version 0.17.6
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.5...rari@0.17.6
 ## [rari@0.17.5] - 2026-10-15
 
 ### 🐛 Bug Fixes
