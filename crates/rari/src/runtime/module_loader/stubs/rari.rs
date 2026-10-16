@@ -84,6 +84,10 @@ export const DEFAULT_IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384];
 export const DEFAULT_FORMATS = ['image/webp'];
 export const DEFAULT_QUALITY_LEVELS = { low: 25, medium: 50, high: 75, max: 100 };
 export const DEFAULT_MINIMUM_CACHE_TTL = 60;
+export const BLUR_PLACEHOLDER_WIDTH = 16;
+export const BLUR_PLACEHOLDER_QUALITY = 25;
+export const MAX_OPTIMIZED_OUTPUT_WIDTH = 3840;
+export function configureImageSizes() {}
 export default Image;
 ";
 
