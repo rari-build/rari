@@ -1,3 +1,11 @@
+## [create-rari-app@0.5.33] - 2026-10-17
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari and related dependencies to version 0.17.7
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.32...create-rari-app@0.5.33
 ## [create-rari-app@0.5.32] - 2026-10-15
 
 ### ⚙️ Miscellaneous Tasks
