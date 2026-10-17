@@ -1,3 +1,16 @@
+## [rari@0.17.7] - 2026-10-17
+
+### 🚀 Features
+
+- *(image)* integrate runtime size configuration injection and enhance preload link handling in ImageOptimizer by @skiniks
+- *(image)* improve width configuration handling by incorporating default values and add tests for empty configurations by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update optional dependencies to version 0.17.7
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.6...rari@0.17.7
 ## [rari@0.17.6] - 2026-10-16
 
 ### 🚀 Features
