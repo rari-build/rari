@@ -25,7 +25,7 @@
     "@shikijs/langs": "catalog:mdx",
     "@shikijs/themes": "catalog:mdx",
     "@shikijs/types": "catalog:mdx",
-    "mermaid": "catalog:mdx",
+    "pele": "catalog:mdx",
     "posthog-js": "catalog:analytics",
     "rari": "catalog:rari",
     "react": "catalog:react",

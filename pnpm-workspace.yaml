@@ -89,7 +89,7 @@ catalogs:
     '@shikijs/langs': ^4.5.0
     '@shikijs/themes': ^4.5.0
     '@shikijs/types': ^4.5.0
-    mermaid: ^12.1.0
+    pele: ^1.6.0
     remark-gfm: ^4.0.1
   monitoring:
     '@sentry/react': ^11.4.0
