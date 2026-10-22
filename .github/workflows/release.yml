@@ -21,8 +21,7 @@ jobs:
   build-binaries:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name ==
-      'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -117,23 +116,20 @@ jobs:
 
       - name: Generate V8 snapshot (Linux)
         if: runner.os == 'Linux'
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml --
-          crates/rari/snapshots
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
         env:
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
 
       - name: Generate V8 snapshot (macOS)
         if: runner.os == 'macOS'
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml --
-          crates/rari/snapshots
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
         env:
           RUSTFLAGS: '' # Override .cargo/config.toml to use default linker
 
       - name: Generate V8 snapshot (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml --
-          crates/rari/snapshots
+        run: cargo run --release --manifest-path tools/snapshot/Cargo.toml -- crates/rari/snapshots
         env:
           AWS_LC_SYS_PREBUILT_NASM: 1
 
@@ -170,7 +166,7 @@ jobs:
           copy target\${{ matrix.target }}\release\rari.exe binaries\${{ matrix.name }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.name }}
           path: binaries/${{ matrix.name }}
@@ -207,7 +203,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
@@ -216,7 +212,7 @@ jobs:
         run: npm install -g npm@11
 
       - name: Download platform binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ matrix.binary }}
           path: platform-binary
@@ -330,8 +326,7 @@ jobs:
 
   npm-release-package:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/rari@') || startsWith(github.ref,
-      'refs/tags/create-rari-app@')
+    if: startsWith(github.ref, 'refs/tags/rari@') || startsWith(github.ref, 'refs/tags/create-rari-app@')
     permissions:
       contents: read
       id-token: write
@@ -410,8 +405,7 @@ jobs:
   build-use-cache-addons:
     name: Build use-cache addon for ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    if: startsWith(github.ref, 'refs/tags/use-cache-binaries@') || github.event_name
-      == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/use-cache-binaries@') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -512,7 +506,7 @@ jobs:
           ls -la addon-output/
 
       - name: Upload addon artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: use-cache-addon-${{ matrix.platform }}
           path: addon-output/rari_use_cache.node
@@ -543,7 +537,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
@@ -552,7 +546,7 @@ jobs:
         run: npm install -g npm@11
 
       - name: Download platform addon
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: use-cache-addon-${{ matrix.platform }}
           path: platform-addon
