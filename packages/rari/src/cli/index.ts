@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
