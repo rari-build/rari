@@ -1,3 +1,20 @@
+## [rari@0.17.8] - 2026-10-22
+
+### 🐛 Bug Fixes
+
+- *(cli)* put the shebang back on the rari and create-rari-app bins by @NotAFlightRisk
+
+### ⚙️ Miscellaneous Tasks
+
+- upgrade project crates by @skiniks
+- bump rari version to 0.17.8 by @skiniks
+
+
+### 🆕 New Contributors
+
+- @NotAFlightRisk made their first contribution
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.7...rari@0.17.8
 ## [rari@0.17.7] - 2026-10-17
 
 ### 🚀 Features
