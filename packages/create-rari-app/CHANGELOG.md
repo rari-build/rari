@@ -1,3 +1,19 @@
+## [create-rari-app@0.5.34] - 2026-10-22
+
+### 🐛 Bug Fixes
+
+- *(cli)* put the shebang back on the rari and create-rari-app bins by @NotAFlightRisk
+
+### ⚙️ Miscellaneous Tasks
+
+- update js deps and gh actions by @skiniks
+
+
+### 🆕 New Contributors
+
+- @NotAFlightRisk made their first contribution
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.33...create-rari-app@0.5.34
 ## [create-rari-app@0.5.33] - 2026-10-17
 
 ### ⚙️ Miscellaneous Tasks

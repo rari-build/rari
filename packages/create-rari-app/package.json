@@ -1,7 +1,7 @@
 {
   "name": "create-rari-app",
   "type": "module",
-  "version": "0.5.33",
+  "version": "0.5.34",
   "packageManager": "pnpm@12.15.0",
   "description": "Create Runtime Accelerated Rendering Infrastructure (rari) applications with no build configuration",
   "author": "Ryan Skinner",
