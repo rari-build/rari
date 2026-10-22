@@ -1,3 +1,12 @@
+## [@rari/use-cache@0.17.8] - 2026-10-22
+
+### ⚙️ Miscellaneous Tasks
+
+- upgrade project crates by @skiniks
+- update optional dependencies to version 0.17.8
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.17.7...@rari/use-cache@0.17.8
 ## [@rari/use-cache@0.17.7] - 2026-10-17
 
 ### ⚙️ Miscellaneous Tasks
