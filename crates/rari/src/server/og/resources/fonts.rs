@@ -204,7 +204,7 @@ mod tests {
                     let mut scaler = scale_context
                         .builder(font_ref)
                         .size(32.0)
-                        .normalized_coords(run.normalized_coords())
+                        .normalized_coords(run.normalized_coords().iter().map(|c| c.to_bits()))
                         .build();
 
                     for glyph in gr.positioned_glyphs() {

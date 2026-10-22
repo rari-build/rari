@@ -189,24 +189,25 @@ impl LayoutEngine {
             };
         }
 
-        taffy_style.align_items =
-            style.get("alignItems").map(|align_items| match align_items.as_str() {
+        if let Some(align_items) = style.get("alignItems") {
+            taffy_style.align_items = match align_items.as_str() {
                 "flex-start" | "start" => AlignItems::FLEX_START,
                 "flex-end" | "end" => AlignItems::FLEX_END,
                 "center" => AlignItems::CENTER,
                 "baseline" => AlignItems::BASELINE,
                 _ => AlignItems::STRETCH,
-            });
+            };
+        }
 
         if let Some(justify_content) = style.get("justifyContent") {
-            taffy_style.justify_content = Some(match justify_content.as_str() {
+            taffy_style.justify_content = match justify_content.as_str() {
                 "flex-end" | "end" => JustifyContent::FLEX_END,
                 "center" => JustifyContent::CENTER,
                 "space-between" => JustifyContent::SPACE_BETWEEN,
                 "space-around" => JustifyContent::SPACE_AROUND,
                 "space-evenly" => JustifyContent::SPACE_EVENLY,
                 _ => JustifyContent::FLEX_START,
-            });
+            };
         }
 
         if let Some(flex) = style.get("flex")

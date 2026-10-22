@@ -232,7 +232,7 @@ impl ImageRenderer {
                 let mut scaler = scale_context
                     .builder(font_ref)
                     .size(params.font_size)
-                    .normalized_coords(run.normalized_coords())
+                    .normalized_coords(run.normalized_coords().iter().map(|c| c.to_bits()))
                     .build();
 
                 let palette = font_ref.color_palettes().next();
@@ -286,12 +286,14 @@ impl ImageRenderer {
         }
 
         let decoration_thickness = (params.font_size / 18.0).max(1.0);
+        let ascent = metrics.baseline - metrics.content_block_min_coord;
+        let descent = metrics.content_block_max_coord - metrics.baseline;
 
         for decoration in &params.text_decoration {
             let y_offset = match decoration {
-                TextDecoration::Underline => line_y + metrics.descent * 0.3,
-                TextDecoration::LineThrough => line_y - metrics.ascent * 0.35,
-                TextDecoration::Overline => line_y - metrics.ascent - decoration_thickness,
+                TextDecoration::Underline => line_y + descent * 0.3,
+                TextDecoration::LineThrough => line_y - ascent * 0.35,
+                TextDecoration::Overline => line_y - ascent - decoration_thickness,
             };
 
             self.draw_decoration_line(
