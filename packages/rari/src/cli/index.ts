@@ -273,7 +273,12 @@ function getDeploymentConfig() {
     process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
       ? process.env.NODE_ENV
       : 'production'
-  const host = isPlatformEnvironment() ? '0.0.0.0' : '127.0.0.1'
+  const host =
+    process.env.RARI_HOST != null && process.env.RARI_HOST !== ''
+      ? process.env.RARI_HOST
+      : isPlatformEnvironment()
+        ? '0.0.0.0'
+        : '127.0.0.1'
 
   return { port, mode, host }
 }
