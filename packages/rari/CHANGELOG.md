@@ -1,3 +1,15 @@
+## [rari@0.17.9] - 2026-11-12
+
+### 🐛 Bug Fixes
+
+- *(cli)* honour RARI_HOST in rari start by @NotAFlightRisk
+
+### ⚙️ Miscellaneous Tasks
+
+- bump rari crate to 0.17.9 by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.8...rari@0.17.9
 ## [rari@0.17.8] - 2026-10-22
 
 ### 🐛 Bug Fixes
