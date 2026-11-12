@@ -1,3 +1,11 @@
+## [create-rari-app@0.5.35] - 2026-11-12
+
+### 🐛 Bug Fixes
+
+- correct package versions by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.34...create-rari-app@0.5.35
 ## [create-rari-app@0.5.34] - 2026-10-22
 
 ### 🐛 Bug Fixes
