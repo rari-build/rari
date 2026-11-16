@@ -1056,18 +1056,18 @@ impl Config {
         if config.use_nonces {
             config.script_src.retain(|s| s != "'unsafe-inline'");
             config.script_src.push("'nonce-{{NONCE}}'".to_string());
-            if !config.script_src.contains(&"'strict-dynamic'".to_string()) {
+            if !config.script_src.iter().any(|i| i == "'strict-dynamic'") {
                 config.script_src.push("'strict-dynamic'".to_string());
             }
-        } else if !config.script_src.contains(&"'unsafe-inline'".to_string()) {
+        } else if !config.script_src.iter().any(|i| i == "'unsafe-inline'") {
             config.script_src.push("'unsafe-inline'".to_string());
         }
 
-        if !config.style_src.contains(&"'unsafe-inline'".to_string()) {
+        if !config.style_src.iter().any(|i| i == "'unsafe-inline'") {
             config.style_src.push("'unsafe-inline'".to_string());
         }
 
-        if self.is_development() && !config.script_src.contains(&"'unsafe-eval'".to_string()) {
+        if self.is_development() && !config.script_src.iter().any(|i| i == "'unsafe-eval'") {
             config.script_src.push("'unsafe-eval'".to_string());
         }
 

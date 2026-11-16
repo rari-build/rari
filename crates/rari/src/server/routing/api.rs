@@ -52,7 +52,7 @@ pub async fn api_cors_preflight(
         );
 
         let mut all_methods = methods;
-        if !all_methods.contains(&"OPTIONS".to_string()) {
+        if !all_methods.iter().any(|i: &String| i == "OPTIONS") {
             all_methods.push("OPTIONS".to_string());
         }
         let methods_str = all_methods.join(", ");
