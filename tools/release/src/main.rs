@@ -161,7 +161,7 @@ async fn run_non_interactive(
     ];
 
     if let Some(only_list) = &only {
-        release_units.retain(|unit| only_list.contains(&unit.name().to_string()));
+        release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));
         if release_units.is_empty() {
             anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
         }
