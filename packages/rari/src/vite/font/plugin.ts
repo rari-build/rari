@@ -89,7 +89,7 @@ function asLocalOptions(value: Record<string, JsonValue>): LocalFontOptions {
       }
       const pathValue = entry.path
       if (typeof pathValue !== 'string')
-        throw new Error('rari/font/local: src.path must be a string')
+        throw new TypeError('rari/font/local: src.path must be a string')
       return {
         path: pathValue,
         weight:

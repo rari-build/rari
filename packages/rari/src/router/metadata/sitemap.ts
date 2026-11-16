@@ -295,7 +295,7 @@ async function generateMultipleSitemaps(
         typeof module.default === 'function' ? await module.default({ id }) : module.default
 
       if (!Array.isArray(sitemapData))
-        throw new Error('Sitemap default export must resolve to a sitemap entry array')
+        throw new TypeError('Sitemap default export must resolve to a sitemap entry array')
 
       const content = generateSitemapXml(sitemapData)
       const outputPath = path.join(sitemapDir, `${sanitizedId}.xml`)
@@ -311,7 +311,7 @@ async function generateSingleSitemap(module: SitemapModuleExports, outDir: strin
   const sitemapData = typeof module.default === 'function' ? await module.default() : module.default
 
   if (!Array.isArray(sitemapData))
-    throw new Error('Sitemap default export must resolve to a sitemap entry array')
+    throw new TypeError('Sitemap default export must resolve to a sitemap entry array')
 
   const content = generateSitemapXml(sitemapData)
   const outputPath = path.join(outDir, 'sitemap.xml')
