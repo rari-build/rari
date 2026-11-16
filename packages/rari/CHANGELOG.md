@@ -1,3 +1,11 @@
+## [rari@0.17.10] - 2026-11-16
+
+### 🐛 Bug Fixes
+
+- change Errors to TypeErrors by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.9...rari@0.17.10
 ## [rari@0.17.9] - 2026-11-12
 
 ### 🐛 Bug Fixes
