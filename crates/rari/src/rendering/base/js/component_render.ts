@@ -11,7 +11,7 @@ void (async function () {
     const moduleExports = g['~rsc'].modules['{component_id}']
     const resolved = moduleExports.default ?? Object.values(moduleExports)[0]
     if (typeof resolved !== 'function')
-      throw new Error('Component {component_id} export is not a function')
+      throw new TypeError('Component {component_id} export is not a function')
     Component = resolved as (props: unknown) => unknown // oxlint-disable-line typescript/no-unsafe-type-assertion
     componentSource = '~rsc.modules.{component_id}'
   } else {

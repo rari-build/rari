@@ -1,4 +1,3 @@
-set windows-shell := ["powershell"]
 set shell := ["bash", "-cu"]
 
 # List all available commands

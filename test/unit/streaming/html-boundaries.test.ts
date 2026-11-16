@@ -30,7 +30,7 @@ function loadTracker(): () => HtmlBoundaryTracker {
   )
   const create = sandbox.rariCreateHtmlBoundaryTracker
   if (typeof create !== 'function')
-    throw new Error('failed to load rariCreateHtmlBoundaryTracker from html_boundaries.ts')
+    throw new TypeError('failed to load rariCreateHtmlBoundaryTracker from html_boundaries.ts')
 
   return create
 }

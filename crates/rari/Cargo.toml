@@ -1,6 +1,6 @@
 [package]
 name = "rari"
-version = "0.17.9"
+version = "0.17.10"
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -70,7 +70,7 @@ deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
 # === Async & Concurrency ===
-async-compression = { version = "0.4.51", features = ["brotli", "gzip", "tokio", "zstd"] }
+async-compression = { version = "0.4.52", features = ["brotli", "gzip", "tokio", "zstd"] }
 async-stream = "0.3.6"
 async-trait = "0.1.92"
 futures = "0.3.34"
@@ -119,12 +119,12 @@ image = { version = "0.25.10", default-features = false, features = [
   "png",
   "webp",
 ] }
-parley = "0.12.0"
-resvg = "0.48.1"
+parley = "0.13.0"
+resvg = "0.50.0"
 swash = "0.2.10"
-taffy = "0.15.0"
+taffy = "0.15.1"
 webp = "0.3.1"
-wuff = "0.2.9"
+wuff = "0.2.10"
 zeno = "0.3.3"
 
 # === Serialization ===
@@ -151,15 +151,15 @@ cow-utils = { workspace = true }
 dashmap = "6.2.1"
 lru = "0.19.0"
 parking_lot = { workspace = true }
-redis = { version = "1.7.1", default-features = false, features = ["tokio-comp"] }
-redb = "4.4.0"
+redis = { version = "1.8.2", default-features = false, features = ["tokio-comp"] }
+redb = "4.6.0"
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-signal-hook = { version = "0.4.5", features = ["iterator"] }
+signal-hook = { version = "0.4.6", features = ["iterator"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [

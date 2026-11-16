@@ -91,10 +91,11 @@ test.describe('Server Actions Progressive Enhancement', () => {
     await page.evaluate(
       ({ fields, action, todoText }) => {
         const form = document.querySelector('[data-testid="todo-form"] form')
-        if (!(form instanceof HTMLFormElement)) throw new Error('Todo form not found')
+        if (!(form instanceof HTMLFormElement)) throw new TypeError('Todo form not found')
 
         const textInput = form.querySelector('input[name="text"]')
-        if (!(textInput instanceof HTMLInputElement)) throw new Error('Todo text input not found')
+        if (!(textInput instanceof HTMLInputElement))
+          throw new TypeError('Todo text input not found')
 
         form.action = action
         form.method = 'POST'
