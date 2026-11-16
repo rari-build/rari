@@ -1,3 +1,11 @@
+## [@rari/lint@0.1.6] - 2026-11-16
+
+### 🚀 Features
+
+- soft-nav hollow shells with immediate loading and page view transitions by @skiniks
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/lint@0.1.5...@rari/lint@0.1.6
 ## [@rari/lint@0.1.5] - 2026-09-29
 
 ### 🚜 Refactor
