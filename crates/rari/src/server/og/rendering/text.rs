@@ -207,9 +207,8 @@ impl ImageRenderer {
         builder.push_text(text);
 
         let (mut layout, _text) = builder.build();
+        layout.set_alignment(params.text_align, AlignmentOptions::default());
         layout.break_all_lines(params.max_width);
-
-        layout.align(params.text_align, AlignmentOptions::default());
 
         let mut scale_context = ScaleContext::new();
 
