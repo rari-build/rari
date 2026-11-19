@@ -4,6 +4,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
+use crate::versions::{self, VersionSources};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageJson {
     pub name: String,
@@ -17,18 +19,71 @@ pub struct Package {
     pub name: String,
     pub path: PathBuf,
     pub current_version: String,
+    pub sources: VersionSources,
 }
 
 #[derive(Debug, Clone)]
 pub struct PackageGroup {
     pub name: String,
     pub current_version: String,
+    pub sources: VersionSources,
 }
 
 impl PackageGroup {
-    pub fn new_virtual(name: String, version: String) -> Self {
-        Self { name, current_version: version }
+    pub async fn load_virtual(
+        name: &str,
+        parent_path: &str,
+        platform_prefix: &str,
+    ) -> Result<Self> {
+        let parent_json = PathBuf::from(parent_path).join("package.json");
+        let pkg_json: PackageJson = serde_json::from_str(&fs::read_to_string(&parent_json).await?)?;
+        let platform_packages: Vec<String> = pkg_json
+            .other
+            .get("optionalDependencies")
+            .and_then(|deps| deps.as_object())
+            .map(|deps| {
+                deps.keys().filter(|dep| dep.starts_with(platform_prefix)).cloned().collect()
+            })
+            .unwrap_or_default();
+        if platform_packages.is_empty() {
+            anyhow::bail!(
+                "No `{platform_prefix}*` platform packages in optionalDependencies of {}",
+                parent_json.display()
+            );
+        }
+
+        let sources = versions::resolve(name, platform_packages, None).await;
+        let Some(current_version) = sources.effective() else {
+            anyhow::bail!(
+                "Could not determine a version for {name}: not found on npm or in git tags"
+            );
+        };
+        Ok(Self { name: name.to_string(), current_version, sources })
     }
+}
+
+pub async fn load_release_units() -> Result<Vec<ReleaseUnit>> {
+    let (rari, create_app, binaries, use_cache, use_cache_binaries, lint) = tokio::join!(
+        Package::load("rari", "packages/rari"),
+        Package::load("create-rari-app", "packages/create-rari-app"),
+        PackageGroup::load_virtual("rari-binaries", "packages/rari", "rari-"),
+        Package::load("@rari/use-cache", "packages/use-cache"),
+        PackageGroup::load_virtual(
+            "@rari/use-cache-binaries",
+            "packages/use-cache",
+            "@rari/use-cache-",
+        ),
+        Package::load("@rari/lint", "packages/lint"),
+    );
+
+    Ok(vec![
+        ReleaseUnit::Single(rari?),
+        ReleaseUnit::Single(create_app?),
+        ReleaseUnit::Virtual(binaries?),
+        ReleaseUnit::Single(use_cache?),
+        ReleaseUnit::Virtual(use_cache_binaries?),
+        ReleaseUnit::Single(lint?),
+    ])
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +104,13 @@ impl ReleaseUnit {
         match self {
             Self::Single(pkg) => &pkg.current_version,
             Self::Virtual(group) => &group.current_version,
+        }
+    }
+
+    pub fn sources(&self) -> &VersionSources {
+        match self {
+            Self::Single(pkg) => &pkg.sources,
+            Self::Virtual(group) => &group.sources,
         }
     }
 
@@ -101,7 +163,11 @@ impl Package {
         let content = fs::read_to_string(&pkg_json_path).await?;
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
 
-        Ok(Self { name: name.to_string(), path: pkg_path, current_version: pkg_json.version })
+        let sources =
+            versions::resolve(name, vec![name.to_string()], Some(pkg_json.version.clone())).await;
+        let current_version = sources.effective().unwrap_or(pkg_json.version);
+
+        Ok(Self { name: name.to_string(), path: pkg_path, current_version, sources })
     }
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {

@@ -6,7 +6,7 @@ use ratatui::Frame;
 
 use crate::{
     changelog, git,
-    package::{Package, ReleaseType, ReleaseUnit, ReleasedPackage, release_tag},
+    package::{ReleaseType, ReleaseUnit, ReleasedPackage, load_release_units, release_tag},
     ui,
 };
 
@@ -63,29 +63,7 @@ impl App {
         dry_run: bool,
         notes_file: Option<PathBuf>,
     ) -> Result<Self> {
-        use crate::package::{PackageGroup, ReleaseUnit};
-
-        let rari_pkg = Package::load("rari", "packages/rari").await?;
-        let binary_version = rari_pkg.current_version.clone();
-        let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
-
-        let use_cache_pkg = Package::load("@rari/use-cache", "packages/use-cache").await?;
-        let use_cache_binary_version = use_cache_pkg.current_version.clone();
-        let use_cache_binary_group = PackageGroup::new_virtual(
-            "@rari/use-cache-binaries".to_string(),
-            use_cache_binary_version,
-        );
-
-        let mut release_units = vec![
-            ReleaseUnit::Single(rari_pkg),
-            ReleaseUnit::Single(
-                Package::load("create-rari-app", "packages/create-rari-app").await?,
-            ),
-            ReleaseUnit::Virtual(binary_group),
-            ReleaseUnit::Single(use_cache_pkg),
-            ReleaseUnit::Virtual(use_cache_binary_group),
-            ReleaseUnit::Single(Package::load("@rari/lint", "packages/lint").await?),
-        ];
+        let mut release_units = load_release_units().await?;
 
         if let Some(only_list) = only {
             release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));

@@ -33,12 +33,23 @@ pub fn render_package_selection(frame: &mut Frame, app: &App) {
         .enumerate()
         .map(|(idx, unit)| {
             let prefix = if idx == app.selected_package_idx { "> " } else { "  " };
-            let content = format!("{}{} (v{})", prefix, unit.name(), unit.current_version());
-            ListItem::new(content).style(if idx == app.selected_package_idx {
+            let style = if idx == app.selected_package_idx {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
-            })
+            };
+            let mut spans = vec![Span::styled(
+                format!("{}{} (v{})", prefix, unit.name(), unit.current_version()),
+                style,
+            )];
+            let sources = unit.sources();
+            if sources.is_out_of_sync() || !sources.npm_reachable() {
+                spans.push(Span::styled(
+                    format!("  ⚠ {}", sources.summary()),
+                    Style::default().fg(Color::Red),
+                ));
+            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -52,13 +63,26 @@ pub fn render_package_selection(frame: &mut Frame, app: &App) {
     frame.render_widget(help, chunks[2]);
 }
 
+fn sources_line(unit: &ReleaseUnit) -> Line<'static> {
+    let sources = unit.sources();
+    let color = if sources.is_out_of_sync() || !sources.npm_reachable() {
+        Color::Red
+    } else {
+        Color::DarkGray
+    };
+    Line::from(vec![
+        Span::raw("Sources: "),
+        Span::styled(sources.summary(), Style::default().fg(color)),
+    ])
+}
+
 pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(5),
+            Constraint::Length(6),
             Constraint::Length(8),
             Constraint::Min(5),
             Constraint::Length(3),
@@ -77,6 +101,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
             Span::raw("Current Version: "),
             Span::styled(unit.current_version(), Style::default().fg(Color::Yellow)),
         ]),
+        sources_line(unit),
     ];
 
     if let ReleaseUnit::Virtual(_) = unit {
@@ -127,7 +152,7 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, i
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(5),
+            Constraint::Length(6),
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Min(1),
@@ -146,6 +171,7 @@ pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, i
             Span::raw("Current Version: "),
             Span::styled(unit.current_version(), Style::default().fg(Color::Yellow)),
         ]),
+        sources_line(unit),
     ])
     .block(Block::default().borders(Borders::ALL).title("Package Info"));
     frame.render_widget(info, chunks[0]);

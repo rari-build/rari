@@ -3,6 +3,7 @@ mod changelog;
 mod git;
 mod package;
 mod ui;
+mod versions;
 
 use std::{
     env,
@@ -22,9 +23,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::package::{
-    Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage, release_tag,
-};
+use crate::package::{ReleaseType, ReleasedPackage, release_tag};
 
 #[derive(Parser, Debug)]
 #[command(name = "release")]
@@ -142,23 +141,8 @@ async fn run_non_interactive(
     }
     println!();
 
-    let rari_pkg = Package::load("rari", "packages/rari").await?;
-    let binary_version = rari_pkg.current_version.clone();
-    let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
-
-    let use_cache_pkg = Package::load("@rari/use-cache", "packages/use-cache").await?;
-    let use_cache_binary_version = use_cache_pkg.current_version.clone();
-    let use_cache_binary_group =
-        PackageGroup::new_virtual("@rari/use-cache-binaries".to_string(), use_cache_binary_version);
-
-    let mut release_units = vec![
-        ReleaseUnit::Single(rari_pkg),
-        ReleaseUnit::Single(Package::load("create-rari-app", "packages/create-rari-app").await?),
-        ReleaseUnit::Virtual(binary_group),
-        ReleaseUnit::Single(use_cache_pkg),
-        ReleaseUnit::Virtual(use_cache_binary_group),
-        ReleaseUnit::Single(Package::load("@rari/lint", "packages/lint").await?),
-    ];
+    println!("Checking published versions...");
+    let mut release_units = package::load_release_units().await?;
 
     if let Some(only_list) = &only {
         release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));
@@ -206,6 +190,15 @@ async fn run_non_interactive(
         };
 
         println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
+        let sources = unit.sources();
+        println!("  {} {}", "Sources:".bold(), sources.summary());
+        if sources.is_out_of_sync() {
+            println!(
+                "  {} Sources disagree; bumping from the highest ({})",
+                "⚠".yellow().bold(),
+                unit.current_version()
+            );
+        }
 
         let first_path = unit.paths().first().map(|p| p.as_path()).unwrap_or(Path::new("."));
         let commits = git::get_commits_since_tag(unit_name, first_path).await?;
