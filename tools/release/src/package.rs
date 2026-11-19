@@ -19,6 +19,7 @@ pub struct Package {
     pub name: String,
     pub path: PathBuf,
     pub current_version: String,
+    pub prerelease_version: String,
     pub sources: VersionSources,
 }
 
@@ -26,6 +27,7 @@ pub struct Package {
 pub struct PackageGroup {
     pub name: String,
     pub current_version: String,
+    pub prerelease_version: String,
     pub sources: VersionSources,
 }
 
@@ -58,7 +60,9 @@ impl PackageGroup {
                 "Could not determine a version for {name}: not found on npm or in git tags"
             );
         };
-        Ok(Self { name: name.to_string(), current_version, sources })
+        let prerelease_version =
+            sources.effective_prerelease().unwrap_or_else(|| current_version.clone());
+        Ok(Self { name: name.to_string(), current_version, prerelease_version, sources })
     }
 }
 
@@ -138,6 +142,18 @@ impl ReleaseUnit {
         }
     }
 
+    pub fn base_version(&self, release_type: ReleaseType) -> &str {
+        let (current, prerelease) = match self {
+            Self::Single(pkg) => (&pkg.current_version, &pkg.prerelease_version),
+            Self::Virtual(group) => (&group.current_version, &group.prerelease_version),
+        };
+        if release_type.is_prerelease() { prerelease } else { current }
+    }
+
+    pub fn next_version(&self, release_type: ReleaseType) -> Option<String> {
+        release_type.to_version(self.base_version(release_type))
+    }
+
     pub fn sources(&self) -> &VersionSources {
         match self {
             Self::Single(pkg) => &pkg.sources,
@@ -197,8 +213,16 @@ impl Package {
         let sources =
             versions::resolve(name, vec![name.to_string()], Some(pkg_json.version.clone())).await;
         let current_version = sources.effective().unwrap_or(pkg_json.version);
+        let prerelease_version =
+            sources.effective_prerelease().unwrap_or_else(|| current_version.clone());
 
-        Ok(Self { name: name.to_string(), path: pkg_path, current_version, sources })
+        Ok(Self {
+            name: name.to_string(),
+            path: pkg_path,
+            current_version,
+            prerelease_version,
+            sources,
+        })
     }
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {
@@ -290,6 +314,10 @@ impl ReleaseType {
             Some(v) if *self != Self::Custom => format!("{self:?} ({v})"),
             _ => format!("{self:?}"),
         }
+    }
+
+    pub fn is_prerelease(self) -> bool {
+        matches!(self, Self::Prepatch | Self::Preminor | Self::Premajor | Self::Prerelease)
     }
 
     pub fn all() -> Vec<Self> {

@@ -212,8 +212,7 @@ async fn run_non_interactive(
                 "prerelease" => ReleaseType::Prerelease,
                 _ => anyhow::bail!("Invalid RELEASE_TYPE: {type_str}"),
             };
-            release_type
-                .to_version(unit.current_version())
+            unit.next_version(release_type)
                 .ok_or_else(|| anyhow::anyhow!("Failed to calculate version"))?
         } else {
             anyhow::bail!(

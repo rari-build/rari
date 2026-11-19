@@ -126,9 +126,7 @@ impl App {
                             package_idx: *package_idx,
                             input: String::new(),
                         };
-                    } else if let Some(new_version) =
-                        release_type.to_version(unit.current_version())
-                    {
+                    } else if let Some(new_version) = unit.next_version(release_type) {
                         self.screen =
                             Screen::Publishing { package_idx: *package_idx, version: new_version };
                         self.publish_step = PublishStep::UpdatingVersion;

@@ -90,7 +90,12 @@ function getDockerInstallSteps(cwd: string): DockerInstallSteps {
   if (has('yarn.lock')) {
     return {
       copy: 'package.json yarn.lock',
-      install: ['ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0', 'RUN corepack enable', 'RUN yarn install'],
+      install: [
+        'ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0',
+        'ENV YARN_NODE_LINKER=node-modules',
+        'RUN corepack enable',
+        'RUN yarn install',
+      ],
     }
   }
   if (has('bun.lock') || has('bun.lockb')) {
@@ -142,8 +147,8 @@ function createDockerignore(cwd: string) {
     `node_modules
 .git
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 dist
 *.log
 .DS_Store

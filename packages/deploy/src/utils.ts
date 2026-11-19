@@ -361,6 +361,9 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
       logInfo('Adding rari dependency...')
       packageJson.dependencies = packageJson.dependencies ?? {}
       packageJson.dependencies.rari = getRariVersion(cwd)
+      logWarn(
+        'rari was added to dependencies. Run your package manager install (e.g. "pnpm install") to update your lockfile before deploying; frozen-lockfile installs will fail otherwise.',
+      )
     }
 
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)

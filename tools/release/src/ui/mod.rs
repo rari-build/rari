@@ -127,7 +127,7 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
         .enumerate()
         .map(|(idx, vt)| {
             let prefix = if idx == app.selected_version_idx { "> * " } else { "  o " };
-            let content = format!("{}{}", prefix, vt.label(unit.current_version()));
+            let content = format!("{}{}", prefix, vt.label(unit.base_version(*vt)));
             ListItem::new(content).style(if idx == app.selected_version_idx {
                 Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             } else {

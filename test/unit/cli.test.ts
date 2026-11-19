@@ -13,6 +13,7 @@ describe('cli', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv }
+    delete process.env.RARI_HOST
   })
 
   afterEach(() => {

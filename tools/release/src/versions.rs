@@ -76,6 +76,21 @@ impl VersionSources {
             .map(|v| v.to_string())
     }
 
+    pub fn effective_prerelease(&self) -> Option<String> {
+        let nexts = self.npm.iter().filter_map(|pkg| match &pkg.status {
+            NpmStatus::Published { next, .. } => next.as_deref(),
+            _ => None,
+        });
+        self.npm_latests()
+            .into_iter()
+            .chain(nexts)
+            .chain(self.latest_tag.as_deref())
+            .chain(self.local.as_deref())
+            .filter_map(|v| Version::parse(v).ok())
+            .max()
+            .map(|v| v.to_string())
+    }
+
     pub fn is_out_of_sync(&self) -> bool {
         if self.npm_is_mixed() {
             return true;
@@ -308,6 +323,29 @@ mod tests {
         assert!(!s.npm_reachable());
         assert!(s.npm_is_mixed());
         assert!(s.is_out_of_sync());
+    }
+
+    #[test]
+    fn prerelease_base_includes_published_next() {
+        let s = VersionSources {
+            local: Some("0.17.10".to_string()),
+            npm: vec![with_status(
+                "rari",
+                NpmStatus::Published {
+                    latest: Some("0.17.10".to_string()),
+                    next: Some("0.17.11-0".to_string()),
+                },
+            )],
+            latest_tag: None,
+        };
+        assert_eq!(s.effective().as_deref(), Some("0.17.10"));
+        assert_eq!(s.effective_prerelease().as_deref(), Some("0.17.11-0"));
+    }
+
+    #[test]
+    fn prerelease_base_matches_stable_without_next() {
+        let s = sources(vec![published("rari", "0.17.10")], Some("0.17.10"), Some("0.17.10"));
+        assert_eq!(s.effective_prerelease(), s.effective());
     }
 
     #[test]
