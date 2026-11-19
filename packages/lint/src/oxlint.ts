@@ -1,35 +1,29 @@
 import type { OxlintConfig } from 'vite-plus/lint'
+import { fileURLToPath } from 'node:url'
 import { ignorePatterns } from './ignores'
+
+function jsPlugin(name: string, specifier: string): { name: string; specifier: string } {
+  try {
+    return { name, specifier: fileURLToPath(import.meta.resolve(specifier)) }
+  } catch {
+    return { name, specifier }
+  }
+}
 
 export const lint: OxlintConfig = {
   plugins: ['import', 'unicorn', 'typescript', 'oxc', 'promise'],
   jsPlugins: [
-    'eslint-plugin-antfu',
-    'eslint-plugin-unused-imports',
-    {
-      name: 'eslint-comments',
-      specifier: '@eslint-community/eslint-plugin-eslint-comments',
-    },
-    'eslint-plugin-command',
-    'eslint-plugin-perfectionist',
-    {
-      name: 'e18e',
-      specifier: '@e18e/eslint-plugin',
-    },
-    'eslint-plugin-regexp',
-    'eslint-plugin-de-morgan',
-    {
-      name: 'slop',
-      specifier: 'eslint-plugin-slop',
-    },
-    {
-      name: 'sonarjs',
-      specifier: 'eslint-plugin-sonarjs',
-    },
-    {
-      name: 'eslint-react',
-      specifier: '@eslint-react/eslint-plugin',
-    },
+    jsPlugin('antfu', 'eslint-plugin-antfu'),
+    jsPlugin('unused-imports', 'eslint-plugin-unused-imports'),
+    jsPlugin('eslint-comments', '@eslint-community/eslint-plugin-eslint-comments'),
+    jsPlugin('command', 'eslint-plugin-command'),
+    jsPlugin('perfectionist', 'eslint-plugin-perfectionist'),
+    jsPlugin('e18e', '@e18e/eslint-plugin'),
+    jsPlugin('regexp', 'eslint-plugin-regexp'),
+    jsPlugin('de-morgan', 'eslint-plugin-de-morgan'),
+    jsPlugin('slop', 'eslint-plugin-slop'),
+    jsPlugin('sonarjs', 'eslint-plugin-sonarjs'),
+    jsPlugin('eslint-react', '@eslint-react/eslint-plugin'),
   ],
   categories: {
     correctness: 'off',
