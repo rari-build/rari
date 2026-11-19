@@ -184,12 +184,8 @@ async fn run_non_interactive(
         );
     }
 
-    let mut released_packages: Vec<ReleasedPackage> = Vec::new();
-
+    let mut planned: Vec<(ReleaseUnit, String)> = Vec::with_capacity(release_units.len());
     for unit in release_units {
-        let unit_name = unit.name();
-        println!("{} {}", "📦 Releasing".bold(), unit_name.cyan().bold());
-
         let new_version = if let Some(ref version) = env_version {
             let v = semver::Version::parse(version)
                 .map_err(|_| anyhow::anyhow!("Invalid RELEASE_VERSION: {version}"))?;
@@ -224,6 +220,14 @@ async fn run_non_interactive(
                 "Non-interactive mode requires RELEASE_VERSION or RELEASE_TYPE environment variable"
             );
         };
+        planned.push((unit, new_version));
+    }
+
+    let mut released_packages: Vec<ReleasedPackage> = Vec::new();
+
+    for (unit, new_version) in planned {
+        let unit_name = unit.name();
+        println!("{} {}", "📦 Releasing".bold(), unit_name.cyan().bold());
 
         println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
         let sources = unit.sources();
