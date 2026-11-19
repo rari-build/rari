@@ -40,7 +40,7 @@ jobs:
         with:
           fetch-depth: '0'
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
         with:
           fetch-depth: '0'
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
@@ -152,7 +152,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
@@ -209,15 +209,14 @@ jobs:
       matrix:
         os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         exclude:
-          - os: ${{ github.event_name == 'merge_group' &&
-              'namespace-profile-rari-windows-amd64' || '' }}
+          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
         with:
           persist-credentials: false
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-platform-cache
@@ -293,15 +292,14 @@ jobs:
   build-use-cache-addon-linux:
     name: Build rari_use_cache.node (linux-x64)
     needs: [changes]
-    if: needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src
-      == 'true'
+    if: needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true'
     runs-on: namespace-profile-rari-linux-amd64
     timeout-minutes: 20
     permissions:
       actions: write
       contents: read
     steps:
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
 
       - uses: ./.github/actions/setup-platform-cache
         with:
@@ -344,8 +342,7 @@ jobs:
   build-use-cache-addon-windows:
     name: Build rari_use_cache.node (win32-x64)
     needs: [changes]
-    if: (needs.changes.outputs.use_cache_crate == 'true' ||
-      needs.changes.outputs.src == 'true') && github.event_name != 'merge_group'
+    if: (needs.changes.outputs.use_cache_crate == 'true' || needs.changes.outputs.src == 'true') && github.event_name != 'merge_group'
     runs-on: namespace-profile-rari-windows-amd64
     timeout-minutes: 20
     permissions:
@@ -407,7 +404,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
@@ -467,7 +464,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: runner.os == 'Windows'
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-namespace-cache
@@ -522,8 +519,7 @@ jobs:
         os: [namespace-profile-rari-linux-amd64, namespace-profile-rari-windows-amd64]
         node: [24.21.0]
         exclude:
-          - os: ${{ github.event_name == 'merge_group' &&
-              'namespace-profile-rari-windows-amd64' || '' }}
+          - os: ${{ github.event_name == 'merge_group' && 'namespace-profile-rari-windows-amd64' || '' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -531,7 +527,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: namespacelabs/nscloud-checkout-action@66f2dc6f6c42a8ac6c4e53473c4840006822831e # v9.0.1
+      - uses: namespacelabs/nscloud-checkout-action@c79409f8642d7fca9c1169a97f84d7ada5de1f9e # v9.0.2
         if: runner.os != 'Windows'
 
       - uses: ./.github/actions/setup-platform-cache
@@ -552,14 +548,12 @@ jobs:
           path: packages
 
       - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result ==
-          'success'
+        if: runner.os == 'Linux' && needs.build-use-cache-addon-linux.result == 'success'
         with:
           platform: linux-x64
 
       - uses: ./.github/actions/restore-use-cache-addon
-        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result ==
-          'success'
+        if: runner.os == 'Windows' && needs.build-use-cache-addon-windows.result == 'success'
         with:
           platform: win32-x64
 
