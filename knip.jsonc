@@ -35,19 +35,7 @@
     },
     "packages/lint": {
       "entry": ["src/**/*.ts"],
-      "project": ["src/**/*.ts"],
-      "ignoreDependencies": [
-        "@e18e/eslint-plugin",
-        "@eslint-community/eslint-plugin-eslint-comments",
-        "eslint-plugin-antfu",
-        "eslint-plugin-command",
-        "eslint-plugin-de-morgan",
-        "eslint-plugin-perfectionist",
-        "eslint-plugin-regexp",
-        "eslint-plugin-slop",
-        "eslint-plugin-sonarjs",
-        "eslint-plugin-unused-imports"
-      ]
+      "project": ["src/**/*.ts"]
     },
     "examples/playground": {
       "entry": ["src/app/**/*.{ts,tsx}"],

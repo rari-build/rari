@@ -4,6 +4,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
+use crate::versions::{self, VersionSources};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageJson {
     pub name: String,
@@ -17,18 +19,107 @@ pub struct Package {
     pub name: String,
     pub path: PathBuf,
     pub current_version: String,
+    pub prerelease_version: String,
+    pub sources: VersionSources,
 }
 
 #[derive(Debug, Clone)]
 pub struct PackageGroup {
     pub name: String,
     pub current_version: String,
+    pub prerelease_version: String,
+    pub sources: VersionSources,
 }
 
 impl PackageGroup {
-    pub fn new_virtual(name: String, version: String) -> Self {
-        Self { name, current_version: version }
+    pub async fn load_virtual(
+        name: &str,
+        parent_path: &str,
+        platform_prefix: &str,
+    ) -> Result<Self> {
+        let parent_json = PathBuf::from(parent_path).join("package.json");
+        let pkg_json: PackageJson = serde_json::from_str(&fs::read_to_string(&parent_json).await?)?;
+        let platform_packages: Vec<String> = pkg_json
+            .other
+            .get("optionalDependencies")
+            .and_then(|deps| deps.as_object())
+            .map(|deps| {
+                deps.keys().filter(|dep| dep.starts_with(platform_prefix)).cloned().collect()
+            })
+            .unwrap_or_default();
+        if platform_packages.is_empty() {
+            anyhow::bail!(
+                "No `{platform_prefix}*` platform packages in optionalDependencies of {}",
+                parent_json.display()
+            );
+        }
+
+        let sources = versions::resolve(name, platform_packages, None).await;
+        let Some(current_version) = sources.effective().or_else(|| sources.effective_prerelease())
+        else {
+            anyhow::bail!(
+                "Could not determine a version for {name}: not found on npm or in git tags"
+            );
+        };
+        let prerelease_version =
+            sources.effective_prerelease().unwrap_or_else(|| current_version.clone());
+        Ok(Self { name: name.to_string(), current_version, prerelease_version, sources })
     }
+}
+
+async fn load_single(load: bool, name: &str, path: &str) -> Option<Result<ReleaseUnit>> {
+    if !load {
+        return None;
+    }
+    Some(Package::load(name, path).await.map(ReleaseUnit::Single))
+}
+
+async fn load_group(
+    load: bool,
+    name: &str,
+    parent_path: &str,
+    platform_prefix: &str,
+) -> Option<Result<ReleaseUnit>> {
+    if !load {
+        return None;
+    }
+    Some(
+        PackageGroup::load_virtual(name, parent_path, platform_prefix)
+            .await
+            .map(ReleaseUnit::Virtual),
+    )
+}
+
+pub async fn load_release_units(only: Option<&[String]>) -> Result<Vec<ReleaseUnit>> {
+    let wanted = |name: &str| only.is_none_or(|list| list.iter().any(|n| n == name));
+
+    let (rari, create_app, binaries, use_cache, use_cache_binaries, lint) = tokio::join!(
+        load_single(wanted("rari"), "rari", "packages/rari"),
+        load_single(wanted("create-rari-app"), "create-rari-app", "packages/create-rari-app"),
+        load_group(wanted("rari-binaries"), "rari-binaries", "packages/rari", "rari-"),
+        load_single(wanted("@rari/use-cache"), "@rari/use-cache", "packages/use-cache"),
+        load_group(
+            wanted("@rari/use-cache-binaries"),
+            "@rari/use-cache-binaries",
+            "packages/use-cache",
+            "@rari/use-cache-",
+        ),
+        load_single(wanted("@rari/lint"), "@rari/lint", "packages/lint"),
+    );
+
+    let units = [rari, create_app, binaries, use_cache, use_cache_binaries, lint]
+        .into_iter()
+        .flatten()
+        .collect::<Result<Vec<_>>>()?;
+
+    if units.is_empty() {
+        anyhow::bail!(
+            "No matching packages for selection: {}",
+            only.unwrap_or_default().join(", ")
+        );
+    }
+
+    Ok(units)
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +140,36 @@ impl ReleaseUnit {
         match self {
             Self::Single(pkg) => &pkg.current_version,
             Self::Virtual(group) => &group.current_version,
+        }
+    }
+
+    pub fn validation_base(&self, version: &semver::Version) -> &str {
+        if version.pre.is_empty() {
+            self.current_version()
+        } else {
+            self.base_version(ReleaseType::Prerelease)
+        }
+    }
+
+    pub fn base_version(&self, release_type: ReleaseType) -> &str {
+        let (current, prerelease) = match self {
+            Self::Single(pkg) => (&pkg.current_version, &pkg.prerelease_version),
+            Self::Virtual(group) => (&group.current_version, &group.prerelease_version),
+        };
+        if release_type.is_prerelease() { prerelease } else { current }
+    }
+
+    pub fn next_version(&self, release_type: ReleaseType) -> Option<String> {
+        let base = self.base_version(release_type);
+        let next = release_type.to_version(base)?;
+        let advanced = semver::Version::parse(&next).ok()? > semver::Version::parse(base).ok()?;
+        advanced.then_some(next)
+    }
+
+    pub fn sources(&self) -> &VersionSources {
+        match self {
+            Self::Single(pkg) => &pkg.sources,
+            Self::Virtual(group) => &group.sources,
         }
     }
 
@@ -101,7 +222,19 @@ impl Package {
         let content = fs::read_to_string(&pkg_json_path).await?;
         let pkg_json: PackageJson = serde_json::from_str(&content)?;
 
-        Ok(Self { name: name.to_string(), path: pkg_path, current_version: pkg_json.version })
+        let sources =
+            versions::resolve(name, vec![name.to_string()], Some(pkg_json.version.clone())).await;
+        let current_version = sources.effective().unwrap_or(pkg_json.version);
+        let prerelease_version =
+            sources.effective_prerelease().unwrap_or_else(|| current_version.clone());
+
+        Ok(Self {
+            name: name.to_string(),
+            path: pkg_path,
+            current_version,
+            prerelease_version,
+            sources,
+        })
     }
 
     pub async fn update_version(&self, new_version: &str) -> Result<()> {
@@ -127,6 +260,19 @@ impl Package {
     }
 }
 
+fn increment_prerelease(pre: &str) -> String {
+    let mut parts: Vec<String> = pre.split('.').map(String::from).collect();
+    match parts.last().and_then(|last| last.parse::<u64>().ok()) {
+        Some(num) => {
+            if let Some(last) = parts.last_mut() {
+                *last = (num + 1).to_string();
+            }
+        }
+        None => parts.push("0".to_string()),
+    }
+    parts.join(".")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReleaseType {
     Patch,
@@ -143,8 +289,17 @@ impl ReleaseType {
     pub fn to_version(self, current: &str) -> Option<String> {
         let v = semver::Version::parse(current).ok()?;
         Some(match self {
+            Self::Patch if !v.pre.is_empty() => {
+                semver::Version::new(v.major, v.minor, v.patch).to_string()
+            }
             Self::Patch => semver::Version::new(v.major, v.minor, v.patch + 1).to_string(),
+            Self::Minor if !v.pre.is_empty() && v.patch == 0 => {
+                semver::Version::new(v.major, v.minor, 0).to_string()
+            }
             Self::Minor => semver::Version::new(v.major, v.minor + 1, 0).to_string(),
+            Self::Major if !v.pre.is_empty() && v.minor == 0 && v.patch == 0 => {
+                semver::Version::new(v.major, 0, 0).to_string()
+            }
             Self::Major => semver::Version::new(v.major + 1, 0, 0).to_string(),
             Self::Prepatch => {
                 let mut new = v;
@@ -173,10 +328,8 @@ impl ReleaseType {
                     new.patch += 1;
                     new.pre = semver::Prerelease::new("0").ok()?;
                 } else {
-                    let pre_str = new.pre.as_str();
-                    if let Ok(num) = pre_str.parse::<u64>() {
-                        new.pre = semver::Prerelease::new(&(num + 1).to_string()).ok()?;
-                    }
+                    new.pre =
+                        semver::Prerelease::new(&increment_prerelease(new.pre.as_str())).ok()?;
                 }
                 new.to_string()
             }
@@ -193,6 +346,10 @@ impl ReleaseType {
             Some(v) if *self != Self::Custom => format!("{self:?} ({v})"),
             _ => format!("{self:?}"),
         }
+    }
+
+    pub fn is_prerelease(self) -> bool {
+        matches!(self, Self::Prepatch | Self::Preminor | Self::Premajor | Self::Prerelease)
     }
 
     pub fn all() -> Vec<Self> {
@@ -242,5 +399,56 @@ impl ReleasedPackage {
         format!(
             "https://github.com/{owner}/{repo}/releases/new?tag={tag}&title={title}&body={body_encoded}"
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prerelease_increments_numeric_suffix() {
+        assert_eq!(ReleaseType::Prerelease.to_version("1.0.0-0").as_deref(), Some("1.0.0-1"));
+        assert_eq!(
+            ReleaseType::Prerelease.to_version("1.0.0-beta.0").as_deref(),
+            Some("1.0.0-beta.1")
+        );
+        assert_eq!(
+            ReleaseType::Prerelease.to_version("1.0.0-rc.1.9").as_deref(),
+            Some("1.0.0-rc.1.10")
+        );
+    }
+
+    #[test]
+    fn prerelease_appends_counter_to_named_tag() {
+        assert_eq!(
+            ReleaseType::Prerelease.to_version("1.0.0-beta").as_deref(),
+            Some("1.0.0-beta.0")
+        );
+    }
+
+    #[test]
+    fn stable_bump_after_prerelease_releases_that_version() {
+        assert_eq!(ReleaseType::Patch.to_version("0.17.11-0").as_deref(), Some("0.17.11"));
+        assert_eq!(ReleaseType::Minor.to_version("1.2.0-beta.1").as_deref(), Some("1.2.0"));
+        assert_eq!(ReleaseType::Major.to_version("2.0.0-rc.0").as_deref(), Some("2.0.0"));
+    }
+
+    #[test]
+    fn stable_bump_past_prerelease_of_lower_level() {
+        assert_eq!(ReleaseType::Minor.to_version("1.2.3-0").as_deref(), Some("1.3.0"));
+        assert_eq!(ReleaseType::Major.to_version("2.1.0-0").as_deref(), Some("3.0.0"));
+    }
+
+    #[test]
+    fn stable_bumps_from_stable_unchanged() {
+        assert_eq!(ReleaseType::Patch.to_version("0.17.10").as_deref(), Some("0.17.11"));
+        assert_eq!(ReleaseType::Minor.to_version("0.17.10").as_deref(), Some("0.18.0"));
+        assert_eq!(ReleaseType::Major.to_version("0.17.10").as_deref(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn prerelease_from_stable_starts_next_patch() {
+        assert_eq!(ReleaseType::Prerelease.to_version("1.0.0").as_deref(), Some("1.0.1-0"));
     }
 }

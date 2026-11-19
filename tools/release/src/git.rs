@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::Result;
 use tokio::process::Command;
 
-fn tag_pattern_for(package_name: &str) -> String {
+pub fn tag_pattern_for(package_name: &str) -> String {
     if package_name == "rari-binaries" {
         "v*".to_string()
     } else if package_name == "@rari/use-cache-binaries" {

@@ -40,10 +40,3 @@ lerna-debug.log*
 
 # OS generated files
 Thumbs.db
-
-
-# Railway
-.railway
-
-# Render
-.render

@@ -6,7 +6,7 @@ use ratatui::Frame;
 
 use crate::{
     changelog, git,
-    package::{Package, ReleaseType, ReleaseUnit, ReleasedPackage, release_tag},
+    package::{ReleaseType, ReleaseUnit, ReleasedPackage, load_release_units, release_tag},
     ui,
 };
 
@@ -63,36 +63,7 @@ impl App {
         dry_run: bool,
         notes_file: Option<PathBuf>,
     ) -> Result<Self> {
-        use crate::package::{PackageGroup, ReleaseUnit};
-
-        let rari_pkg = Package::load("rari", "packages/rari").await?;
-        let binary_version = rari_pkg.current_version.clone();
-        let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
-
-        let use_cache_pkg = Package::load("@rari/use-cache", "packages/use-cache").await?;
-        let use_cache_binary_version = use_cache_pkg.current_version.clone();
-        let use_cache_binary_group = PackageGroup::new_virtual(
-            "@rari/use-cache-binaries".to_string(),
-            use_cache_binary_version,
-        );
-
-        let mut release_units = vec![
-            ReleaseUnit::Single(rari_pkg),
-            ReleaseUnit::Single(
-                Package::load("create-rari-app", "packages/create-rari-app").await?,
-            ),
-            ReleaseUnit::Virtual(binary_group),
-            ReleaseUnit::Single(use_cache_pkg),
-            ReleaseUnit::Virtual(use_cache_binary_group),
-            ReleaseUnit::Single(Package::load("@rari/lint", "packages/lint").await?),
-        ];
-
-        if let Some(only_list) = only {
-            release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));
-            if release_units.is_empty() {
-                anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
-            }
-        }
+        let release_units = load_release_units(only.as_deref()).await?;
 
         Ok(Self {
             screen: Screen::PackageSelection,
@@ -136,6 +107,7 @@ impl App {
                     self.previous_tag = git::get_previous_tag(unit.name(), None).await?;
                     self.screen = Screen::VersionSelection { package_idx };
                     self.selected_version_idx = 0;
+                    self.error_message = None;
                 }
                 KeyCode::Esc | KeyCode::Char('q') => return Ok(true),
                 _ => {}
@@ -143,9 +115,11 @@ impl App {
             Screen::VersionSelection { package_idx } => match key {
                 KeyCode::Up if self.selected_version_idx > 0 => {
                     self.selected_version_idx -= 1;
+                    self.error_message = None;
                 }
                 KeyCode::Down if self.selected_version_idx < self.version_types.len() - 1 => {
                     self.selected_version_idx += 1;
+                    self.error_message = None;
                 }
                 KeyCode::Enter => {
                     let release_type = self.version_types[self.selected_version_idx];
@@ -155,14 +129,17 @@ impl App {
                             package_idx: *package_idx,
                             input: String::new(),
                         };
-                    } else if let Some(new_version) =
-                        release_type.to_version(unit.current_version())
-                    {
+                    } else if let Some(new_version) = unit.next_version(release_type) {
                         self.screen =
                             Screen::Publishing { package_idx: *package_idx, version: new_version };
                         self.publish_step = PublishStep::UpdatingVersion;
                         self.publish_progress = 0.0;
                         self.status_messages.clear();
+                    } else {
+                        self.error_message = Some(format!(
+                            "Could not calculate a version greater than {}",
+                            unit.base_version(release_type)
+                        ));
                     }
                 }
                 KeyCode::Esc => {
@@ -186,7 +163,7 @@ impl App {
                 KeyCode::Enter => {
                     let unit = &self.release_units[*package_idx];
                     if let Ok(version) = semver::Version::parse(input) {
-                        match semver::Version::parse(unit.current_version()) {
+                        match semver::Version::parse(unit.validation_base(&version)) {
                             Ok(current) => {
                                 if version > current {
                                     self.screen = Screen::Publishing {

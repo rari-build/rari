@@ -59,7 +59,7 @@ git push origin main
 
 ```bash
 # Configure Railway deployment files
-{{PACKAGE_MANAGER}} run deploy:railway
+{{PACKAGE_MANAGER}} run setup:railway
 
 # Follow the instructions to deploy
 ```
@@ -85,9 +85,30 @@ git push origin main
 
 ```bash
 # Configure Render deployment files
-{{PACKAGE_MANAGER}} run deploy:render
+{{PACKAGE_MANAGER}} run setup:render
 
 # Follow the instructions to deploy
+```
+
+### Fly.io
+
+1. Generate the Fly.io configuration (`fly.toml`, `Dockerfile`, `.dockerignore`):
+
+```bash
+{{PACKAGE_MANAGER}} run setup:fly
+```
+
+2. Install the [Fly CLI](https://fly.io/docs/flyctl/install/) and log in:
+
+```bash
+fly auth login
+```
+
+3. Create the app and deploy:
+
+```bash
+fly launch --no-deploy
+fly deploy
 ```
 
 ## Available Scripts
@@ -101,8 +122,9 @@ git push origin main
 {{PACKAGE_MANAGER}} start               # Start production server
 
 # Deployment
-{{PACKAGE_MANAGER}} run deploy:railway  # Set up Railway deployment
-{{PACKAGE_MANAGER}} run deploy:render   # Set up Render deployment
+{{PACKAGE_MANAGER}} run setup:railway   # Set up Railway deployment
+{{PACKAGE_MANAGER}} run setup:render    # Set up Render deployment
+{{PACKAGE_MANAGER}} run setup:fly       # Set up Fly.io deployment
 
 # Code Quality
 {{PACKAGE_MANAGER}} run typecheck       # Run TypeScript checks
@@ -113,6 +135,7 @@ git push origin main
 - [rari Documentation](https://rari.build/docs)
 - [Railway Documentation](https://docs.railway.app)
 - [Render Documentation](https://render.com/docs)
+- [Fly.io Documentation](https://fly.io/docs)
 - [React Server Components](https://react.dev/reference/react/use-server)
 
 ---

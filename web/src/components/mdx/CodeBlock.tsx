@@ -56,7 +56,7 @@ export default function CodeBlock({
       {highlightedHtml != null && highlightedHtml !== '' ? (
         <div
           className="[&>pre]:m-0 [&>pre]:px-4 [&>pre]:py-3 [&>pre]:pr-12 [&>pre]:bg-transparent [&>pre]:overflow-x-auto [&>pre]:max-w-full"
-          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
+          // oxlint-disable-next-line eslint-react/dom-no-dangerously-set-innerhtml
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
         />
       ) : (

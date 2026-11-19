@@ -154,6 +154,6 @@ void (async () => {
     return await handleReplyActionMode(flightServer, serverManifest)
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    throw new Error(`Server action error: ${errorMessage}`)
+    throw new Error(`Server action error: ${errorMessage}`, { cause: error })
   }
 })()

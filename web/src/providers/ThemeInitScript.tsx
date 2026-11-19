@@ -5,7 +5,7 @@ const THEME_INIT_SCRIPT = `(function(){try{var stored=localStorage.getItem(${JSO
 export function ThemeInitScript() {
   return (
     <script
-      // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
+      // oxlint-disable-next-line eslint-react/dom-no-dangerously-set-innerhtml
       dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
     />
   )

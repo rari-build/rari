@@ -3,6 +3,7 @@ mod changelog;
 mod git;
 mod package;
 mod ui;
+mod versions;
 
 use std::{
     env,
@@ -22,28 +23,43 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::package::{
-    Package, PackageGroup, ReleaseType, ReleaseUnit, ReleasedPackage, release_tag,
-};
+use crate::package::{ReleaseType, ReleaseUnit, ReleasedPackage, release_tag};
 
 #[derive(Parser, Debug)]
+#[expect(clippy::struct_excessive_bools, reason = "CLI flags map directly to clap bool args")]
 #[command(name = "release")]
 #[command(about = "rari Release Manager", long_about = None)]
 struct Args {
-    #[arg(long, value_delimiter = ',')]
+    #[arg(
+        long,
+        value_delimiter = ',',
+        help = "Comma-separated release units to include, e.g. rari,@rari/lint (or set PACKAGES)"
+    )]
     only: Option<Vec<String>>,
 
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Show what would happen without changing files, committing, tagging, or pushing"
+    )]
     dry_run: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Run without the TUI (implied by RELEASE_VERSION or RELEASE_TYPE)")]
     non_interactive: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "In non-interactive mode, commit and tag locally but don't push")]
     no_push: bool,
 
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Manual release notes to use instead of .github/release-notes/ (or set RELEASE_NOTES_FILE)"
+    )]
     notes_file: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "In non-interactive mode, release even if npm can't be reached (versions fall back to git tags and local package.json)"
+    )]
+    allow_offline: bool,
 }
 
 #[expect(clippy::print_stdout)]
@@ -79,6 +95,7 @@ async fn main() -> Result<()> {
             env_version,
             env_type,
             notes_file,
+            args.allow_offline,
         )
         .await;
     }
@@ -89,13 +106,14 @@ async fn main() -> Result<()> {
         println!();
     }
 
+    println!("Checking published versions...");
+    let mut app = App::new(only, args.dry_run, notes_file).await?;
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-
-    let mut app = App::new(only, args.dry_run, notes_file).await?;
 
     let result = run_app(&mut terminal, &mut app).await;
 
@@ -135,6 +153,7 @@ async fn run_non_interactive(
     env_version: Option<String>,
     env_type: Option<String>,
     notes_file: Option<PathBuf>,
+    allow_offline: bool,
 ) -> Result<()> {
     println!("{}", "rari Release Script".cyan().bold());
     if dry_run {
@@ -142,46 +161,38 @@ async fn run_non_interactive(
     }
     println!();
 
-    let rari_pkg = Package::load("rari", "packages/rari").await?;
-    let binary_version = rari_pkg.current_version.clone();
-    let binary_group = PackageGroup::new_virtual("rari-binaries".to_string(), binary_version);
+    println!("Checking published versions...");
+    let release_units = package::load_release_units(only.as_deref()).await?;
 
-    let use_cache_pkg = Package::load("@rari/use-cache", "packages/use-cache").await?;
-    let use_cache_binary_version = use_cache_pkg.current_version.clone();
-    let use_cache_binary_group =
-        PackageGroup::new_virtual("@rari/use-cache-binaries".to_string(), use_cache_binary_version);
-
-    let mut release_units = vec![
-        ReleaseUnit::Single(rari_pkg),
-        ReleaseUnit::Single(Package::load("create-rari-app", "packages/create-rari-app").await?),
-        ReleaseUnit::Virtual(binary_group),
-        ReleaseUnit::Single(use_cache_pkg),
-        ReleaseUnit::Virtual(use_cache_binary_group),
-        ReleaseUnit::Single(Package::load("@rari/lint", "packages/lint").await?),
-    ];
-
-    if let Some(only_list) = &only {
-        release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));
-        if release_units.is_empty() {
-            anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
+    let offline: Vec<&str> = release_units
+        .iter()
+        .filter(|unit| !unit.sources().npm_reachable())
+        .map(ReleaseUnit::name)
+        .collect();
+    if !offline.is_empty() {
+        if !allow_offline {
+            anyhow::bail!(
+                "Could not reach npm for: {}. Refusing to pick versions from git tags and local \
+                 package.json only; re-run with --allow-offline to override.",
+                offline.join(", ")
+            );
         }
+        println!(
+            "{} npm unreachable for {}; using git tags and local versions (--allow-offline)",
+            "⚠".yellow().bold(),
+            offline.join(", ")
+        );
     }
 
-    let mut released_packages: Vec<ReleasedPackage> = Vec::new();
-
+    let mut planned: Vec<(ReleaseUnit, String)> = Vec::with_capacity(release_units.len());
     for unit in release_units {
-        let unit_name = unit.name();
-        println!("{} {}", "📦 Releasing".bold(), unit_name.cyan().bold());
-
         let new_version = if let Some(ref version) = env_version {
             let v = semver::Version::parse(version)
                 .map_err(|_| anyhow::anyhow!("Invalid RELEASE_VERSION: {version}"))?;
-            let current = semver::Version::parse(unit.current_version())?;
-            if v <= current {
+            let base = unit.validation_base(&v);
+            if v <= semver::Version::parse(base)? {
                 anyhow::bail!(
-                    "RELEASE_VERSION ({}) must be greater than current version {}",
-                    version,
-                    unit.current_version()
+                    "RELEASE_VERSION ({version}) must be greater than current version {base}"
                 );
             }
             version.clone()
@@ -196,16 +207,36 @@ async fn run_non_interactive(
                 "prerelease" => ReleaseType::Prerelease,
                 _ => anyhow::bail!("Invalid RELEASE_TYPE: {type_str}"),
             };
-            release_type
-                .to_version(unit.current_version())
-                .ok_or_else(|| anyhow::anyhow!("Failed to calculate version"))?
+            unit.next_version(release_type).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Could not calculate a {type_str} version greater than {}",
+                    unit.base_version(release_type)
+                )
+            })?
         } else {
             anyhow::bail!(
                 "Non-interactive mode requires RELEASE_VERSION or RELEASE_TYPE environment variable"
             );
         };
+        planned.push((unit, new_version));
+    }
+
+    let mut released_packages: Vec<ReleasedPackage> = Vec::new();
+
+    for (unit, new_version) in planned {
+        let unit_name = unit.name();
+        println!("{} {}", "📦 Releasing".bold(), unit_name.cyan().bold());
 
         println!("  {} {} → {}", "Version:".bold(), unit.current_version(), new_version.green());
+        let sources = unit.sources();
+        println!("  {} {}", "Sources:".bold(), sources.summary());
+        if sources.is_out_of_sync() {
+            println!(
+                "  {} Sources disagree; bumping from the highest ({})",
+                "⚠".yellow().bold(),
+                unit.current_version()
+            );
+        }
 
         let first_path = unit.paths().first().map(|p| p.as_path()).unwrap_or(Path::new("."));
         let commits = git::get_commits_since_tag(unit_name, first_path).await?;

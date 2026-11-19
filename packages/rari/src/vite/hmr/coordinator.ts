@@ -367,11 +367,7 @@ export class HMRCoordinator {
   private flushLogs(): void {
     if (this.logBatch.length === 0) return
 
-    const grouped = this.logBatch.reduce<Record<string, typeof this.logBatch>>((acc, log) => {
-      acc[log.type] ??= []
-      acc[log.type].push(log)
-      return acc
-    }, {})
+    const grouped = Object.groupBy(this.logBatch, log => log.type)
 
     for (const [type, logs] of Object.entries(grouped)) {
       if (!isHmrLogType(type)) continue

@@ -1,53 +1,19 @@
-import { existsSync } from 'node:fs'
 import process from 'node:process'
+import {
+  detectPackageManager,
+  getDeploymentConfig,
+  isFlyEnvironment,
+  isRailwayEnvironment,
+  isRenderEnvironment,
+} from '@rari/cli'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
-
-function detectPackageManager(): string {
-  if (existsSync('pnpm-lock.yaml')) return 'pnpm'
-  if (existsSync('yarn.lock')) return 'yarn'
-  if (existsSync('bun.lockb')) return 'bun'
-
-  return 'npm'
-}
-
-function hasEnvValue(value: string | undefined): boolean {
-  return value != null && value !== ''
-}
-
-function isRailwayEnvironment(): boolean {
-  return (
-    hasEnvValue(process.env.RAILWAY_ENVIRONMENT) ||
-    hasEnvValue(process.env.RAILWAY_PROJECT_ID) ||
-    hasEnvValue(process.env.RAILWAY_SERVICE_ID)
-  )
-}
-
-function isRenderEnvironment(): boolean {
-  return (
-    hasEnvValue(process.env.RENDER) ||
-    hasEnvValue(process.env.RENDER_SERVICE_ID) ||
-    hasEnvValue(process.env.RENDER_SERVICE_NAME)
-  )
-}
-
-function getDeploymentConfig() {
-  const port = hasEnvValue(process.env.PORT)
-    ? process.env.PORT
-    : hasEnvValue(process.env.RSC_PORT)
-      ? process.env.RSC_PORT
-      : '3000'
-  const mode = hasEnvValue(process.env.NODE_ENV) ? process.env.NODE_ENV : 'production'
-  const isPlatform = isRailwayEnvironment() || isRenderEnvironment()
-  const host = isPlatform ? '0.0.0.0' : '127.0.0.1'
-
-  return { port, mode, host }
-}
 
 describe('cli', () => {
   const originalEnv = process.env
 
   beforeEach(() => {
     process.env = { ...originalEnv }
+    delete process.env.RARI_HOST
   })
 
   afterEach(() => {
@@ -110,6 +76,24 @@ describe('cli', () => {
       expect(isRenderEnvironment()).toBe(true)
     })
 
+    it('should detect Fly environment', () => {
+      process.env.FLY_APP_NAME = 'test-app'
+      expect(isFlyEnvironment()).toBe(true)
+    })
+
+    it('should detect Fly from MACHINE_ID', () => {
+      delete process.env.FLY_APP_NAME
+      process.env.FLY_MACHINE_ID = 'test-machine'
+      expect(isFlyEnvironment()).toBe(true)
+    })
+
+    it('should detect Fly from ALLOC_ID', () => {
+      delete process.env.FLY_APP_NAME
+      delete process.env.FLY_MACHINE_ID
+      process.env.FLY_ALLOC_ID = 'test-alloc'
+      expect(isFlyEnvironment()).toBe(true)
+    })
+
     it('should return false when no platform detected', () => {
       delete process.env.RAILWAY_ENVIRONMENT
       delete process.env.RAILWAY_PROJECT_ID
@@ -117,9 +101,13 @@ describe('cli', () => {
       delete process.env.RENDER
       delete process.env.RENDER_SERVICE_ID
       delete process.env.RENDER_SERVICE_NAME
+      delete process.env.FLY_APP_NAME
+      delete process.env.FLY_MACHINE_ID
+      delete process.env.FLY_ALLOC_ID
 
       expect(isRailwayEnvironment()).toBe(false)
       expect(isRenderEnvironment()).toBe(false)
+      expect(isFlyEnvironment()).toBe(false)
     })
   })
 
@@ -169,6 +157,21 @@ describe('cli', () => {
       expect(config.host).toBe('0.0.0.0')
     })
 
+    it('should use 0.0.0.0 for Fly environment', () => {
+      delete process.env.RAILWAY_ENVIRONMENT
+      delete process.env.RENDER
+      process.env.FLY_APP_NAME = 'test-app'
+      const config = getDeploymentConfig()
+      expect(config.host).toBe('0.0.0.0')
+    })
+
+    it('should prefer RARI_HOST over platform defaults', () => {
+      process.env.FLY_APP_NAME = 'test-app'
+      process.env.RARI_HOST = '192.168.1.10'
+      const config = getDeploymentConfig()
+      expect(config.host).toBe('192.168.1.10')
+    })
+
     it('should use 127.0.0.1 for local environments', () => {
       delete process.env.RAILWAY_ENVIRONMENT
       delete process.env.RAILWAY_PROJECT_ID
@@ -176,6 +179,10 @@ describe('cli', () => {
       delete process.env.RENDER
       delete process.env.RENDER_SERVICE_ID
       delete process.env.RENDER_SERVICE_NAME
+      delete process.env.FLY_APP_NAME
+      delete process.env.FLY_MACHINE_ID
+      delete process.env.FLY_ALLOC_ID
+      delete process.env.RARI_HOST
 
       const config = getDeploymentConfig()
       expect(config.host).toBe('127.0.0.1')

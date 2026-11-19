@@ -321,18 +321,24 @@ export function getRariVersion(cwd: string = process.cwd()): string {
 
 interface ProviderConfig {
   readonly providerName: string
-  readonly deployScript: string
-  readonly startScript?: string
-  readonly dependency?: string
+  readonly deployScript?: string
 }
 
 export type { ProviderConfig }
 
-export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig) {
+export function getInstallCommand(cwd: string): string {
+  if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm install'
+  if (existsSync(join(cwd, 'yarn.lock'))) return 'yarn install'
+  if (existsSync(join(cwd, 'bun.lock')) || existsSync(join(cwd, 'bun.lockb'))) return 'bun install'
+  return 'npm install'
+}
+
+export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig): boolean {
   const packageJsonPath = join(cwd, 'package.json')
   if (!existsSync(packageJsonPath)) {
     logError('No package.json found. Please run this command from your project root.')
     process.exit(1)
+    return false
   }
 
   try {
@@ -340,7 +346,7 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
 
     packageJson.scripts = packageJson.scripts ?? {}
 
-    const newStart = config.startScript ?? 'rari start'
+    const newStart = 'rari start'
     if (
       packageJson.scripts.start &&
       packageJson.scripts.start !== newStart &&
@@ -352,81 +358,54 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
     }
 
     packageJson.scripts.start = newStart
-    packageJson.scripts['start:local'] = 'rari start'
-    packageJson.scripts[`deploy:${config.providerName.toLowerCase()}`] = config.deployScript
+    if (!('build' in packageJson.scripts)) packageJson.scripts.build = 'rari build'
+    if (config.deployScript != null) {
+      packageJson.scripts[`deploy:${config.providerName.toLowerCase()}`] = config.deployScript
+    }
 
     ensureMinimumNodeEngine(packageJson)
 
-    if (packageJson.dependencies?.rari == null || packageJson.dependencies.rari === '') {
+    const addedRari = packageJson.dependencies?.rari == null || packageJson.dependencies.rari === ''
+    if (addedRari) {
       logInfo('Adding rari dependency...')
       packageJson.dependencies = packageJson.dependencies ?? {}
-      packageJson.dependencies.rari = config.dependency ?? getRariVersion(cwd)
+      packageJson.dependencies.rari = getRariVersion(cwd)
+      logWarn(
+        `rari was added to dependencies. Run "${getInstallCommand(cwd)}" to update your lockfile before deploying; frozen-lockfile installs will fail otherwise.`,
+      )
     }
 
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
     logSuccess(`Updated package.json for ${config.providerName} deployment`)
+    return addedRari
   } catch (error) {
     logError(`Failed to update package.json: ${errorMessage(error)}`)
     process.exit(1)
+    return false
   }
 }
 
-export function updateGitignoreForProvider(
-  cwd: string,
+export function printDeploymentSuccess(
   providerName: string,
-  providerFolder: string,
+  nextSteps: readonly string[],
+  automaticSteps: readonly string[],
 ) {
-  const gitignorePath = join(cwd, '.gitignore')
-  const providerGitignoreEntries = ['', `# ${providerName}`, `${providerFolder}/`, ''].join('\n')
-
-  if (existsSync(gitignorePath)) {
-    const gitignoreContent = readFileSync(gitignorePath, 'utf-8')
-    const lines = gitignoreContent.split('\n').map(line => line.trim())
-    const hasExactMatch = lines.includes(`${providerFolder}/`) || lines.includes(providerFolder)
-
-    if (!hasExactMatch) {
-      writeFileSync(gitignorePath, gitignoreContent + providerGitignoreEntries)
-      logSuccess(`Updated .gitignore with ${providerName} entries`)
-    }
-  } else {
-    const defaultGitignore = `# Dependencies
-node_modules
-.pnpm-store
-
-# Build outputs
-dist
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-# ${providerName}
-${providerFolder}
-
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.vscode
-.idea
-*.swp
-*.swo
-*~
-
-# Temporary files
-.tmp
-tmp
-`
-    writeFileSync(gitignorePath, defaultGitignore)
-    logSuccess(`Created .gitignore with ${providerName} entries`)
-  }
+  console.warn('')
+  logSuccess(`${providerName} deployment setup complete! 🎉`)
+  console.warn('')
+  logInfo('Next steps:')
+  for (const [index, step] of nextSteps.entries()) console.warn(`  ${index + 1}. ${step}`)
+  console.warn('')
+  logInfo('Your rari app will automatically:')
+  for (const step of [
+    `Detect ${providerName} environment`,
+    ...automaticSteps,
+    'Run in production mode',
+    'Download platform-specific rari binary',
+  ])
+    console.warn(`  ✅ ${step}`)
+  console.warn('')
+  logSuccess('Ready for deployment! 🚀')
 }
 
 export function createOrBackupConfigFile(cwd: string, filename: string, content: string) {

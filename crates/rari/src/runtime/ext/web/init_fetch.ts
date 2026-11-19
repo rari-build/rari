@@ -152,8 +152,8 @@ function serializeFormDataBody(body: FormData): string {
 function serializeCacheTags(init: CachedFetchInit): string {
   const validTags = extractValidTags(init)
   if (validTags.length === 0) return ''
-  const normalizedTags = [...validTags].sort((a: string, b: string) => a.localeCompare(b))
-  return `:tags:${JSON.stringify(normalizedTags)}`
+  validTags.sort((a: string, b: string) => a.localeCompare(b))
+  return `:tags:${JSON.stringify(validTags)}`
 }
 
 // oxlint-disable typescript/prefer-readonly-parameter-types

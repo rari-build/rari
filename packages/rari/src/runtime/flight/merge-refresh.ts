@@ -149,7 +149,7 @@ function childArray(children: ReactNode): ReactNode[] {
   }
   if (Array.isArray(children)) return flattenReactNodes(children, null)
   if (isFlightThenable(children)) return [children]
-  // eslint-disable-next-line react/no-children-to-array
+  // oxlint-disable-next-line eslint-react/no-children-to-array
   return Children.toArray(children)
 }
 
