@@ -106,13 +106,14 @@ async fn main() -> Result<()> {
         println!();
     }
 
+    println!("Checking published versions...");
+    let mut app = App::new(only, args.dry_run, notes_file).await?;
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-
-    let mut app = App::new(only, args.dry_run, notes_file).await?;
 
     let result = run_app(&mut terminal, &mut app).await;
 

@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { styleText } from 'node:util'
@@ -21,9 +21,10 @@ export function createFlyDeployment() {
     deployScript: 'fly deploy',
   })
 
+  const installSteps = getDockerInstallSteps(cwd)
   createFlyToml(cwd)
-  createDockerfile(cwd)
-  createDockerignore(cwd)
+  createDockerfile(cwd, installSteps)
+  createDockerignore(cwd, installSteps.copy.split(' '))
 
   printDeploymentSuccess(
     'Fly.io',
@@ -117,8 +118,7 @@ function getDockerInstallSteps(cwd: string): DockerInstallSteps {
   return { copy: 'package.json', install: ['RUN npm install'] }
 }
 
-function createDockerfile(cwd: string) {
-  const { copy, install } = getDockerInstallSteps(cwd)
+function createDockerfile(cwd: string, { copy, install }: DockerInstallSteps) {
   const dockerfile = `FROM node:24-slim
 
 RUN apt-get update && apt-get install -y libfontconfig1 && rm -rf /var/lib/apt/lists/*
@@ -144,9 +144,23 @@ CMD ["npm", "start"]
   createOrBackupConfigFile(cwd, 'Dockerfile', dockerfile)
 }
 
-function createDockerignore(cwd: string) {
+function ensureDockerignoreIncludes(dockerignorePath: string, files: readonly string[]) {
+  const content = readFileSync(dockerignorePath, 'utf-8')
+  const lines = new Set(content.split('\n').map(line => line.trim()))
+  const missing = files.filter(file => !lines.has(`!${file}`))
+  if (missing.length === 0) return
+
+  const prefix = content === '' || content.endsWith('\n') ? '' : '\n'
+  appendFileSync(dockerignorePath, `${prefix}${missing.map(file => `!${file}`).join('\n')}\n`)
+  logSuccess(`Updated .dockerignore so the Docker build can copy ${missing.join(', ')}`)
+}
+
+function createDockerignore(cwd: string, requiredFiles: readonly string[]) {
   const dockerignorePath = join(cwd, '.dockerignore')
-  if (existsSync(dockerignorePath)) return
+  if (existsSync(dockerignorePath)) {
+    ensureDockerignoreIncludes(dockerignorePath, requiredFiles)
+    return
+  }
 
   writeFileSync(
     dockerignorePath,
