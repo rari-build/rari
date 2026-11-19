@@ -4,10 +4,10 @@ import process from 'node:process'
 import { styleText } from 'node:util'
 import {
   createOrBackupConfigFile,
-  getRariVersion,
+  logError,
   logInfo,
   logSuccess,
-  updateGitignoreForProvider,
+  printDeploymentSuccess,
   updatePackageJsonForProvider,
 } from './utils'
 
@@ -16,20 +16,25 @@ export function createRailwayDeployment() {
 
   logInfo('Creating Railway deployment configuration...')
 
-  updatePackageJsonForProvider(cwd, {
-    providerName: 'Railway',
-    deployScript: 'echo "Push to GitHub and connect to Railway to deploy"',
-    startScript: 'rari start',
-    dependency: getRariVersion(),
-  })
+  updatePackageJsonForProvider(cwd, { providerName: 'Railway' })
 
   createRailwayToml(cwd)
+  const hasRuntimePackages = ensureRailpackAptPackages(cwd)
 
-  updateGitignoreForProvider(cwd, 'Railway', '.railway')
-
-  updateReadmeForRailway(cwd)
-
-  printRailwaySuccessMessage()
+  printDeploymentSuccess(
+    'Railway',
+    [
+      styleText('cyan', 'git add .'),
+      styleText('cyan', 'git commit -m "Add Railway deployment"'),
+      styleText('cyan', 'git push origin main'),
+      `Go to ${styleText('cyan', 'https://railway.app')} and deploy from GitHub`,
+    ],
+    [
+      ...(hasRuntimePackages ? ['Install libfontconfig1 (required by the Rust runtime)'] : []),
+      'Bind to 0.0.0.0 (Railway requirement)',
+      "Use Railway's PORT environment variable",
+    ],
+  )
 }
 
 function createRailwayToml(cwd: string) {
@@ -47,96 +52,49 @@ restartPolicyMaxRetries = 3
   createOrBackupConfigFile(cwd, 'railway.toml', railwayConfig)
 }
 
-function updateReadmeForRailway(cwd: string) {
-  const readmePath = join(cwd, 'README.md')
-  const railwayReadmeSection = `
-## 🚂 Deploy to Railway
+const RAILPACK_SCHEMA = 'https://schema.railpack.com'
+const RUNTIME_APT_PACKAGES = ['libfontconfig1']
 
-This rari application is configured for Railway deployment.
-
-### Quick Deploy
-
-1. **Push to GitHub**:
-   \`\`\`bash
-   git add .
-   git commit -m "Add Railway deployment"
-   git push origin main
-   \`\`\`
-
-2. **Deploy to Railway**:
-   - Go to [railway.app](https://railway.app)
-   - Create new project → "Deploy from GitHub repo"
-   - Select your repository
-   - Click "Deploy Now"
-
-3. **Generate Domain**:
-   - In Railway dashboard → Settings → Networking
-   - Click "Generate Domain"
-   - Your app will be live! 🎉
-
-### Local Development
-
-\`\`\`bash
-# Development server
-npm run start:local
-
-# Production simulation
-npm start
-\`\`\`
-
-### Environment Variables
-
-Railway automatically provides:
-- \`PORT\` - Server port (Railway assigns this)
-- \`NODE_ENV=production\` - Production mode
-
-Optional variables you can set:
-- \`RUST_LOG=debug\` - Rust logging level
-
----
-`
-
-  if (existsSync(readmePath)) {
-    const readmeContent = readFileSync(readmePath, 'utf-8')
-    if (!readmeContent.includes('Deploy to Railway')) {
-      writeFileSync(readmePath, readmeContent + railwayReadmeSection)
-      logSuccess('Updated README.md with Railway deployment instructions')
-    }
-  } else {
-    const defaultReadme = `# My rari App
-
-A high-performance React Server Components application powered by rari.
-${railwayReadmeSection}
-## Getting Started
-
-\`\`\`bash
-npm install
-npm start
-\`\`\`
-
-Visit [http://localhost:3000](http://localhost:3000) to see your app.
-`
-    writeFileSync(readmePath, defaultReadme)
-    logSuccess('Created README.md with Railway deployment instructions')
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function printRailwaySuccessMessage() {
-  console.warn('')
-  logSuccess('Railway deployment setup complete! 🎉')
-  console.warn('')
-  logInfo('Next steps:')
-  console.warn(`  1. ${styleText('cyan', 'git add .')}`)
-  console.warn(`  2. ${styleText('cyan', 'git commit -m "Add Railway deployment"')}`)
-  console.warn(`  3. ${styleText('cyan', 'git push origin main')}`)
-  console.warn(`  4. Go to ${styleText('cyan', 'https://railway.app')} and deploy from GitHub`)
-  console.warn('')
-  logInfo('Your rari app will automatically:')
-  console.warn('  ✅ Detect Railway environment')
-  console.warn('  ✅ Bind to 0.0.0.0 (Railway requirement)')
-  console.warn("  ✅ Use Railway's PORT environment variable")
-  console.warn('  ✅ Run in production mode')
-  console.warn('  ✅ Download platform-specific rari binary')
-  console.warn('')
-  logSuccess('Ready for deployment! 🚀')
+function ensureRailpackAptPackages(cwd: string): boolean {
+  const railpackPath = join(cwd, 'railpack.json')
+
+  if (!existsSync(railpackPath)) {
+    const config = {
+      $schema: RAILPACK_SCHEMA,
+      deploy: { aptPackages: ['...', ...RUNTIME_APT_PACKAGES] },
+    }
+    writeFileSync(railpackPath, `${JSON.stringify(config, null, 2)}\n`)
+    logSuccess('Created railpack.json configuration')
+    return true
+  }
+
+  let config: unknown
+  try {
+    config = JSON.parse(readFileSync(railpackPath, 'utf-8'))
+  } catch {
+    config = null
+  }
+
+  if (!isRecord(config) || (config.deploy !== undefined && !isRecord(config.deploy))) {
+    logError(
+      `Could not update railpack.json. Add ${RUNTIME_APT_PACKAGES.join(', ')} to deploy.aptPackages manually.`,
+    )
+    return false
+  }
+
+  const deploy = isRecord(config.deploy) ? config.deploy : {}
+  const existing = Array.isArray(deploy.aptPackages)
+    ? deploy.aptPackages.filter((pkg): pkg is string => typeof pkg === 'string')
+    : ['...']
+  const missing = RUNTIME_APT_PACKAGES.filter(pkg => !existing.includes(pkg))
+  if (missing.length === 0) return true
+
+  config.deploy = { ...deploy, aptPackages: [...existing, ...missing] }
+  writeFileSync(railpackPath, `${JSON.stringify(config, null, 2)}\n`)
+  logSuccess(`Added ${missing.join(', ')} to railpack.json deploy.aptPackages`)
+  return true
 }

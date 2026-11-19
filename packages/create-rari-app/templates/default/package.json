@@ -12,8 +12,9 @@
     "build": "rari build",
     "dev": "rari dev",
     "start": "rari start",
-    "deploy:railway": "rari deploy railway",
-    "deploy:render": "rari deploy render",
+    "setup:railway": "rari deploy railway",
+    "setup:render": "rari deploy render",
+    "setup:fly": "rari deploy fly",
     "clean": "rari clean",
     "typecheck": "tsc"
   },

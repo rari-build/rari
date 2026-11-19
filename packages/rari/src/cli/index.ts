@@ -251,13 +251,22 @@ function isRenderEnvironment(): boolean {
   )
 }
 
+function isFlyEnvironment(): boolean {
+  return (
+    (process.env.FLY_APP_NAME != null && process.env.FLY_APP_NAME !== '') ||
+    (process.env.FLY_MACHINE_ID != null && process.env.FLY_MACHINE_ID !== '') ||
+    (process.env.FLY_ALLOC_ID != null && process.env.FLY_ALLOC_ID !== '')
+  )
+}
+
 function isPlatformEnvironment(): boolean {
-  return isRailwayEnvironment() || isRenderEnvironment()
+  return isRailwayEnvironment() || isRenderEnvironment() || isFlyEnvironment()
 }
 
 function getPlatformName(): string {
   if (isRailwayEnvironment()) return 'Railway'
   if (isRenderEnvironment()) return 'Render'
+  if (isFlyEnvironment()) return 'Fly.io'
 
   return 'local'
 }
@@ -534,6 +543,18 @@ async function deployToRender() {
   createRenderDeployment()
 }
 
+async function deployToFly() {
+  logInfo('Setting up Fly.io deployment...')
+
+  if (isPlatformEnvironment()) {
+    logError(`Already running in ${getPlatformName()} environment. Use "rari start" instead.`)
+    process.exit(1)
+  }
+
+  const { createFlyDeployment } = await import('@rari/deploy/fly')
+  createFlyDeployment()
+}
+
 function cleanDistFolder() {
   const distPath = resolve(process.cwd(), 'dist')
 
@@ -556,11 +577,13 @@ ${styleText('bold', 'Usage:')}
   ${styleText('cyan', 'rari clean')}               Remove the dist folder
   ${styleText('cyan', 'rari deploy railway')}      Setup Railway deployment
   ${styleText('cyan', 'rari deploy render')}       Setup Render deployment
+  ${styleText('cyan', 'rari deploy fly')}          Setup Fly.io deployment
   ${styleText('cyan', 'rari help')}                Show this help message
 
 ${styleText('bold', 'Environment Variables:')}
   ${styleText('yellow', 'PORT')}                     Server port (default: 3000)
   ${styleText('yellow', 'RSC_PORT')}                 Alternative server port
+  ${styleText('yellow', 'RARI_HOST')}                Address the server binds to (default: 0.0.0.0 on platforms, 127.0.0.1 locally)
   ${styleText('yellow', 'NODE_ENV')}                 Environment (default: production for start, development for dev)
   ${styleText('yellow', 'RUST_LOG')}                 Rust logging level (default: info)
 
@@ -583,11 +606,17 @@ ${styleText('bold', 'Examples:')}
   ${styleText('gray', '# Start production server on port 8080')}
   ${styleText('cyan', 'PORT=8080 rari start')}
 
+  ${styleText('gray', '# Start production server reachable from other hosts (e.g. Docker)')}
+  ${styleText('cyan', 'RARI_HOST=0.0.0.0 rari start')}
+
   ${styleText('gray', '# Setup Railway deployment')}
   ${styleText('cyan', 'rari deploy railway')}
 
   ${styleText('gray', '# Setup Render deployment')}
   ${styleText('cyan', 'rari deploy render')}
+
+  ${styleText('gray', '# Setup Fly.io deployment')}
+  ${styleText('cyan', 'rari deploy fly')}
 
   ${styleText('gray', '# Start with debug logging')}
   ${styleText('cyan', 'RUST_LOG=debug rari start')}
@@ -595,9 +624,10 @@ ${styleText('bold', 'Examples:')}
 ${styleText('bold', 'Deployment:')}
   ${styleText('cyan', 'rari deploy railway')}     Creates Railway deployment files
   ${styleText('cyan', 'rari deploy render')}      Creates Render deployment files
+  ${styleText('cyan', 'rari deploy fly')}         Creates Fly.io deployment files
 
   Platform deployment automatically detects the environment and configures:
-  - Host binding (0.0.0.0 for platforms, 127.0.0.1 for local)
+  - Host binding (0.0.0.0 for platforms, 127.0.0.1 for local, or RARI_HOST if set)
   - Port from platform's PORT environment variable
   - Production mode optimization
 
@@ -649,8 +679,10 @@ async function main() {
         await deployToRailway()
       } else if (args[0] === 'render') {
         await deployToRender()
+      } else if (args[0] === 'fly') {
+        await deployToFly()
       } else {
-        logError('Unknown deployment target. Available: railway, render')
+        logError('Unknown deployment target. Available: railway, render, fly')
         process.exit(1)
       }
       break
@@ -676,7 +708,13 @@ if (isCliMainModule()) {
   })
 }
 
-export { detectPackageManager, getDeploymentConfig, isRailwayEnvironment, isRenderEnvironment }
+export {
+  detectPackageManager,
+  getDeploymentConfig,
+  isFlyEnvironment,
+  isRailwayEnvironment,
+  isRenderEnvironment,
+}
 export {
   findImageConfigPath,
   outDirFromImageConfigPath,

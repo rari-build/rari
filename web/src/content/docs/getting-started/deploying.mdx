@@ -1,5 +1,5 @@
 export const title = 'Deploying'
-export const description = 'Build and deploy your rari application to Railway, Render, or any Node.js hosting platform.'
+export const description = 'Build and deploy your rari application to Railway, Render, Fly.io, or any Node.js hosting platform.'
 
 <PageHeader title="Deploying" />
 
@@ -29,7 +29,7 @@ Run `rari start` to launch the production server:
 rari start
 ```
 
-The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway, Render), it automatically binds to `0.0.0.0` so the host can route external traffic to your app.
+The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway, Render, Fly.io), it automatically binds to `0.0.0.0` so the host can route external traffic to your app.
 
 ## Environment Variables
 
@@ -39,7 +39,7 @@ The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway
 | `RSC_PORT`  | Alternative server port (fallback if `PORT` is not set)            | `3000`                                                      |
 | `NODE_ENV`  | Environment mode                                                   | `production` for `rari start`, `development` for `rari dev` |
 | `RUST_LOG`  | Rust runtime log level (`error`, `warn`, `info`, `debug`, `trace`) | `error`                                                     |
-| `RARI_HOST` | Server bind address                                                | `127.0.0.1` (`0.0.0.0` on Railway and Render)               |
+| `RARI_HOST` | Server bind address                                                | `127.0.0.1` (`0.0.0.0` on Railway, Render, and Fly.io)      |
 
 `PORT` takes precedence over `RSC_PORT`. Most hosting platforms set `PORT` automatically.
 
@@ -51,7 +51,7 @@ rari has built-in support for [Railway](https://railway.app). Run the deploy com
 rari deploy railway
 ```
 
-This creates a `railway.toml` in your project root and updates your `package.json`:
+This creates a `railway.toml` and a `railpack.json` in your project root and updates your `package.json`:
 
 ```toml title="railway.toml"
 [build]
@@ -65,10 +65,20 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 ```
 
+```json title="railpack.json"
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "aptPackages": ["...", "libfontconfig1"]
+  }
+}
+```
+
 Your `package.json` gets these changes:
 
 - `scripts.start` is set to `rari start`
-- `engines.node` is set to `^24.21.0 || >=26.0.0` (required by rari)
+- `scripts.build` is set to `rari build` if not already present (Railway runs it during the build)
+- `engines.node` is set to `>=24.21.0` if missing or lower (required by rari)
 - `rari` is added to `dependencies` if not already present
 
 If you have an existing `start` script, it's backed up to `start:original`.
@@ -85,13 +95,13 @@ Railway is auto-detected via the `RAILWAY_ENVIRONMENT` environment variable, and
 
 ### System Dependencies
 
-The Rust runtime requires `libfontconfig1` for image and font rendering. On Railway, add this variable to your service:
+The Rust runtime requires `libfontconfig1` for image and font rendering. The generated `railpack.json` installs it in the deployed image. The `"..."` entry keeps the packages Railpack would install anyway. If you already have a `railpack.json`, `rari deploy railway` adds `libfontconfig1` to its `deploy.aptPackages` instead of replacing the file.
 
-| Variable                       | Value            |
-| ------------------------------ | ---------------- |
-| `RAILPACK_DEPLOY_APT_PACKAGES` | `libfontconfig1` |
+If you'd rather not use a `railpack.json`, set this variable on your service in the Railway dashboard instead:
 
-You can set this in the Railway dashboard under your service's Variables tab.
+| Variable                       | Value                |
+| ------------------------------ | -------------------- |
+| `RAILPACK_DEPLOY_APT_PACKAGES` | `... libfontconfig1` |
 
 ## Render
 
@@ -109,7 +119,7 @@ services:
     name: rari-app
     runtime: node
     plan: free
-    buildCommand: npm install && npx rari build
+    buildCommand: npm install --include=dev && npx rari build
     startCommand: npm start
     healthCheckPath: /_rari/health
     envVars:
@@ -119,7 +129,7 @@ services:
         value: info
 ```
 
-The same `package.json` changes apply as with Railway: `scripts.start`, `engines.node`, and the `rari` dependency.
+The same `package.json` changes apply as with Railway: `scripts.start`, `scripts.build`, `engines.node`, and the `rari` dependency. `--include=dev` is needed because `NODE_ENV=production` is also set during the build, and the build tools are dev dependencies.
 
 ### Deploying to Render
 
@@ -134,6 +144,52 @@ Render is auto-detected via the `RENDER` environment variable, and the server bi
 ### System Dependencies
 
 The Rust runtime requires `libfontconfig1` for image and font rendering. Render's native Node.js runtime includes `libvips-dev`, which provides `libfontconfig1` as a transitive dependency, so this should work out of the box. If you run into font-related errors, switch to a [Docker deployment](https://render.com/docs/docker) and install `libfontconfig1` explicitly (see the [Self-Hosting](#self-hosting) Dockerfile below).
+
+## Fly.io
+
+rari also has built-in support for [Fly.io](https://fly.io). Run the deploy command to generate the configuration files:
+
+```terminal
+rari deploy fly
+```
+
+This creates a `fly.toml`, a `Dockerfile`, and a `.dockerignore` (if you don't already have one) in your project root, and applies the same `package.json` changes as Railway. It also adds a `deploy:fly` script that runs `fly deploy`.
+
+```toml title="fly.toml"
+app = "rari-app"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/_rari/health"
+    timeout = "5s"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+```
+
+The generated `Dockerfile` installs `libfontconfig1`, installs dependencies with the package manager matching your lockfile (npm, pnpm, yarn, or bun), runs `rari build`, and starts the server on port 8080 with `RARI_HOST=0.0.0.0`.
+
+### Deploying to Fly.io
+
+1. Install the [Fly CLI](https://fly.io/docs/flyctl/install/) and run `fly auth login`
+2. Run `fly launch --no-deploy` to create the app (pick a unique name; this updates `app` in `fly.toml`)
+3. Run `fly deploy`
+
+Fly.io is auto-detected via the `FLY_APP_NAME`, `FLY_MACHINE_ID`, or `FLY_ALLOC_ID` environment variables, and the server binds to `0.0.0.0`. Set secrets with `fly secrets set NAME=value`.
 
 ## Self-Hosting
 
@@ -175,12 +231,13 @@ RUN npx rari build
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV RARI_HOST=0.0.0.0
 EXPOSE 3000
 
 CMD ["npm", "start"]
 ```
 
-The server binds to `0.0.0.0` automatically on Railway and Render, but defaults to `127.0.0.1` elsewhere. For containerized or cloud deployments, make sure your networking layer routes traffic to the server's bound address and port.
+The server binds to `0.0.0.0` automatically on Railway, Render, and Fly.io, but defaults to `127.0.0.1` elsewhere. In a container or on any other host that needs external traffic, set `RARI_HOST=0.0.0.0` (as in the Dockerfile above) so the server is reachable.
 
 ## Related
 

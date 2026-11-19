@@ -12,6 +12,10 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./fly": {
+      "types": "./dist/fly.d.mts",
+      "import": "./dist/fly.mjs"
+    },
     "./railway": {
       "types": "./dist/railway.d.mts",
       "import": "./dist/railway.mjs"
