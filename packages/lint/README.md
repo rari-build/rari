@@ -26,6 +26,8 @@ export default defineConfig({
 
 ### ESLint flat config
 
+The ESLint config only covers files oxlint doesn't lint: `package.json`, `pnpm-workspace.yaml`, and JSON/YAML key sorting. All JavaScript, TypeScript, and React rules (including `@eslint-react`) run in oxlint through `@rari/lint/vite`, so use both exports together.
+
 ```ts
 // eslint.config.ts
 export { default } from '@rari/lint/eslint'
@@ -51,7 +53,7 @@ export default [
 | Export              | Purpose                                           |
 | ------------------- | ------------------------------------------------- |
 | `@rari/lint/vite`   | `fmt`, `lint`, and `ignorePatterns` for vite-plus |
-| `@rari/lint/eslint` | Flat ESLint config                                |
+| `@rari/lint/eslint` | Flat ESLint config for package.json, JSON, YAML   |
 
 ## Notes
 

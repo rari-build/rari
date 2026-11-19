@@ -37,7 +37,7 @@ export default function MermaidChart({ children, className }: MermaidChartProps)
       <div className="pele flex items-center justify-center overflow-auto rounded-md border border-[#30363d] bg-[#0d1117] p-6 [--pele-bg:#0d1117] [--pele-fg:#e5e7eb] [--pele-muted:#9ca3af] [--pele-line:#9ca3af] [--pele-surface:#161b22] [--pele-surface-alt:#1f2937] [--pele-border:#30363d] [--pele-accent:#3b82f6]">
         <div
           className="w-full"
-          // eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
+          // oxlint-disable-next-line eslint-react/dom-no-dangerously-set-innerhtml
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       </div>

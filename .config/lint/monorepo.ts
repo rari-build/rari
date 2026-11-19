@@ -107,18 +107,6 @@ export const monorepoEslintConfigs: Linter.Config[] = [
   {
     ignores: monorepoIgnorePatterns,
   },
-  {
-    files: ['crates/rari/src/runtime/ext/**/*.ts'],
-    rules: {
-      'react/no-unnecessary-use-prefix': 'off',
-    },
-  },
-  {
-    files: ['tools/bundle-react-esm/*.ts'],
-    rules: {
-      'no-console': 'off',
-    },
-  },
 ]
 
 export const monorepoFmt: OxfmtConfig = {
@@ -163,6 +151,12 @@ export const monorepoLint: OxlintConfig = {
         'unused-imports/no-unused-vars': 'off',
       },
       plugins: ['typescript'],
+    },
+    {
+      files: ['crates/rari/src/runtime/ext/**/*.ts'],
+      rules: {
+        'eslint-react/no-unnecessary-use-prefix': 'off',
+      },
     },
   ],
 }

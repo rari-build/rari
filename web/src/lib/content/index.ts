@@ -57,14 +57,6 @@ export async function contentFileExists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function readContentFile(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, 'utf-8')
-  } catch {
-    return null
-  }
-}
-
 export interface BlogPost {
   slug: string
   title: string
