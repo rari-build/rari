@@ -265,7 +265,8 @@
 
   function toJsonForRust(value: unknown): unknown {
     try {
-      const json: unknown = JSON.parse(JSON.stringify(value))
+      const serialized = JSON.stringify(value)
+      const json: unknown = JSON.parse(serialized)
       return json
     } catch {
       return value
