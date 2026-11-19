@@ -235,59 +235,68 @@ function parseCliArgv(argv: readonly string[]): { command: string | undefined; a
   return { command, args }
 }
 
-function isRailwayEnvironment(): boolean {
-  return (
-    (process.env.RAILWAY_ENVIRONMENT != null && process.env.RAILWAY_ENVIRONMENT !== '') ||
-    (process.env.RAILWAY_PROJECT_ID != null && process.env.RAILWAY_PROJECT_ID !== '') ||
-    (process.env.RAILWAY_SERVICE_ID != null && process.env.RAILWAY_SERVICE_ID !== '')
-  )
+function envValue(name: string): string | undefined {
+  const value = process.env[name]
+  return value != null && value !== '' ? value : undefined
 }
 
-function isRenderEnvironment(): boolean {
-  return (
-    (process.env.RENDER != null && process.env.RENDER !== '') ||
-    (process.env.RENDER_SERVICE_ID != null && process.env.RENDER_SERVICE_ID !== '') ||
-    (process.env.RENDER_SERVICE_NAME != null && process.env.RENDER_SERVICE_NAME !== '')
-  )
+function hasEnvValue(name: string): boolean {
+  return envValue(name) !== undefined
 }
 
-function isFlyEnvironment(): boolean {
-  return (
-    (process.env.FLY_APP_NAME != null && process.env.FLY_APP_NAME !== '') ||
-    (process.env.FLY_MACHINE_ID != null && process.env.FLY_MACHINE_ID !== '') ||
-    (process.env.FLY_ALLOC_ID != null && process.env.FLY_ALLOC_ID !== '')
-  )
+interface Platform {
+  readonly id: string
+  readonly name: string
+  readonly envVars: readonly string[]
+  readonly setup: () => Promise<void>
 }
 
-function isPlatformEnvironment(): boolean {
-  return isRailwayEnvironment() || isRenderEnvironment() || isFlyEnvironment()
+const PLATFORMS: readonly Platform[] = [
+  {
+    id: 'railway',
+    name: 'Railway',
+    envVars: ['RAILWAY_ENVIRONMENT', 'RAILWAY_PROJECT_ID', 'RAILWAY_SERVICE_ID'],
+    setup: async () => {
+      const { createRailwayDeployment } = await import('@rari/deploy/railway')
+      createRailwayDeployment()
+    },
+  },
+  {
+    id: 'render',
+    name: 'Render',
+    envVars: ['RENDER', 'RENDER_SERVICE_ID', 'RENDER_SERVICE_NAME'],
+    setup: async () => {
+      const { createRenderDeployment } = await import('@rari/deploy/render')
+      createRenderDeployment()
+    },
+  },
+  {
+    id: 'fly',
+    name: 'Fly.io',
+    envVars: ['FLY_APP_NAME', 'FLY_MACHINE_ID', 'FLY_ALLOC_ID'],
+    setup: async () => {
+      const { createFlyDeployment } = await import('@rari/deploy/fly')
+      createFlyDeployment()
+    },
+  },
+]
+
+function isPlatform(id: string): boolean {
+  return PLATFORMS.find(platform => platform.id === id)?.envVars.some(hasEnvValue) ?? false
 }
 
-function getPlatformName(): string {
-  if (isRailwayEnvironment()) return 'Railway'
-  if (isRenderEnvironment()) return 'Render'
-  if (isFlyEnvironment()) return 'Fly.io'
-
-  return 'local'
+function detectPlatform(): Platform | undefined {
+  return PLATFORMS.find(platform => platform.envVars.some(hasEnvValue))
 }
+
+const isRailwayEnvironment = (): boolean => isPlatform('railway')
+const isRenderEnvironment = (): boolean => isPlatform('render')
+const isFlyEnvironment = (): boolean => isPlatform('fly')
 
 function getDeploymentConfig() {
-  const port =
-    process.env.PORT != null && process.env.PORT !== ''
-      ? process.env.PORT
-      : process.env.RSC_PORT != null && process.env.RSC_PORT !== ''
-        ? process.env.RSC_PORT
-        : '3000'
-  const mode =
-    process.env.NODE_ENV != null && process.env.NODE_ENV !== ''
-      ? process.env.NODE_ENV
-      : 'production'
-  const host =
-    process.env.RARI_HOST != null && process.env.RARI_HOST !== ''
-      ? process.env.RARI_HOST
-      : isPlatformEnvironment()
-        ? '0.0.0.0'
-        : '127.0.0.1'
+  const port = envValue('PORT') ?? envValue('RSC_PORT') ?? '3000'
+  const mode = envValue('NODE_ENV') ?? 'production'
+  const host = envValue('RARI_HOST') ?? (detectPlatform() ? '0.0.0.0' : '127.0.0.1')
 
   return { port, mode, host }
 }
@@ -437,8 +446,9 @@ async function startRustServer(): Promise<void> {
 
   const { port, mode, host } = getDeploymentConfig()
 
-  if (isPlatformEnvironment()) {
-    const platformName = getPlatformName()
+  const platform = detectPlatform()
+  if (platform) {
+    const platformName = platform.name
     logInfo(`${platformName} environment detected`)
     logInfo(`Starting rari server for ${platformName} deployment...`)
     logInfo(`Mode: ${mode}, Host: ${host}, Port: ${port}`)
@@ -519,40 +529,22 @@ async function startRustServer(): Promise<void> {
   return new Promise(() => {})
 }
 
-async function deployToRailway() {
-  logInfo('Setting up Railway deployment...')
-
-  if (isPlatformEnvironment()) {
-    logError(`Already running in ${getPlatformName()} environment. Use "rari start" instead.`)
+async function deployTo(target: string | undefined) {
+  const platform = PLATFORMS.find(p => p.id === target)
+  if (!platform) {
+    logError(`Unknown deployment target. Available: ${PLATFORMS.map(p => p.id).join(', ')}`)
     process.exit(1)
   }
 
-  const { createRailwayDeployment } = await import('@rari/deploy/railway')
-  createRailwayDeployment()
-}
+  logInfo(`Setting up ${platform.name} deployment...`)
 
-async function deployToRender() {
-  logInfo('Setting up Render deployment...')
-
-  if (isPlatformEnvironment()) {
-    logError(`Already running in ${getPlatformName()} environment. Use "rari start" instead.`)
+  const current = detectPlatform()
+  if (current) {
+    logError(`Already running in ${current.name} environment. Use "rari start" instead.`)
     process.exit(1)
   }
 
-  const { createRenderDeployment } = await import('@rari/deploy/render')
-  createRenderDeployment()
-}
-
-async function deployToFly() {
-  logInfo('Setting up Fly.io deployment...')
-
-  if (isPlatformEnvironment()) {
-    logError(`Already running in ${getPlatformName()} environment. Use "rari start" instead.`)
-    process.exit(1)
-  }
-
-  const { createFlyDeployment } = await import('@rari/deploy/fly')
-  createFlyDeployment()
+  await platform.setup()
 }
 
 function cleanDistFolder() {
@@ -675,16 +667,7 @@ async function main() {
       break
 
     case 'deploy':
-      if (args[0] === 'railway') {
-        await deployToRailway()
-      } else if (args[0] === 'render') {
-        await deployToRender()
-      } else if (args[0] === 'fly') {
-        await deployToFly()
-      } else {
-        logError('Unknown deployment target. Available: railway, render, fly')
-        process.exit(1)
-      }
+      await deployTo(args[0])
       break
 
     default:
