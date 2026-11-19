@@ -1691,7 +1691,7 @@ if (import.meta.hot) {
 
     if (replacements.length === 0) return modifiedCode
 
-    for (const { start, end, replacement } of [...replacements].sort((a, b) => b.start - a.start)) {
+    for (const { start, end, replacement } of replacements.toSorted((a, b) => b.start - a.start)) {
       modifiedCode = modifiedCode.slice(0, start) + replacement + modifiedCode.slice(end)
     }
 
@@ -1795,7 +1795,7 @@ if (import.meta.hot) {
     if (collected == null) return null
 
     let modifiedCode = code
-    for (const { start, end, replacement } of [...collected.replacements].sort(
+    for (const { start, end, replacement } of collected.replacements.toSorted(
       (a, b) => b.start - a.start,
     )) {
       modifiedCode = modifiedCode.slice(0, start) + replacement + modifiedCode.slice(end)

@@ -401,7 +401,6 @@ export function Image({
   const shouldEagerBlur = preload || loading === 'eager'
   const optimizerFormat = primaryOptimizerFormat(loader)
 
-  const [showAltText, setShowAltText] = useState(false)
   const onLoadRef = useRef(onLoad)
   const { imgRef, blurComplete, setBlurComplete, activeBlurUrl } = useImageBlurState({
     finalSrc,
@@ -431,7 +430,6 @@ export function Image({
 
   const handleError = useCallback(
     (event: SyntheticEvent<HTMLImageElement>) => {
-      setShowAltText(true)
       if (placeholder === 'blur') setBlurComplete(true)
 
       if (onError) onError(event)
@@ -485,11 +483,11 @@ export function Image({
       src={resolvedSrc}
       srcSet={srcSet}
       sizes={srcSet != null ? resolvedSizes : undefined}
-      alt={showAltText ? alt : ''}
+      alt={alt}
       width={fill ? undefined : imgWidth}
       height={fill ? undefined : imgHeight}
       loading={preload ? 'eager' : loading}
-      fetchPriority={preload ? 'high' : 'auto'}
+      fetchPriority={preload ? 'high' : undefined}
       decoding={imgDecoding}
       onLoad={placeholder === 'blur' || onLoad != null ? handleLoad : undefined}
       onError={handleError}

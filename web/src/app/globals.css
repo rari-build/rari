@@ -313,9 +313,12 @@ button:focus-visible {
   font-weight: 600;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+:root {
+  --scrollbar-thumb: var(--edge);
+  --scrollbar-track: var(--canvas);
+
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
 }
 
 .not-prose pre {
@@ -331,17 +334,28 @@ button:focus-visible {
   max-width: 100%;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--canvas);
-}
+@supports not (scrollbar-color: auto) {
+  :root {
+    scrollbar-width: auto;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--edge);
-  border-radius: 4px;
-}
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-hover);
+  ::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+  }
 }
 
 ::selection {

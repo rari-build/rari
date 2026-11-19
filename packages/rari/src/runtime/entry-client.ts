@@ -28,6 +28,7 @@ import {
   getClientComponents,
   getRariWindowBag,
 } from './shared/rari-global'
+import { installRouteAnnouncer } from './shared/route-announcer'
 import './shared/types'
 // @ts-expect-error - virtual module resolved by Vite
 import 'virtual:rsc-integration.ts'
@@ -112,6 +113,7 @@ function mountApp(content: ReactNode) {
   }
 
   restoreDocumentTitle(ssrTitle)
+  installRouteAnnouncer()
   notifyClientReady()
 }
 

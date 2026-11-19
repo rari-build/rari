@@ -334,10 +334,8 @@ export class ServerComponentBuilder {
 
   private async withEnvEmitLock<T>(fn: () => Promise<T>): Promise<T> {
     const previous = this.envEmitLock
-    let release!: () => void
-    this.envEmitLock = new Promise(resolve => {
-      release = resolve
-    })
+    const { promise, resolve: release } = Promise.withResolvers<void>()
+    this.envEmitLock = promise
     await previous
     try {
       return await fn()

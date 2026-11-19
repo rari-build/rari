@@ -23,6 +23,7 @@ export async function getUseCacheTransform(): Promise<UseCacheTransform> {
       const detail = error instanceof Error && error.message !== '' ? ` ${error.message}` : ''
       throw new Error(
         `\`experimental.useCache\` / \`experimental.useCacheRemote\` requires a working \`@rari/use-cache\` native addon. Install the optional platform package, or run \`just build-addon-dev\` in the monorepo.${detail}`,
+        { cause: error },
       )
     }
   })()

@@ -979,7 +979,7 @@ export function transformInlineServerActions(
   const hoisted: string[] = []
   let needsRegisterImport = false
 
-  const ordered = [...actions].sort((a, b) => b.start - a.start)
+  const ordered = actions.toSorted((a, b) => b.start - a.start)
   let actionIndex = actions.length - 1
 
   for (const action of ordered) {

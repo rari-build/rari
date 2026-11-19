@@ -258,13 +258,17 @@
     }
 
     const rsc = (g['~rsc'] ??= {})
+    const jsonResult = toJsonForRust(result)
+    rsc.renderResult = jsonResult
+    return jsonResult
+  }
+
+  function toJsonForRust(value: unknown): unknown {
     try {
-      const cleanResult: unknown = JSON.parse(JSON.stringify(result))
-      rsc.renderResult = cleanResult
-      return cleanResult
+      const json: unknown = JSON.parse(JSON.stringify(value))
+      return json
     } catch {
-      rsc.renderResult = result
-      return result
+      return value
     }
   }
 
