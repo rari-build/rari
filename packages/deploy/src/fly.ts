@@ -4,6 +4,7 @@ import process from 'node:process'
 import { styleText } from 'node:util'
 import {
   createOrBackupConfigFile,
+  getInstallCommand,
   logInfo,
   logSuccess,
   printDeploymentSuccess,
@@ -15,7 +16,7 @@ export function createFlyDeployment() {
 
   logInfo('Creating Fly.io deployment configuration...')
 
-  updatePackageJsonForProvider(cwd, {
+  const addedRari = updatePackageJsonForProvider(cwd, {
     providerName: 'Fly',
     deployScript: 'fly deploy',
   })
@@ -27,6 +28,9 @@ export function createFlyDeployment() {
   printDeploymentSuccess(
     'Fly.io',
     [
+      ...(addedRari
+        ? [`${styleText('cyan', getInstallCommand(cwd))} (updates your lockfile for rari)`]
+        : []),
       `Install the Fly CLI: ${styleText('cyan', 'https://fly.io/docs/flyctl/install/')}`,
       styleText('cyan', 'fly auth login'),
       styleText('cyan', 'fly launch --no-deploy'),

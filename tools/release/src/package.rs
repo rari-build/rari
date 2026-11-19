@@ -151,7 +151,10 @@ impl ReleaseUnit {
     }
 
     pub fn next_version(&self, release_type: ReleaseType) -> Option<String> {
-        release_type.to_version(self.base_version(release_type))
+        let base = self.base_version(release_type);
+        let next = release_type.to_version(base)?;
+        let advanced = semver::Version::parse(&next).ok()? > semver::Version::parse(base).ok()?;
+        advanced.then_some(next)
     }
 
     pub fn sources(&self) -> &VersionSources {
@@ -248,6 +251,19 @@ impl Package {
     }
 }
 
+fn increment_prerelease(pre: &str) -> String {
+    let mut parts: Vec<String> = pre.split('.').map(String::from).collect();
+    match parts.last().and_then(|last| last.parse::<u64>().ok()) {
+        Some(num) => {
+            if let Some(last) = parts.last_mut() {
+                *last = (num + 1).to_string();
+            }
+        }
+        None => parts.push("0".to_string()),
+    }
+    parts.join(".")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReleaseType {
     Patch,
@@ -294,10 +310,8 @@ impl ReleaseType {
                     new.patch += 1;
                     new.pre = semver::Prerelease::new("0").ok()?;
                 } else {
-                    let pre_str = new.pre.as_str();
-                    if let Ok(num) = pre_str.parse::<u64>() {
-                        new.pre = semver::Prerelease::new(&(num + 1).to_string()).ok()?;
-                    }
+                    new.pre =
+                        semver::Prerelease::new(&increment_prerelease(new.pre.as_str())).ok()?;
                 }
                 new.to_string()
             }
@@ -367,5 +381,36 @@ impl ReleasedPackage {
         format!(
             "https://github.com/{owner}/{repo}/releases/new?tag={tag}&title={title}&body={body_encoded}"
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prerelease_increments_numeric_suffix() {
+        assert_eq!(ReleaseType::Prerelease.to_version("1.0.0-0").as_deref(), Some("1.0.0-1"));
+        assert_eq!(
+            ReleaseType::Prerelease.to_version("1.0.0-beta.0").as_deref(),
+            Some("1.0.0-beta.1")
+        );
+        assert_eq!(
+            ReleaseType::Prerelease.to_version("1.0.0-rc.1.9").as_deref(),
+            Some("1.0.0-rc.1.10")
+        );
+    }
+
+    #[test]
+    fn prerelease_appends_counter_to_named_tag() {
+        assert_eq!(
+            ReleaseType::Prerelease.to_version("1.0.0-beta").as_deref(),
+            Some("1.0.0-beta.0")
+        );
+    }
+
+    #[test]
+    fn prerelease_from_stable_starts_next_patch() {
+        assert_eq!(ReleaseType::Prerelease.to_version("1.0.0").as_deref(), Some("1.0.1-0"));
     }
 }

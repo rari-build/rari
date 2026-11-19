@@ -326,11 +326,19 @@ interface ProviderConfig {
 
 export type { ProviderConfig }
 
-export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig) {
+export function getInstallCommand(cwd: string): string {
+  if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm install'
+  if (existsSync(join(cwd, 'yarn.lock'))) return 'yarn install'
+  if (existsSync(join(cwd, 'bun.lock')) || existsSync(join(cwd, 'bun.lockb'))) return 'bun install'
+  return 'npm install'
+}
+
+export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig): boolean {
   const packageJsonPath = join(cwd, 'package.json')
   if (!existsSync(packageJsonPath)) {
     logError('No package.json found. Please run this command from your project root.')
     process.exit(1)
+    return false
   }
 
   try {
@@ -357,20 +365,23 @@ export function updatePackageJsonForProvider(cwd: string, config: ProviderConfig
 
     ensureMinimumNodeEngine(packageJson)
 
-    if (packageJson.dependencies?.rari == null || packageJson.dependencies.rari === '') {
+    const addedRari = packageJson.dependencies?.rari == null || packageJson.dependencies.rari === ''
+    if (addedRari) {
       logInfo('Adding rari dependency...')
       packageJson.dependencies = packageJson.dependencies ?? {}
       packageJson.dependencies.rari = getRariVersion(cwd)
       logWarn(
-        'rari was added to dependencies. Run your package manager install (e.g. "pnpm install") to update your lockfile before deploying; frozen-lockfile installs will fail otherwise.',
+        `rari was added to dependencies. Run "${getInstallCommand(cwd)}" to update your lockfile before deploying; frozen-lockfile installs will fail otherwise.`,
       )
     }
 
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
     logSuccess(`Updated package.json for ${config.providerName} deployment`)
+    return addedRari
   } catch (error) {
     logError(`Failed to update package.json: ${errorMessage(error)}`)
     process.exit(1)
+    return false
   }
 }
 

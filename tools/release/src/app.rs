@@ -107,6 +107,7 @@ impl App {
                     self.previous_tag = git::get_previous_tag(unit.name(), None).await?;
                     self.screen = Screen::VersionSelection { package_idx };
                     self.selected_version_idx = 0;
+                    self.error_message = None;
                 }
                 KeyCode::Esc | KeyCode::Char('q') => return Ok(true),
                 _ => {}
@@ -114,9 +115,11 @@ impl App {
             Screen::VersionSelection { package_idx } => match key {
                 KeyCode::Up if self.selected_version_idx > 0 => {
                     self.selected_version_idx -= 1;
+                    self.error_message = None;
                 }
                 KeyCode::Down if self.selected_version_idx < self.version_types.len() - 1 => {
                     self.selected_version_idx += 1;
+                    self.error_message = None;
                 }
                 KeyCode::Enter => {
                     let release_type = self.version_types[self.selected_version_idx];
@@ -132,6 +135,11 @@ impl App {
                         self.publish_step = PublishStep::UpdatingVersion;
                         self.publish_progress = 0.0;
                         self.status_messages.clear();
+                    } else {
+                        self.error_message = Some(format!(
+                            "Could not calculate a version greater than {}",
+                            unit.base_version(release_type)
+                        ));
                     }
                 }
                 KeyCode::Esc => {

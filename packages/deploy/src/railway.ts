@@ -4,6 +4,7 @@ import process from 'node:process'
 import { styleText } from 'node:util'
 import {
   createOrBackupConfigFile,
+  getInstallCommand,
   logError,
   logInfo,
   logSuccess,
@@ -16,7 +17,7 @@ export function createRailwayDeployment() {
 
   logInfo('Creating Railway deployment configuration...')
 
-  updatePackageJsonForProvider(cwd, { providerName: 'Railway' })
+  const addedRari = updatePackageJsonForProvider(cwd, { providerName: 'Railway' })
 
   createRailwayToml(cwd)
   const hasRuntimePackages = ensureRailpackAptPackages(cwd)
@@ -24,6 +25,9 @@ export function createRailwayDeployment() {
   printDeploymentSuccess(
     'Railway',
     [
+      ...(addedRari
+        ? [`${styleText('cyan', getInstallCommand(cwd))} (updates your lockfile for rari)`]
+        : []),
       styleText('cyan', 'git add .'),
       styleText('cyan', 'git commit -m "Add Railway deployment"'),
       styleText('cyan', 'git push origin main'),

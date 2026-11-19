@@ -2,6 +2,7 @@ import process from 'node:process'
 import { styleText } from 'node:util'
 import {
   createOrBackupConfigFile,
+  getInstallCommand,
   logInfo,
   printDeploymentSuccess,
   updatePackageJsonForProvider,
@@ -12,13 +13,16 @@ export function createRenderDeployment() {
 
   logInfo('Creating Render deployment configuration...')
 
-  updatePackageJsonForProvider(cwd, { providerName: 'Render' })
+  const addedRari = updatePackageJsonForProvider(cwd, { providerName: 'Render' })
 
   createRenderYaml(cwd)
 
   printDeploymentSuccess(
     'Render',
     [
+      ...(addedRari
+        ? [`${styleText('cyan', getInstallCommand(cwd))} (updates your lockfile for rari)`]
+        : []),
       styleText('cyan', 'git add .'),
       styleText('cyan', 'git commit -m "Add Render deployment"'),
       styleText('cyan', 'git push origin main'),

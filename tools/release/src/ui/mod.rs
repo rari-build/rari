@@ -140,10 +140,14 @@ pub fn render_version_selection(frame: &mut Frame, app: &App, unit: &ReleaseUnit
         List::new(items).block(Block::default().borders(Borders::ALL).title("Select Version"));
     frame.render_widget(list, chunks[2]);
 
-    let help = Paragraph::new("Up/Down: Navigate  Enter: Confirm  Esc: Back")
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(help, chunks[3]);
+    let footer = match &app.error_message {
+        Some(error) => Paragraph::new(error.as_str()).style(Style::default().fg(Color::Red)),
+        None => Paragraph::new("Up/Down: Navigate  Enter: Confirm  Esc: Back"),
+    };
+    frame.render_widget(
+        footer.alignment(Alignment::Center).block(Block::default().borders(Borders::ALL)),
+        chunks[3],
+    );
 }
 
 pub fn render_custom_version(frame: &mut Frame, app: &App, unit: &ReleaseUnit, input: &str) {

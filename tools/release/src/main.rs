@@ -212,8 +212,12 @@ async fn run_non_interactive(
                 "prerelease" => ReleaseType::Prerelease,
                 _ => anyhow::bail!("Invalid RELEASE_TYPE: {type_str}"),
             };
-            unit.next_version(release_type)
-                .ok_or_else(|| anyhow::anyhow!("Failed to calculate version"))?
+            unit.next_version(release_type).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Could not calculate a {type_str} version greater than {}",
+                    unit.base_version(release_type)
+                )
+            })?
         } else {
             anyhow::bail!(
                 "Non-interactive mode requires RELEASE_VERSION or RELEASE_TYPE environment variable"
