@@ -63,14 +63,7 @@ impl App {
         dry_run: bool,
         notes_file: Option<PathBuf>,
     ) -> Result<Self> {
-        let mut release_units = load_release_units().await?;
-
-        if let Some(only_list) = only {
-            release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));
-            if release_units.is_empty() {
-                anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
-            }
-        }
+        let release_units = load_release_units(only.as_deref()).await?;
 
         Ok(Self {
             screen: Screen::PackageSelection,

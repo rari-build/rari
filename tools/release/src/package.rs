@@ -62,28 +62,59 @@ impl PackageGroup {
     }
 }
 
-pub async fn load_release_units() -> Result<Vec<ReleaseUnit>> {
+async fn load_single(load: bool, name: &str, path: &str) -> Option<Result<ReleaseUnit>> {
+    if !load {
+        return None;
+    }
+    Some(Package::load(name, path).await.map(ReleaseUnit::Single))
+}
+
+async fn load_group(
+    load: bool,
+    name: &str,
+    parent_path: &str,
+    platform_prefix: &str,
+) -> Option<Result<ReleaseUnit>> {
+    if !load {
+        return None;
+    }
+    Some(
+        PackageGroup::load_virtual(name, parent_path, platform_prefix)
+            .await
+            .map(ReleaseUnit::Virtual),
+    )
+}
+
+pub async fn load_release_units(only: Option<&[String]>) -> Result<Vec<ReleaseUnit>> {
+    let wanted = |name: &str| only.is_none_or(|list| list.iter().any(|n| n == name));
+
     let (rari, create_app, binaries, use_cache, use_cache_binaries, lint) = tokio::join!(
-        Package::load("rari", "packages/rari"),
-        Package::load("create-rari-app", "packages/create-rari-app"),
-        PackageGroup::load_virtual("rari-binaries", "packages/rari", "rari-"),
-        Package::load("@rari/use-cache", "packages/use-cache"),
-        PackageGroup::load_virtual(
+        load_single(wanted("rari"), "rari", "packages/rari"),
+        load_single(wanted("create-rari-app"), "create-rari-app", "packages/create-rari-app"),
+        load_group(wanted("rari-binaries"), "rari-binaries", "packages/rari", "rari-"),
+        load_single(wanted("@rari/use-cache"), "@rari/use-cache", "packages/use-cache"),
+        load_group(
+            wanted("@rari/use-cache-binaries"),
             "@rari/use-cache-binaries",
             "packages/use-cache",
             "@rari/use-cache-",
         ),
-        Package::load("@rari/lint", "packages/lint"),
+        load_single(wanted("@rari/lint"), "@rari/lint", "packages/lint"),
     );
 
-    Ok(vec![
-        ReleaseUnit::Single(rari?),
-        ReleaseUnit::Single(create_app?),
-        ReleaseUnit::Virtual(binaries?),
-        ReleaseUnit::Single(use_cache?),
-        ReleaseUnit::Virtual(use_cache_binaries?),
-        ReleaseUnit::Single(lint?),
-    ])
+    let units = [rari, create_app, binaries, use_cache, use_cache_binaries, lint]
+        .into_iter()
+        .flatten()
+        .collect::<Result<Vec<_>>>()?;
+
+    if units.is_empty() {
+        anyhow::bail!(
+            "No matching packages for selection: {}",
+            only.unwrap_or_default().join(", ")
+        );
+    }
+
+    Ok(units)
 }
 
 #[derive(Debug, Clone)]

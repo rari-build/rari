@@ -23,26 +23,43 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::package::{ReleaseType, ReleasedPackage, release_tag};
+use crate::package::{ReleaseType, ReleaseUnit, ReleasedPackage, release_tag};
 
 #[derive(Parser, Debug)]
+#[expect(clippy::struct_excessive_bools, reason = "CLI flags map directly to clap bool args")]
 #[command(name = "release")]
 #[command(about = "rari Release Manager", long_about = None)]
 struct Args {
-    #[arg(long, value_delimiter = ',')]
+    #[arg(
+        long,
+        value_delimiter = ',',
+        help = "Comma-separated release units to include, e.g. rari,@rari/lint (or set PACKAGES)"
+    )]
     only: Option<Vec<String>>,
 
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Show what would happen without changing files, committing, tagging, or pushing"
+    )]
     dry_run: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Run without the TUI (implied by RELEASE_VERSION or RELEASE_TYPE)")]
     non_interactive: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "In non-interactive mode, commit and tag locally but don't push")]
     no_push: bool,
 
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Manual release notes to use instead of .github/release-notes/ (or set RELEASE_NOTES_FILE)"
+    )]
     notes_file: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "In non-interactive mode, release even if npm can't be reached (versions fall back to git tags and local package.json)"
+    )]
+    allow_offline: bool,
 }
 
 #[expect(clippy::print_stdout)]
@@ -78,6 +95,7 @@ async fn main() -> Result<()> {
             env_version,
             env_type,
             notes_file,
+            args.allow_offline,
         )
         .await;
     }
@@ -134,6 +152,7 @@ async fn run_non_interactive(
     env_version: Option<String>,
     env_type: Option<String>,
     notes_file: Option<PathBuf>,
+    allow_offline: bool,
 ) -> Result<()> {
     println!("{}", "rari Release Script".cyan().bold());
     if dry_run {
@@ -142,13 +161,26 @@ async fn run_non_interactive(
     println!();
 
     println!("Checking published versions...");
-    let mut release_units = package::load_release_units().await?;
+    let release_units = package::load_release_units(only.as_deref()).await?;
 
-    if let Some(only_list) = &only {
-        release_units.retain(|unit| only_list.iter().any(|i: &String| i == unit.name()));
-        if release_units.is_empty() {
-            anyhow::bail!("No matching packages for selection: {}", only_list.join(", "));
+    let offline: Vec<&str> = release_units
+        .iter()
+        .filter(|unit| !unit.sources().npm_reachable())
+        .map(ReleaseUnit::name)
+        .collect();
+    if !offline.is_empty() {
+        if !allow_offline {
+            anyhow::bail!(
+                "Could not reach npm for: {}. Refusing to pick versions from git tags and local \
+                 package.json only; re-run with --allow-offline to override.",
+                offline.join(", ")
+            );
         }
+        println!(
+            "{} npm unreachable for {}; using git tags and local versions (--allow-offline)",
+            "⚠".yellow().bold(),
+            offline.join(", ")
+        );
     }
 
     let mut released_packages: Vec<ReleasedPackage> = Vec::new();

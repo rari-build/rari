@@ -55,10 +55,15 @@ impl VersionSources {
     }
 
     pub fn npm_is_mixed(&self) -> bool {
-        self.npm_reachable()
-            && (self.npm_latests().len() > 1
-                || self.npm.iter().any(|pkg| pkg.latest().is_none())
-                    && !self.npm_latests().is_empty())
+        let latests = self.npm_latests();
+        latests.len() > 1
+            || (!latests.is_empty()
+                && self.npm.iter().any(|pkg| {
+                    matches!(
+                        pkg.status,
+                        NpmStatus::NotPublished | NpmStatus::Published { latest: None, .. }
+                    )
+                }))
     }
 
     pub fn effective(&self) -> Option<String> {
@@ -287,5 +292,34 @@ mod tests {
         );
         assert!(s.is_out_of_sync());
         assert!(s.summary().contains("rari-linux-riscv64 unpublished"));
+    }
+
+    #[test]
+    fn mixed_versions_still_flagged_when_one_lookup_fails() {
+        let s = sources(
+            vec![
+                published("rari-darwin-arm64", "0.17.11"),
+                published("rari-linux-x64", "0.17.10"),
+                with_status("rari-win32-x64", NpmStatus::Unavailable),
+            ],
+            Some("0.17.11"),
+            None,
+        );
+        assert!(!s.npm_reachable());
+        assert!(s.npm_is_mixed());
+        assert!(s.is_out_of_sync());
+    }
+
+    #[test]
+    fn unavailable_alone_is_not_mixed() {
+        let s = sources(
+            vec![
+                published("rari-darwin-arm64", "0.17.10"),
+                with_status("rari-win32-x64", NpmStatus::Unavailable),
+            ],
+            Some("0.17.10"),
+            None,
+        );
+        assert!(!s.npm_is_mixed());
     }
 }
