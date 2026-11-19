@@ -55,7 +55,8 @@ impl PackageGroup {
         }
 
         let sources = versions::resolve(name, platform_packages, None).await;
-        let Some(current_version) = sources.effective() else {
+        let Some(current_version) = sources.effective().or_else(|| sources.effective_prerelease())
+        else {
             anyhow::bail!(
                 "Could not determine a version for {name}: not found on npm or in git tags"
             );

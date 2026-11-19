@@ -754,7 +754,7 @@ export function AppRouterProvider({
               : detail.to
           window.dispatchEvent(
             new CustomEvent('rari:navigate-committed', {
-              detail: { navigationId: detail.navigationId },
+              detail: { navigationId: detail.navigationId, hardNavigation: true },
             }),
           )
           window.location.assign(href)

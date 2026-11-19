@@ -26,11 +26,20 @@ export function getRouteAnnouncement(): string {
   return window.location.pathname
 }
 
+function isHardNavigation(event: Event): boolean {
+  if (!(event instanceof CustomEvent)) return false
+  const detail: unknown = event.detail
+  return (
+    typeof detail === 'object' && detail !== null && Reflect.get(detail, 'hardNavigation') === true
+  )
+}
+
 export function installRouteAnnouncer(): void {
   if (typeof document === 'undefined') return
   getAnnouncer()
 
-  window.addEventListener('rari:navigate-committed', () => {
+  window.addEventListener('rari:navigate-committed', event => {
+    if (isHardNavigation(event)) return
     const announcer = getAnnouncer()
     announcer.textContent = ''
     requestAnimationFrame(() => {

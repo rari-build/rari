@@ -83,7 +83,9 @@ function getDockerInstallSteps(cwd: string): DockerInstallSteps {
 
   if (has('pnpm-lock.yaml')) {
     return {
-      copy: 'package.json pnpm-lock.yaml',
+      copy: has('pnpm-workspace.yaml')
+        ? 'package.json pnpm-lock.yaml pnpm-workspace.yaml'
+        : 'package.json pnpm-lock.yaml',
       install: [
         'ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0',
         'RUN corepack enable',
