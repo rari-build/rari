@@ -143,6 +143,14 @@ impl ReleaseUnit {
         }
     }
 
+    pub fn validation_base(&self, version: &semver::Version) -> &str {
+        if version.pre.is_empty() {
+            self.current_version()
+        } else {
+            self.base_version(ReleaseType::Prerelease)
+        }
+    }
+
     pub fn base_version(&self, release_type: ReleaseType) -> &str {
         let (current, prerelease) = match self {
             Self::Single(pkg) => (&pkg.current_version, &pkg.prerelease_version),
@@ -281,8 +289,17 @@ impl ReleaseType {
     pub fn to_version(self, current: &str) -> Option<String> {
         let v = semver::Version::parse(current).ok()?;
         Some(match self {
+            Self::Patch if !v.pre.is_empty() => {
+                semver::Version::new(v.major, v.minor, v.patch).to_string()
+            }
             Self::Patch => semver::Version::new(v.major, v.minor, v.patch + 1).to_string(),
+            Self::Minor if !v.pre.is_empty() && v.patch == 0 => {
+                semver::Version::new(v.major, v.minor, 0).to_string()
+            }
             Self::Minor => semver::Version::new(v.major, v.minor + 1, 0).to_string(),
+            Self::Major if !v.pre.is_empty() && v.minor == 0 && v.patch == 0 => {
+                semver::Version::new(v.major, 0, 0).to_string()
+            }
             Self::Major => semver::Version::new(v.major + 1, 0, 0).to_string(),
             Self::Prepatch => {
                 let mut new = v;
@@ -408,6 +425,26 @@ mod tests {
             ReleaseType::Prerelease.to_version("1.0.0-beta").as_deref(),
             Some("1.0.0-beta.0")
         );
+    }
+
+    #[test]
+    fn stable_bump_after_prerelease_releases_that_version() {
+        assert_eq!(ReleaseType::Patch.to_version("0.17.11-0").as_deref(), Some("0.17.11"));
+        assert_eq!(ReleaseType::Minor.to_version("1.2.0-beta.1").as_deref(), Some("1.2.0"));
+        assert_eq!(ReleaseType::Major.to_version("2.0.0-rc.0").as_deref(), Some("2.0.0"));
+    }
+
+    #[test]
+    fn stable_bump_past_prerelease_of_lower_level() {
+        assert_eq!(ReleaseType::Minor.to_version("1.2.3-0").as_deref(), Some("1.3.0"));
+        assert_eq!(ReleaseType::Major.to_version("2.1.0-0").as_deref(), Some("3.0.0"));
+    }
+
+    #[test]
+    fn stable_bumps_from_stable_unchanged() {
+        assert_eq!(ReleaseType::Patch.to_version("0.17.10").as_deref(), Some("0.17.11"));
+        assert_eq!(ReleaseType::Minor.to_version("0.17.10").as_deref(), Some("0.18.0"));
+        assert_eq!(ReleaseType::Major.to_version("0.17.10").as_deref(), Some("1.0.0"));
     }
 
     #[test]

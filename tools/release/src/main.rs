@@ -189,12 +189,10 @@ async fn run_non_interactive(
         let new_version = if let Some(ref version) = env_version {
             let v = semver::Version::parse(version)
                 .map_err(|_| anyhow::anyhow!("Invalid RELEASE_VERSION: {version}"))?;
-            let current = semver::Version::parse(unit.current_version())?;
-            if v <= current {
+            let base = unit.validation_base(&v);
+            if v <= semver::Version::parse(base)? {
                 anyhow::bail!(
-                    "RELEASE_VERSION ({}) must be greater than current version {}",
-                    version,
-                    unit.current_version()
+                    "RELEASE_VERSION ({version}) must be greater than current version {base}"
                 );
             }
             version.clone()

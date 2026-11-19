@@ -163,7 +163,7 @@ impl App {
                 KeyCode::Enter => {
                     let unit = &self.release_units[*package_idx];
                     if let Ok(version) = semver::Version::parse(input) {
-                        match semver::Version::parse(unit.current_version()) {
+                        match semver::Version::parse(unit.validation_base(&version)) {
                             Ok(current) => {
                                 if version > current {
                                     self.screen = Screen::Publishing {
