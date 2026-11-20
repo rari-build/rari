@@ -1,3 +1,20 @@
+## [@rari/use-cache@0.17.11] - 2026-11-20
+
+### 🚀 Features
+
+- enhance import handling and diagnostics by @skiniks
+- enhance CJS and ESM analysis, improve diagnostics, and update Cargo.toml dependencies by @skiniks
+- improve CJS analysis caching logic by @skiniks
+- enhance JSX pragma handling and improve argument naming in cache declaration functions by @skiniks
+- update async function syntax to use rest parameters for improved argument handling by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update dependencies by @skiniks
+- update optional dependencies to version 0.17.11
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/@rari/use-cache@0.17.10...@rari/use-cache@0.17.11
 ## [@rari/use-cache@0.17.8] - 2026-10-22
 
 ### ⚙️ Miscellaneous Tasks
