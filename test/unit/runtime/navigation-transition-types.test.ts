@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { PendingLeafEviction } from '../../../packages/rari/src/runtime/flight/apply-flight-patch'
-import type { RouteLocation } from '../../../packages/rari/src/runtime/flight/commit-navigation-payload'
 import { addTransitionType, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { getNavigationTransitionSnapshot } from '../../../packages/rari/src/router/navigation/navigation-transition-store'
@@ -197,6 +196,9 @@ describe('commitNavigationPayload', () => {
         order.push('clearHmrError')
       },
       pendingNavigateCommittedIdRef: { current: null },
+      setCommittedNavigationId: () => {
+        order.push('setCommittedNavigationId')
+      },
     })
 
     expect(startTransition).toHaveBeenCalledOnce()
@@ -214,6 +216,7 @@ describe('commitNavigationPayload', () => {
       'setRenderKey',
       'setRscPayload',
       'clearHmrError',
+      'setCommittedNavigationId',
       'transition-end',
     ])
   })
@@ -287,15 +290,11 @@ describe('commitNavigationPayload', () => {
     })
 
     const pendingNavigateCommittedIdRef = { current: null as number | null }
-    const pendingNavigateLocationRef = { current: null as RouteLocation | null }
-    const routeLocation = { pathname: '/about', search: '' }
 
     commitNavigationPayload({
       parsedPayload: { element: 'next' },
       shouldScrollToTop: false,
       navigationId: 9,
-      routeLocation,
-      pendingNavigateLocationRef,
       startTransition: scope => {
         void scope()
       },
@@ -310,7 +309,6 @@ describe('commitNavigationPayload', () => {
     })
 
     expect(pendingNavigateCommittedIdRef.current).toBe(9)
-    expect(pendingNavigateLocationRef.current).toBe(routeLocation)
     expect(window.dispatchEvent).not.toHaveBeenCalled()
   })
 
