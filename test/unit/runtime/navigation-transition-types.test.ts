@@ -331,7 +331,7 @@ describe('commitNavigationPayload', () => {
     const unsubscribe = flightRouteCache.subscribe(() => {
       notify()
     })
-    const pendingEvictLeafRef = { current: null as PendingLeafEviction | null }
+    const pendingEvictLeavesRef = { current: [] as PendingLeafEviction[] }
 
     try {
       commitNavigationPayload({
@@ -343,7 +343,7 @@ describe('commitNavigationPayload', () => {
         pendingHistory: { url: '/blog/post', state: {} },
         routeLocation: { pathname: '/blog/post', search: '' },
         pendingEvictLeaf: { pathname: '/blog', search: '' },
-        pendingEvictLeafRef,
+        pendingEvictLeavesRef,
         startTransition: scope => {
           void scope()
         },
@@ -361,7 +361,49 @@ describe('commitNavigationPayload', () => {
 
     expect(notify).not.toHaveBeenCalled()
     expect(flightRouteCache.hasRoute('/blog', '')).toBe(true)
-    expect(pendingEvictLeafRef.current).toEqual({ pathname: '/blog', search: '' })
+    expect(pendingEvictLeavesRef.current).toEqual([{ pathname: '/blog', search: '' }])
     flightRouteCache.clear()
+  })
+
+  it('queues evictions from navigations that commit before React does', () => {
+    vi.stubGlobal('window', {
+      history: { pushState: vi.fn(), replaceState: vi.fn() },
+      dispatchEvent: vi.fn(),
+    })
+
+    const pendingEvictLeavesRef = { current: [] as PendingLeafEviction[] }
+    const currentNavigationIdRef = { current: 0 }
+    const commit = (navigationId: number, to: string, from: string): void => {
+      currentNavigationIdRef.current = navigationId
+      commitNavigationPayload({
+        parsedPayload: { element: to },
+        shouldScrollToTop: false,
+        navigationId,
+        transitionTypes: ['nav', 'nav-forward'],
+        maySuspend: true,
+        pendingHistory: { url: to, state: {} },
+        routeLocation: { pathname: to, search: '' },
+        pendingEvictLeaf: { pathname: from, search: '' },
+        pendingEvictLeavesRef,
+        startTransition: scope => {
+          void scope()
+        },
+        currentNavigationIdRef,
+        pendingScrollPayloadRef: { current: null },
+        setRenderKey: () => {},
+        setRscPayload: () => {},
+        setRouteLocation: () => {},
+        clearHmrError: () => {},
+        pendingNavigateCommittedIdRef: { current: null },
+      })
+    }
+
+    commit(1, '/b', '/a')
+    commit(2, '/c', '/b')
+
+    expect(pendingEvictLeavesRef.current).toEqual([
+      { pathname: '/a', search: '' },
+      { pathname: '/b', search: '' },
+    ])
   })
 })

@@ -35,7 +35,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
   readonly pendingEvictLeaf?: PendingLeafEviction
-  readonly pendingEvictLeafRef?: RefObject<PendingLeafEviction | null>
+  readonly pendingEvictLeavesRef?: RefObject<PendingLeafEviction[]>
 }
 
 export function resolveNavigationTransitionTypes(options: {
@@ -97,7 +97,7 @@ export function commitNavigationPayload<T extends object>(
     clearHmrError,
     pendingNavigateCommittedIdRef,
     pendingEvictLeaf,
-    pendingEvictLeafRef,
+    pendingEvictLeavesRef,
   } = options
 
   if (currentNavigationIdRef.current !== navigationId) return
@@ -117,7 +117,7 @@ export function commitNavigationPayload<T extends object>(
     setPendingLoadingLeaf?.(null)
     if (!maySuspend) applyPendingHistory(pendingHistory)
     if (routeLocation != null) setRouteLocation?.(routeLocation)
-    if (pendingEvictLeafRef != null) pendingEvictLeafRef.current = pendingEvictLeaf ?? null
+    if (pendingEvictLeaf != null) pendingEvictLeavesRef?.current.push(pendingEvictLeaf)
 
     setRenderKey(prev => {
       const commitKey = prev + 1
