@@ -60,39 +60,39 @@ rari delivers exceptional performance that significantly outperforms traditional
 
 ### Head-to-Head Comparison vs Next.js
 
-> Benchmarks last updated: August 10, 2026 (rari v0.15.9)
+> Benchmarks last updated: November 20, 2026 (rari v0.17.11)
 
 **Response Time (Single Request):**
 
 | Metric          | rari       | Next.js | Improvement      |
 | --------------- | ---------- | ------- | ---------------- |
-| **Average**     | **0.12ms** | 1.74ms  | **14.5x faster** |
-| **P95**         | **0.12ms** | 2.44ms  | **20.3x faster** |
-| **Bundle Size** | 287 KB     | 573 KB  | **50% smaller**  |
+| **Average**     | **0.10ms** | 1.49ms  | **14.9x faster** |
+| **P95**         | **0.10ms** | 1.57ms  | **15.7x faster** |
+| **Bundle Size** | 367 KB     | 578 KB  | **36% smaller**  |
 
 **Throughput Under Load (50 concurrent connections, 30s):**
 
-| Metric           | rari       | Next.js | Improvement      |
-| ---------------- | ---------- | ------- | ---------------- |
-| **Requests/sec** | **89,371** | 1,683   | **53.1x higher** |
-| **Avg Latency**  | **0.56ms** | 29.73ms | **53.1x faster** |
-| **P95 Latency**  | **0.90ms** | 36.70ms | **40.8x faster** |
-| **Errors**       | 0          | 0       | Stable           |
+| Metric           | rari        | Next.js | Improvement      |
+| ---------------- | ----------- | ------- | ---------------- |
+| **Requests/sec** | **104,754** | 1,701   | **61.6x higher** |
+| **Avg Latency**  | **0.48ms**  | 29.40ms | **61.3x faster** |
+| **P95 Latency**  | **0.78ms**  | 36.17ms | **46.4x faster** |
+| **Errors**       | 0           | 0       | Stable           |
 
 **Build Performance:**
 
 | Metric          | rari      | Next.js | Improvement     |
 | --------------- | --------- | ------- | --------------- |
-| **Build Time**  | **1.12s** | 3.88s   | **3.5x faster** |
-| **Bundle Size** | 287 KB    | 573 KB  | **50% smaller** |
+| **Build Time**  | **0.74s** | 2.63s   | **3.5x faster** |
+| **Bundle Size** | 367 KB    | 578 KB  | **36% smaller** |
 
 **Streaming (`/stream`, Suspense):**
 
 | Metric             | rari    | Next.js | Improvement      |
 | ------------------ | ------- | ------- | ---------------- |
-| **TTFB**           | **1ms** | 12ms    | **11.1x faster** |
-| **First content**  | 107ms   | 108ms   | Comparable       |
-| **Last byte**      | 1007ms  | 1009ms  | Comparable\*     |
+| **TTFB**           | **1ms** | 12ms    | **11.8x faster** |
+| **First content**  | 118ms   | 109ms   | 0.93x            |
+| **Last byte**      | 1020ms  | 1011ms  | Comparable\*     |
 | **Resolved cards** | 10/10   | 10/10   | Comparable       |
 | **Throughput**     | 24.99/s | 24.99/s | 1.0x             |
 
