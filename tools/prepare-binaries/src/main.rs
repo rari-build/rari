@@ -13,7 +13,8 @@ use common::{
 };
 use rari_binary::{build_binary, copy_binary_to_platform_package, validate_binary};
 use use_cache_addon::{
-    addon_stable_output_path_public, build_addon, copy_addon_to_platform_package, validate_addon,
+    addon_stable_output_path_public, build_addon, copy_addon_to_platform_package,
+    remove_staging_artifact, validate_addon,
 };
 
 #[derive(Parser, Debug)]
@@ -148,6 +149,8 @@ async fn main() -> Result<()> {
             log_error("Addon validation failed");
             process::exit(1);
         }
+
+        remove_staging_artifact(current_target, &project_root);
 
         println!();
     }
