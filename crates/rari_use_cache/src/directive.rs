@@ -1,6 +1,6 @@
 use rari_ast::oxc::{
     ast::ast::{Directive, Expression, Statement},
-    span::{GetSpan, Span},
+    span::Span,
 };
 
 struct PrologueEntry<'s> {
@@ -83,23 +83,11 @@ pub fn file_level_cache_directive_spans(
     directives: &[Directive<'_>],
     statements: &[Statement<'_>],
 ) -> Vec<Span> {
-    let mut spans: Vec<Span> = directives
-        .iter()
-        .filter(|d| {
-            cache_kind_from_directive_value(d.expression.value.as_str().unwrap_or_default())
-                .is_some()
-        })
-        .map(|d| d.span)
-        .collect();
-    for stmt in statements {
-        if let Statement::ExpressionStatement(expr_stmt) = stmt
-            && let Expression::StringLiteral(lit) = &expr_stmt.expression
-            && cache_kind_from_directive_value(lit.value.as_str().unwrap_or_default()).is_some()
-        {
-            spans.push(stmt.span());
-        }
-    }
-    spans
+    prologue(directives, statements)
+        .into_iter()
+        .filter(|entry| cache_kind_from_directive_value(entry.value).is_some())
+        .map(|entry| entry.span)
+        .collect()
 }
 
 pub fn leading_framework_directive_spans(
@@ -245,6 +233,18 @@ mod tests {
         assert_eq!(
             extract_file_level_cache_kind(&ret.program.directives, &ret.program.body),
             Some("default".to_string())
+        );
+    }
+
+    #[test]
+    fn test_file_level_cache_string_after_statement_is_not_a_directive() {
+        let allocator = Allocator::default();
+        let source = "1; 'use cache'; foo()";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        assert_eq!(extract_file_level_cache_kind(&ret.program.directives, &ret.program.body), None);
+        assert_eq!(
+            file_level_cache_directive_spans(&ret.program.directives, &ret.program.body),
+            Vec::new()
         );
     }
 

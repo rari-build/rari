@@ -1,6 +1,10 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-use oxc::syntax::module_record::{ExportEntry, ExportExportName};
+use oxc::{
+    semantic::SemanticBuilder,
+    str::Ident,
+    syntax::module_record::{ExportEntry, ExportExportName, ExportLocalName},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::ParsedSource;
@@ -14,12 +18,28 @@ pub struct ModuleExportsAndReExports {
 impl ParsedSource<'_> {
     /// Analyzes the ES runtime exports for require ESM.
     ///
+    /// The result describes the source as originally parsed and does not
+    /// represent transpiled output.
+    ///
     /// This is used during CJS export analysis when a CJS module
     /// re-exports an ESM module and the original CJS module needs
     /// to know the exports of the ESM module so it can create its
     /// wrapper ESM module.
     pub fn analyze_es_runtime_exports(&self) -> ModuleExportsAndReExports {
+        fn is_local_type_only(entry: &ExportEntry<'_>, scoping: &oxc::semantic::Scoping) -> bool {
+            if entry.module_request.is_some() {
+                return false;
+            }
+            let ExportLocalName::Name(name) = &entry.local_name else {
+                return false;
+            };
+            scoping
+                .get_binding(scoping.root_scope_id(), Ident::from(name.name.as_str()))
+                .is_some_and(|symbol| scoping.symbol_flags(symbol).is_type())
+        }
+
         let module_record = self.module_record();
+        let scoping = SemanticBuilder::new().build(self.program()).semantic.into_scoping();
         let mut result = ModuleExportsAndReExports::default();
 
         // Type-only exports (`export type { A }`, `export interface B {}`,
@@ -28,11 +48,11 @@ impl ParsedSource<'_> {
             .local_export_entries
             .iter()
             .chain(module_record.indirect_export_entries.iter())
-            .filter(|entry| !entry.is_type)
+            .filter(|entry| !entry.is_type && !is_local_type_only(entry, &scoping))
             .collect();
         // The module record groups entries by kind, so sort them back into
         // source order.
-        entries.sort_by_key(|entry| entry.statement_span.start);
+        entries.sort_by_key(|entry| entry.span.start);
         for entry in entries {
             match &entry.export_name {
                 ExportExportName::Name(name) => {
@@ -203,12 +223,29 @@ export interface A {}
 export type B = string;
 export type { C };
 export { type D, e } from './other.js';
+export type { F };
+export { type H, i };
 export type * from './types.js';
 export declare const f: number;
 export const g = 1;
 ",
         );
-        tester.assert_exports(&["e", "g"]);
+        tester.assert_exports(&["e", "i", "g"]);
+    }
+
+    #[test]
+    fn runtime_exports_ignores_locally_bound_type_only_exports() {
+        let tester = parse(
+            "
+interface A {}
+type B = string;
+import type { C } from './types.js';
+const value = 1;
+export { A, B, C, value };
+export { value as directValue } from './other.js';
+",
+        );
+        tester.assert_exports(&["value", "directValue"]);
     }
 
     #[test]

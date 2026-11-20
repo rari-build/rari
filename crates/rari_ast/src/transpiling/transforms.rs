@@ -6,7 +6,8 @@ use oxc::{
     allocator::{Allocator, ArenaVec, CloneIn, GetAllocator},
     ast::{ast::*, builder::AstBuilder},
     ast_visit::{VisitMut, walk_mut},
-    span::SPAN,
+    semantic::Scoping,
+    span::{GetSpan, SPAN},
     syntax::operator::AssignmentOperator,
 };
 
@@ -71,14 +72,9 @@ impl<'a> VisitMut<'a> for ImportDeclsToVarDecls<'a> {
                                 ));
                             }
                             ImportDeclarationSpecifier::ImportSpecifier(s) => {
-                                let imported_name = s.imported.name();
                                 let local_name = s.local.name.as_str();
-                                let shorthand = imported_name == local_name;
-                                let key = PropertyKey::new_static_identifier(
-                                    SPAN,
-                                    imported_name,
-                                    &self.ast,
-                                );
+                                let shorthand = s.imported.name() == local_name;
+                                let key = import_property_key(&s.imported, &self.ast);
                                 let value = BindingPattern::new_binding_identifier(
                                     SPAN, local_name, &self.ast,
                                 );
@@ -152,6 +148,72 @@ impl<'a> ImportDeclsToVarDecls<'a> {
         with_clause: Option<&WithClause<'a>>,
     ) -> Expression<'a> {
         create_await_import_expr(&self.ast, source, with_clause)
+    }
+}
+
+fn import_property_key<'a>(
+    imported: &ModuleExportName<'a>,
+    ast: &AstBuilder<'a>,
+) -> PropertyKey<'a> {
+    match imported {
+        ModuleExportName::IdentifierName(name) => {
+            PropertyKey::new_static_identifier(SPAN, name.name, ast)
+        }
+        ModuleExportName::StringLiteral(name) => {
+            PropertyKey::new_string_literal(SPAN, name.value, None, ast)
+        }
+        ModuleExportName::IdentifierReference(_) => unreachable!(),
+    }
+}
+
+pub fn preserve_type_only_imports(program: &mut Program<'_>, scoping: &Scoping) {
+    for stmt in &mut program.body {
+        let Statement::ImportDeclaration(import_decl) = stmt else {
+            continue;
+        };
+        if import_decl.import_kind.is_type() {
+            continue;
+        }
+        let Some(specifiers) = import_decl.specifiers.as_ref() else {
+            continue;
+        };
+
+        let mut has_type_only_import = false;
+        let mut has_value_import = false;
+        for specifier in specifiers {
+            let explicit_type = matches!(
+                specifier,
+                ImportDeclarationSpecifier::ImportSpecifier(import_specifier)
+                    if import_specifier.import_kind.is_type()
+            );
+            let mut has_type_reference = explicit_type;
+            let mut has_value_reference = false;
+            for reference in scoping.get_resolved_references(specifier.local().symbol_id()) {
+                if reference.is_type() {
+                    has_type_reference = true;
+                } else {
+                    has_value_reference = true;
+                }
+            }
+            has_type_only_import |= has_type_reference;
+            has_value_import |= has_value_reference;
+        }
+
+        if has_type_only_import && !has_value_import {
+            import_decl.specifiers = None;
+        }
+    }
+}
+
+pub struct SortClassElementsBySourceOrder;
+
+impl<'a> VisitMut<'a> for SortClassElementsBySourceOrder {
+    fn visit_class(&mut self, class: &mut Class<'a>) {
+        let body = &mut class.body.body;
+        if body.windows(2).any(|elements| elements[0].span().start > elements[1].span().start) {
+            body.sort_by_key(|element| element.span().start);
+        }
+        walk_mut::walk_class(self, class);
     }
 }
 
@@ -438,6 +500,10 @@ mod test {
         test_transform_import(
             r#"import { A as LocalA, B, C as LocalC } from "./mod.ts";"#,
             r#"const { A: LocalA, B, C: LocalC } = await import("./mod.ts");"#,
+        );
+        test_transform_import(
+            r#"import { "foo-bar" as value } from "./mod.ts";"#,
+            r#"const { "foo-bar": value } = await import("./mod.ts");"#,
         );
     }
 

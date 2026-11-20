@@ -130,10 +130,7 @@ pub fn emit(
             source_map.set_file(file.as_str());
         }
 
-        // Inline source contents if requested
-        if emit_options.inline_sources {
-            source_map.set_source_contents(vec![Some(source_text)]);
-        }
+        source_map.set_source_contents(vec![emit_options.inline_sources.then_some(source_text)]);
 
         let map_buf = source_map.to_json_string().into_bytes();
 

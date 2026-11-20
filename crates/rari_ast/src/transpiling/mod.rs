@@ -5,10 +5,10 @@ use std::{borrow::Cow, path::Path};
 use deno_error::JsError;
 use deno_media_type::MediaType;
 use oxc::{
-    allocator::Allocator,
-    ast::ast::Program,
+    allocator::{Allocator, CloneIn},
+    ast::ast::{Program, Statement},
     ast_visit::VisitMut,
-    semantic::SemanticBuilder,
+    semantic::{Scoping, SemanticBuilder},
     transformer::{DecoratorOptions, JsxOptions, TransformOptions, Transformer, TypeScriptOptions},
 };
 use thiserror::Error;
@@ -189,6 +189,7 @@ impl<'a> ParsedSource<'a> {
         transpile_module_options: &TranspileModuleOptions,
         emit_options: &EmitOptions,
     ) -> Result<EmittedSourceText, TranspileError> {
+        let mut program = self.program.clone_in(allocator);
         let module_kind = transpile_module_options.module_kind.unwrap_or({
             if matches!(self.media_type, MediaType::Cjs | MediaType::Cts) {
                 ModuleKind::Cjs
@@ -197,16 +198,17 @@ impl<'a> ParsedSource<'a> {
             }
         });
         ensure_no_fatal_diagnostics(self.diagnostics.for_module_kind(module_kind))?;
+        ensure_supported_decorators(transpile_options)?;
 
         // A CommonJS module without ES module syntax is transpiled as a script so
         // that `import x = require()` / `export =` lower to `require` /
         // `module.exports` and the JSX import source is required instead of
         // imported.
         if module_kind.is_cjs()
-            && self.program.source_type.is_module()
-            && crate::parsed_source::compute_is_script_from_body(&self.program.body)
+            && program.source_type.is_module()
+            && crate::parsed_source::compute_is_script_from_body(&program.body)
         {
-            transforms::CjsScriptExports::new(allocator).transform(&mut self.program);
+            transforms::CjsScriptExports::new(allocator).transform(&mut program);
         }
 
         let transpile_options = resolve_transpile_options(self.media_type, transpile_options);
@@ -216,19 +218,19 @@ impl<'a> ParsedSource<'a> {
         // automatic runtime.
         let transpile_options = maybe_upgrade_jsx_for_pragma(
             &transpile_options,
-            &self.program.comments,
+            &self.get_leading_comments().cloned().collect::<Vec<_>>(),
             self.text.as_ref(),
         );
 
         // Apply custom pre-transforms
         if transpile_options.var_decl_imports {
             let mut strip_exports = transforms::StripExports::new(allocator);
-            strip_exports.visit_program(&mut self.program);
+            strip_exports.visit_program(&mut program);
 
             // Transform import declarations to variable declarations before
             // the TS pass so that the transformer doesn't optimize them away
             let mut import_to_var = transforms::ImportDeclsToVarDecls::new(allocator);
-            import_to_var.visit_program(&mut self.program);
+            import_to_var.visit_program(&mut program);
         }
 
         // Build OXC TransformOptions
@@ -240,7 +242,7 @@ impl<'a> ParsedSource<'a> {
         let semantic_ret = SemanticBuilder::new()
             .with_check_syntax_error(true)
             .with_enum_eval(true)
-            .build(&self.program);
+            .build(&program);
         if semantic_ret.diagnostics.has_errors() {
             let text_info = self.text_info_lazy().clone();
             return Err(TranspileError::ParseErrors(ParseDiagnosticsError(
@@ -259,24 +261,31 @@ impl<'a> ParsedSource<'a> {
             )));
         }
         let scoping = semantic_ret.semantic.into_scoping();
+        if transpile_options.imports_not_used_as_values == ImportsNotUsedAsValues::Error {
+            ensure_no_type_only_imports(&program, &scoping)?;
+        } else if transpile_options.imports_not_used_as_values == ImportsNotUsedAsValues::Preserve {
+            transforms::preserve_type_only_imports(&mut program, &scoping);
+        }
 
         // Run OXC transformer (TS strip, JSX, decorators, etc.)
         let transformer =
             Transformer::new(allocator, Path::new(self.specifier.as_str()), &transform_options);
-        let transform_ret = transformer.build_with_scoping(scoping, &mut self.program);
+        let transform_ret = transformer.build_with_scoping(scoping, &mut program);
         ensure_no_transform_errors(&transform_ret.diagnostics)?;
+
+        transforms::SortClassElementsBySourceOrder.visit_program(&mut program);
 
         // Apply custom post-transforms: transform any import declarations
         // inserted by the JSX transform to variable declarations
         let has_jsx_transform = transpile_options.jsx.is_some();
         if transpile_options.var_decl_imports && has_jsx_transform {
             let mut import_to_var = transforms::ImportDeclsToVarDecls::new(allocator);
-            import_to_var.visit_program(&mut self.program);
+            import_to_var.visit_program(&mut program);
         }
 
         // Emit
         let file_name = self.specifier.as_str();
-        Ok(emit(&self.program, self.text.as_ref(), file_name, emit_options)?)
+        Ok(emit(&program, self.text.as_ref(), file_name, emit_options)?)
     }
 }
 
@@ -294,7 +303,7 @@ fn resolve_transpile_options(
     Cow::Borrowed(options)
 }
 
-/// Scan program comments for `@jsxImportSource` pragma. If found and the
+/// Scan leading comments for `@jsxImportSource` pragma. If found and the
 /// current JSX runtime is Classic, upgrade to Automatic to match the behavior
 /// of SWC/Babel where `@jsxImportSource` implies automatic runtime.
 fn maybe_upgrade_jsx_for_pragma<'a>(
@@ -337,8 +346,17 @@ fn jsx_import_source_pragma(
 
 fn parse_jsx_import_source_pragma(text: &str) -> Option<String> {
     const PRAGMA: &str = "@jsxImportSource";
-    let (_, after_pragma) = text.split_once(PRAGMA)?;
-    after_pragma.split_whitespace().next().filter(|value| !value.is_empty()).map(ToOwned::to_owned)
+    text.lines().find_map(|line| {
+        let line = line.trim();
+        let line = line.strip_prefix('*').unwrap_or(line).trim();
+        let after_pragma = line.strip_prefix(PRAGMA)?;
+        if !after_pragma.chars().next().is_some_and(char::is_whitespace) {
+            return None;
+        }
+        let mut values = after_pragma.split_whitespace();
+        let import_source = values.next()?;
+        values.next().is_none().then(|| import_source.to_string())
+    })
 }
 
 fn build_transform_options(
@@ -382,7 +400,7 @@ fn build_transform_options(
             },
         }
     } else {
-        JsxOptions::default()
+        JsxOptions { jsx_plugin: false, ..Default::default() }
     };
 
     let decorator = match &options.decorators {
@@ -422,12 +440,18 @@ pub fn transform_program<'a>(
     module_kind: ModuleKind,
 ) -> Result<(), TransformProgramError> {
     ensure_no_fatal_diagnostics(diagnostics.for_module_kind(module_kind))?;
+    ensure_supported_decorators(options)?;
 
     let transform_options = build_transform_options(options, specifier);
 
     // Run semantic analysis
     let semantic_ret = SemanticBuilder::new().with_enum_eval(true).build(program);
     let scoping = semantic_ret.semantic.into_scoping();
+    if options.imports_not_used_as_values == ImportsNotUsedAsValues::Error {
+        ensure_no_type_only_imports(program, &scoping)?;
+    } else if options.imports_not_used_as_values == ImportsNotUsedAsValues::Preserve {
+        transforms::preserve_type_only_imports(program, &scoping);
+    }
 
     // Run transformer
     let transformer =
@@ -435,7 +459,60 @@ pub fn transform_program<'a>(
     let transform_ret = transformer.build_with_scoping(scoping, program);
 
     ensure_no_transform_errors(&transform_ret.diagnostics)?;
+    transforms::SortClassElementsBySourceOrder.visit_program(program);
 
+    Ok(())
+}
+
+fn ensure_supported_decorators(options: &TranspileOptions) -> Result<(), TransformProgramError> {
+    if matches!(options.decorators, DecoratorsTranspileOption::Ecma) {
+        return Err(TransformProgramError::Transform(
+            "TC39 decorators proposal transpilation is not supported".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_no_type_only_imports(
+    program: &Program<'_>,
+    scoping: &Scoping,
+) -> Result<(), TransformProgramError> {
+    for stmt in &program.body {
+        let Statement::ImportDeclaration(import_decl) = stmt else {
+            continue;
+        };
+        if import_decl.import_kind.is_type() {
+            continue;
+        }
+        let Some(specifiers) = import_decl.specifiers.as_ref() else {
+            continue;
+        };
+
+        for specifier in specifiers {
+            if matches!(
+                specifier,
+                oxc::ast::ast::ImportDeclarationSpecifier::ImportSpecifier(import_specifier)
+                    if import_specifier.import_kind.is_type()
+            ) {
+                continue;
+            }
+            let mut has_type_reference = false;
+            let mut has_value_reference = false;
+            for reference in scoping.get_resolved_references(specifier.local().symbol_id()) {
+                if reference.is_type() {
+                    has_type_reference = true;
+                } else {
+                    has_value_reference = true;
+                }
+            }
+            if has_type_reference && !has_value_reference {
+                return Err(TransformProgramError::Transform(format!(
+                    "Import '{}' is only used as a type; use an explicit type-only import",
+                    specifier.local().name.as_str()
+                )));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -496,6 +573,17 @@ mod tests {
         let encoded = text[index + prefix.len()..].trim_end();
         let decoded = base64::prelude::BASE64_STANDARD.decode(encoded).unwrap();
         (&text[..index], serde_json::from_slice(&decoded).unwrap())
+    }
+
+    #[test]
+    fn jsx_import_source_pragma_requires_a_complete_directive() {
+        assert_eq!(
+            parse_jsx_import_source_pragma("* @jsxImportSource jsx_lib"),
+            Some("jsx_lib".to_string())
+        );
+        assert_eq!(parse_jsx_import_source_pragma("@jsxImportSource"), None);
+        assert_eq!(parse_jsx_import_source_pragma("@jsxImportSourceExtra jsx_lib"), None);
+        assert_eq!(parse_jsx_import_source_pragma("@jsxImportSource jsx_lib trailing"), None);
     }
 
     #[test]
@@ -569,7 +657,6 @@ let N;
   const Value = _N.Value = 5;
 })(N || (N = {}));
 export class A {
-  d;
   b;
   c = 1;
   e;
@@ -579,6 +666,7 @@ export class A {
     this.e = e;
     console.log(N.Value);
   }
+  d;
 }
 "#;
         let (transpiled_code, _) = split_inline_source_map(&transpiled_source.text);
@@ -587,6 +675,35 @@ export class A {
             transpiled_source.text.contains("\n//# sourceMappingURL=data:application/json;base64,")
         );
         assert!(transpiled_source.source_map.is_none());
+    }
+
+    #[test]
+    fn test_parameter_property_field_order_matches_runtime_initialization() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.ts").unwrap();
+        let source = "class Example {\n  first = 1;\n  constructor(public second = 2) {}\n}";
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::TypeScript,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let code = program
+            .transpile(
+                &allocator,
+                &TranspileOptions::default(),
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        assert!(code.find("first = 1;").unwrap() < code.find("second;").unwrap());
     }
 
     #[test]
@@ -673,6 +790,74 @@ export class A {
             )
             .unwrap();
         assert!(transpiled_source.text.contains("React.createElement(\"div\", null"));
+    }
+
+    #[test]
+    fn test_transpile_jsx_disabled() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
+        let source = "const element = <div />;";
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::Tsx,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let code = program
+            .transpile(
+                &allocator,
+                &TranspileOptions { jsx: None, ..Default::default() },
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        assert_eq!(code, "const element = <div />;\n");
+    }
+
+    #[test]
+    fn test_retranspile_parsed_source_with_different_jsx_options() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
+        let source = "const element = <div />;";
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::Tsx,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let transformed = program
+            .transpile(
+                &allocator,
+                &TranspileOptions::default(),
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        let preserved = program
+            .transpile(
+                &allocator,
+                &TranspileOptions { jsx: None, ..Default::default() },
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        assert!(transformed.contains("React.createElement(\"div\", null)"));
+        assert_eq!(preserved, "const element = <div />;\n");
     }
 
     #[test]
@@ -792,6 +977,38 @@ function App() {
 }
 "#;
         assert_eq!(&code[..expected.len()], expected);
+    }
+
+    #[test]
+    fn test_jsx_import_source_pragma_must_be_leading() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
+        let source = r"const value = 1;
+/** @jsxImportSource jsx_lib */
+function App() { return <div />; }";
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::Tsx,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let code = program
+            .transpile(
+                &allocator,
+                &TranspileOptions::default(),
+                &TranspileModuleOptions::default(),
+                &EmitOptions { remove_comments: true, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        assert!(code.contains("React.createElement(\"div\", null)"));
+        assert!(!code.contains("jsx_lib"));
     }
 
     #[test]
@@ -1170,8 +1387,7 @@ _ts_decorate([
     }
 
     #[test]
-    #[ignore = "oxc does not implement the TC39 decorators proposal transform, so the decorators are left in the output"]
-    fn test_transpile_decorators_proposal() {
+    fn test_transpile_decorators_proposal_is_unsupported() {
         let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.ts").unwrap();
         let source = r"
     function enumerable(value: boolean) {
@@ -1205,7 +1421,7 @@ _ts_decorate([
             },
         )
         .unwrap();
-        let code = program
+        let error = program
             .transpile(
                 &allocator,
                 &TranspileOptions {
@@ -1215,10 +1431,10 @@ _ts_decorate([
                 &TranspileModuleOptions::default(),
                 &EmitOptions::default(),
             )
-            .unwrap()
-            .text;
-        let expected = include_str!("./testdata/tc39_decorator_proposal_output.txt");
-        assert_eq!(&code[0..std::cmp::min(expected.len(), code.len())], expected);
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("TC39 decorators proposal transpilation is not supported")
+        );
     }
 
     #[test]
@@ -1672,6 +1888,44 @@ for (let i = 0; i < testVariable >> 1; i++) callCount++;
     }
 
     #[test]
+    fn test_source_map_omits_contents_when_disabled() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
+        let source = "const value = 1;";
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::Tsx,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let result = program
+            .transpile(
+                &allocator,
+                &TranspileOptions::default(),
+                &TranspileModuleOptions::default(),
+                &EmitOptions {
+                    source_map: SourceMapOption::Separate,
+                    inline_sources: false,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let map: serde_json::Value =
+            serde_json::from_str(result.source_map.as_deref().unwrap()).unwrap();
+        assert!(map.get("sourcesContent").is_none_or(|contents| {
+            contents
+                .as_array()
+                .is_some_and(|sources| sources.iter().all(serde_json::Value::is_null))
+        }));
+    }
+
+    #[test]
     fn test_source_map_base() {
         #[track_caller]
         fn run_test(file_name: &str, base: &str, expected: &str) {
@@ -1927,5 +2181,60 @@ export function formatter(record: Record) {
         // value imports should be preserved
         assert!(code.contains("bar"));
         assert!(code.contains("baz"));
+    }
+
+    #[test]
+    fn test_imports_not_used_as_values_options() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.ts").unwrap();
+        let source = r#"import { Foo } from "./foo.ts"; type Alias = Foo;"#;
+        let mut program = parse_module(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::TypeScript,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let removed = program
+            .transpile(
+                &allocator,
+                &TranspileOptions {
+                    imports_not_used_as_values: ImportsNotUsedAsValues::Remove,
+                    ..Default::default()
+                },
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        let preserved = program
+            .transpile(
+                &allocator,
+                &TranspileOptions {
+                    imports_not_used_as_values: ImportsNotUsedAsValues::Preserve,
+                    ..Default::default()
+                },
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        let errored = program.transpile(
+            &allocator,
+            &TranspileOptions {
+                imports_not_used_as_values: ImportsNotUsedAsValues::Error,
+                ..Default::default()
+            },
+            &TranspileModuleOptions::default(),
+            &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+        );
+        assert!(!removed.contains("./foo.ts"));
+        assert!(preserved.contains("import \"./foo.ts\";"));
+        assert!(errored.unwrap_err().to_string().contains("only used as a type"));
     }
 }

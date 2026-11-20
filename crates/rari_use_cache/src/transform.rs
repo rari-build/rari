@@ -240,6 +240,34 @@ fn apply_edits(source: &str, mut edits: Vec<Edit>) -> String {
     out
 }
 
+fn unparsed_source_start(program: &Program<'_>, source: &str) -> Option<u32> {
+    let parsed_end = program
+        .body
+        .last()
+        .map(GetSpan::span)
+        .map(|span| span.end)
+        .into_iter()
+        .chain(program.directives.last().map(|directive| directive.span.end))
+        .chain(program.hashbang.as_ref().map(|hashbang| hashbang.span.end))
+        .max()
+        .unwrap_or(0);
+    let mut cursor = parsed_end as usize;
+    loop {
+        let rest = source.get(cursor..)?;
+        let (offset, _) = rest
+            .char_indices()
+            .find(|(_, character)| !character.is_whitespace() && *character != '\u{FEFF}')?;
+        cursor += offset;
+        if let Some(comment) =
+            program.comments.iter().find(|comment| comment.span.start as usize == cursor)
+        {
+            cursor = comment.span.end as usize;
+        } else {
+            return u32::try_from(cursor).ok();
+        }
+    }
+}
+
 /// Transforms source code to add cache functionality.
 ///
 /// # Errors
@@ -258,6 +286,15 @@ pub fn transform_source(
             let message =
                 parsed.diagnostics.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ");
             return Err(TransformError::Parse(message));
+        }
+        if !parsed.diagnostics.is_empty()
+            && let Some(unparsed_start) = unparsed_source_start(&parsed.program, source)
+        {
+            let message =
+                parsed.diagnostics.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ");
+            return Err(TransformError::Parse(format!(
+                "{message} (unparsed input at byte {unparsed_start})"
+            )));
         }
 
         let mut visitor = TransformVisitor::new(source, filename, hash_salt);
@@ -292,5 +329,37 @@ pub fn transform_source(
             };
             Err(TransformError::Panic(msg))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_non_fatal_partial_parse() {
+        let result = transform_source(
+            "async function f() { \"use cache\"; return 1 }\n@",
+            "partial.ts",
+            "test",
+        );
+        assert!(matches!(result, Err(TransformError::Parse(_))));
+    }
+
+    #[test]
+    fn rejects_partial_parse_before_trailing_comment() {
+        let result = transform_source(
+            "async function f() { \"use cache\"; return 1 }\n@ // trailing",
+            "partial.ts",
+            "test",
+        );
+        assert!(matches!(result, Err(TransformError::Parse(_))));
+    }
+
+    #[test]
+    fn accepts_trailing_comments_and_whitespace() {
+        let source = "async function f() { \"use cache\"; return 1 }\n// trailing comment\n  ";
+        let result = transform_source(source, "trailing.ts", "test");
+        assert!(result.is_ok());
     }
 }

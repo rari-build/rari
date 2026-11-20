@@ -82,7 +82,8 @@ impl DiagnosticLocation<'_> {
                 let pos = source_pos.byte_index(text_info);
                 let line_index = text_info.line_index(pos);
                 let line_start = text_info.line_start(line_index);
-                let content = text_info.range_text(line_start, pos);
+                let content =
+                    text_info.range_text(line_start, pos.min(text_info.line_end(line_index)));
                 let line = line_index + 1;
                 let column = content.encode_utf16().count() + 1;
                 Some((line, column))
@@ -463,14 +464,17 @@ fn print_snippet(
             }
 
             let (padding_width, highlight_width) = if start_line_number == end_line_number {
-                let highlight_start = highlight.range.start.byte_index(source);
-                let highlight_end = highlight.range.end.byte_index(source);
+                let highlight_start =
+                    highlight.range.start.byte_index(source).clamp(line_start_pos, line_end_pos);
+                let highlight_end =
+                    highlight.range.end.byte_index(source).clamp(highlight_start, line_end_pos);
                 (
                     display_width(source.range_text(line_start_pos, highlight_start)),
                     display_width(source.range_text(highlight_start, highlight_end)),
                 )
             } else if is_first_line {
-                let highlight_start = highlight.range.start.byte_index(source);
+                let highlight_start =
+                    highlight.range.start.byte_index(source).clamp(line_start_pos, line_end_pos);
                 (
                     display_width(source.range_text(line_start_pos, highlight_start)),
                     display_width(source.range_text(highlight_start, line_end_pos)),
@@ -479,7 +483,8 @@ fn print_snippet(
                 // Last line of a multi-line highlight: underline only the offending
                 // text, skipping the line's leading indentation so the carets sit
                 // under the code rather than the whitespace.
-                let highlight_end = highlight.range.end.byte_index(source);
+                let highlight_end =
+                    highlight.range.end.byte_index(source).clamp(line_start_pos, line_end_pos);
                 let line_prefix = source.range_text(line_start_pos, highlight_end);
                 let trimmed = line_prefix.trim_start();
                 let indent = &line_prefix[..line_prefix.len() - trimmed.len()];
@@ -666,6 +671,33 @@ mod tests {
        1 | const value = 1;\n  \
        |       ^^^^^\n"
         );
+    }
+
+    #[test]
+    fn test_snippet_crlf_range_excludes_carriage_return() {
+        let output =
+            render("foo\r\n", DiagnosticSourceRange { start: line_col(0, 0), end: line_col(0, 4) });
+        assert_eq!(
+            output,
+            "error[test-rule]: a test diagnostic\n \
+       --> /test.ts:1:1\n  \
+       | \n\
+       1 | foo\n  \
+       | ^^^\n"
+        );
+    }
+
+    #[test]
+    fn test_snippet_range_starting_in_crlf_is_clamped_to_line_bounds() {
+        let output = render(
+            "a\r\nb",
+            DiagnosticSourceRange {
+                start: DiagnosticSourcePos::ByteIndex(2),
+                end: DiagnosticSourcePos::ByteIndex(3),
+            },
+        );
+        assert!(output.contains("1 | a\n"));
+        assert!(output.contains("2 | b\n"));
     }
 
     #[test]

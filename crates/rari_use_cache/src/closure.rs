@@ -1,9 +1,9 @@
 use rari_ast::oxc::{
     ast::ast::{
-        ArrowFunctionExpression, BindingPattern, BlockStatement, CatchClause, Class, Declaration,
-        ExportDefaultDeclarationKind, ForInStatement, ForOfStatement, ForStatement,
-        FormalParameters, Function, FunctionBody, IdentifierReference, ImportDeclarationSpecifier,
-        Statement, VariableDeclaration, VariableDeclarationKind,
+        ArrowFunctionBody, ArrowFunctionExpression, BindingPattern, BlockStatement, CatchClause,
+        Class, Declaration, ExportDefaultDeclarationKind, ForInStatement, ForOfStatement,
+        ForStatement, FormalParameters, Function, FunctionBody, IdentifierReference,
+        ImportDeclarationSpecifier, Statement, VariableDeclaration, VariableDeclarationKind,
     },
     ast_visit::{Visit, walk},
     syntax::scope::ScopeFlags,
@@ -153,6 +153,71 @@ struct ClosureCollector<'m> {
     seen: FxHashSet<String>,
 }
 
+struct FunctionVarCollector {
+    names: FxHashSet<String>,
+}
+
+impl<'a> Visit<'a> for FunctionVarCollector {
+    fn visit_variable_declaration(&mut self, var_decl: &VariableDeclaration<'a>) {
+        if var_decl.kind == VariableDeclarationKind::Var {
+            for decl in &var_decl.declarations {
+                collect_bound_names(&decl.id, &mut self.names);
+            }
+        }
+    }
+
+    fn visit_function(&mut self, _function: &Function<'a>, _flags: ScopeFlags) {}
+
+    fn visit_arrow_function_expression(&mut self, _arrow: &ArrowFunctionExpression<'a>) {}
+}
+
+fn collect_function_var_names(body: &FunctionBody<'_>) -> FxHashSet<String> {
+    let mut collector = FunctionVarCollector { names: FxHashSet::default() };
+    for stmt in &body.statements {
+        collector.visit_statement(stmt);
+    }
+    collector.names
+}
+
+fn collect_block_names(statements: &[Statement<'_>]) -> FxHashSet<String> {
+    let mut names = FxHashSet::default();
+    for stmt in statements {
+        match stmt {
+            Statement::VariableDeclaration(var_decl)
+                if var_decl.kind != VariableDeclarationKind::Var =>
+            {
+                for decl in &var_decl.declarations {
+                    collect_bound_names(&decl.id, &mut names);
+                }
+            }
+            Statement::FunctionDeclaration(function) => {
+                names.extend(function_name(function));
+            }
+            Statement::ClassDeclaration(class) => {
+                names.extend(class_name(class));
+            }
+            Statement::ExportDeclaration(export) => match &export.declaration {
+                Declaration::FunctionDeclaration(function) => {
+                    names.extend(function_name(function));
+                }
+                Declaration::VariableDeclaration(var_decl)
+                    if var_decl.kind != VariableDeclarationKind::Var =>
+                {
+                    for decl in &var_decl.declarations {
+                        collect_bound_names(&decl.id, &mut names);
+                    }
+                }
+                Declaration::ClassDeclaration(class) => {
+                    names.extend(class_name(class));
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    names
+}
+
 impl ClosureCollector<'_> {
     fn is_shadowed(&self, name: &str) -> bool {
         self.function_scope_stack.iter().rev().any(|scope| scope.contains(name))
@@ -187,7 +252,7 @@ impl<'a> Visit<'a> for ClosureCollector<'_> {
         match stmt {
             Statement::FunctionDeclaration(function) => {
                 if let (Some(name), Some(scope)) =
-                    (function_name(function), self.function_scope_stack.last_mut())
+                    (function_name(function), self.scope_stack.last_mut())
                 {
                     scope.insert(name);
                 }
@@ -218,7 +283,8 @@ impl<'a> Visit<'a> for ClosureCollector<'_> {
     }
 
     fn visit_block_statement(&mut self, block: &BlockStatement<'a>) {
-        self.with_block_scope(FxHashSet::default(), |this| {
+        let names = collect_block_names(&block.body);
+        self.with_block_scope(names, |this| {
             walk::walk_block_statement(this, block);
         });
     }
@@ -227,7 +293,8 @@ impl<'a> Visit<'a> for ClosureCollector<'_> {
         // A nested function body is its own block scope (SWC modelled it as a
         // block statement), so its `let`/`const`/`class` bindings must not
         // leak into the enclosing scope.
-        self.with_block_scope(FxHashSet::default(), |this| {
+        let names = collect_block_names(&body.statements);
+        self.with_block_scope(names, |this| {
             walk::walk_function_body(this, body);
         });
     }
@@ -235,12 +302,18 @@ impl<'a> Visit<'a> for ClosureCollector<'_> {
     fn visit_function(&mut self, function: &Function<'a>, flags: ScopeFlags) {
         let mut params = FxHashSet::default();
         collect_param_names(&function.params, &mut params);
+        if let Some(body) = &function.body {
+            params.extend(collect_function_var_names(body));
+        }
         self.with_function_scope(params, |this| walk::walk_function(this, function, flags));
     }
 
     fn visit_arrow_function_expression(&mut self, arrow: &ArrowFunctionExpression<'a>) {
         let mut params = FxHashSet::default();
         collect_param_names(&arrow.params, &mut params);
+        if let ArrowFunctionBody::FunctionBody(body) = &arrow.body {
+            params.extend(collect_function_var_names(body));
+        }
         self.with_function_scope(params, |this| {
             walk::walk_arrow_function_expression(this, arrow);
         });
@@ -277,6 +350,8 @@ pub fn collect_closure_idents(
     fn_ident: Option<&str>,
 ) -> Vec<String> {
     let mut outer_scope = fn_params.clone();
+    outer_scope.extend(collect_function_var_names(body));
+    outer_scope.extend(collect_block_names(&body.statements));
     if let Some(name) = fn_ident {
         outer_scope.insert(name.to_string());
     }
@@ -398,5 +473,39 @@ mod tests {
         let body = function.body.as_ref().expect("expected a body");
         let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
         assert_eq!(found, vec!["shared".to_string()]);
+    }
+
+    #[test]
+    fn test_var_decl_before_use_is_shadowed_without_nested_function_leak() {
+        let allocator = Allocator::default();
+        let source = "const shared = 1\nasync function f() { return shared + inner(); var shared; function inner() { return shared } }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(1) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
+        assert_eq!(found, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_block_function_does_not_shadow_outside_block() {
+        let allocator = Allocator::default();
+        let source = "const inner = 1\nasync function f() { { function inner() {} } return inner }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(1) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
+        assert_eq!(found, vec!["inner".to_string()]);
     }
 }

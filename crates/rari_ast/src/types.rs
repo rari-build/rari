@@ -223,7 +223,7 @@ impl std::error::Error for ParseDiagnostic {}
 /// A single entry in a source code highlight.
 enum HighlightEntry {
     /// A source line with its underline indicator.
-    SourceLine { text: String, underline: String },
+    SourceLine { line_number: usize, text: String, underline: String },
     /// An ellipsis indicating skipped lines.
     Ellipsis,
 }
@@ -236,19 +236,24 @@ enum HighlightEntry {
 /// N | {source_line}
 ///   | {underline}
 /// ```
-fn format_highlight_entries(entries: &[HighlightEntry], start_line_number: usize) -> String {
-    let num_str = start_line_number.to_string();
-    let padding = " ".repeat(num_str.len());
+fn format_highlight_entries(entries: &[HighlightEntry]) -> String {
+    let line_number_width = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            HighlightEntry::SourceLine { line_number, .. } => Some(line_number.to_string().len()),
+            HighlightEntry::Ellipsis => None,
+        })
+        .max()
+        .unwrap_or(1);
+    let padding = " ".repeat(line_number_width);
     let mut result = format!("{padding} |\n");
 
-    let mut current_line_num = start_line_number;
     let entry_count = entries.len();
     for (i, entry) in entries.iter().enumerate() {
         match entry {
-            HighlightEntry::SourceLine { text, underline } => {
-                let _ = writeln!(result, "{current_line_num} | {text}");
+            HighlightEntry::SourceLine { line_number, text, underline } => {
+                let _ = writeln!(result, "{line_number:>line_number_width$} | {text}");
                 let _ = write!(result, "{padding} | {underline}");
-                current_line_num += 1;
             }
             HighlightEntry::Ellipsis => {
                 let _ = write!(result, "{padding} | ...");
@@ -278,8 +283,8 @@ impl fmt::Display for ParseDiagnostic {
         // todo(dsherret): remove this catch unwind once we've
         // tested this out a lot
         let snippet_result = std::panic::catch_unwind(|| {
-            let entries = get_range_highlight_entries(self.source(), self.span());
-            format_highlight_entries(&entries, display_position.line_number)
+            let (entries, _) = get_range_highlight_entries(self.source(), self.span());
+            format_highlight_entries(&entries)
         });
 
         match snippet_result {
@@ -297,7 +302,10 @@ impl fmt::Display for ParseDiagnostic {
 
 /// Code in this function was adapted from:
 /// https://github.com/dprint/dprint/blob/a026a1350d27a61ea18207cb31897b18eaab51a1/crates/core/src/formatting/utils/string_utils.rs#L62
-fn get_range_highlight_entries(source: &SourceTextInfo, byte_range: Span) -> Vec<HighlightEntry> {
+fn get_range_highlight_entries(
+    source: &SourceTextInfo,
+    byte_range: Span,
+) -> (Vec<HighlightEntry>, usize) {
     fn get_column_index_of_pos(text: &str, pos: usize) -> usize {
         let line_start_byte_pos = get_line_start_byte_pos(text, pos);
         text[line_start_byte_pos..pos].chars().count()
@@ -316,7 +324,7 @@ fn get_range_highlight_entries(source: &SourceTextInfo, byte_range: Span) -> Vec
     fn get_text_and_error_range(
         source: &SourceTextInfo,
         byte_range: Span,
-    ) -> (&str, (usize, usize)) {
+    ) -> (&str, (usize, usize), usize) {
         let start = byte_range.start as usize;
         let end = byte_range.end as usize;
         let mut first_line_index = source.line_index(start);
@@ -333,10 +341,11 @@ fn get_range_highlight_entries(source: &SourceTextInfo, byte_range: Span) -> Vec
 
         let error_start = start - first_line_start;
         let error_end = error_start + (end - start);
-        (sub_text, (error_start, error_end))
+        (sub_text, (error_start, error_end), first_line_index)
     }
 
-    let (sub_text, (error_start, error_end)) = get_text_and_error_range(source, byte_range);
+    let (sub_text, (error_start, error_end), first_line_index) =
+        get_text_and_error_range(source, byte_range);
 
     let mut entries = Vec::new();
     // don't use .lines() here because it will trim any empty
@@ -399,23 +408,27 @@ fn get_range_highlight_entries(source: &SourceTextInfo, byte_range: Span) -> Vec
             ))
         );
 
-        entries.push(HighlightEntry::SourceLine { text, underline });
+        entries.push(HighlightEntry::SourceLine {
+            line_number: first_line_index + i + 1,
+            text,
+            underline,
+        });
     }
-    entries
+    (entries, first_line_index)
 }
 
 /// Formats a range highlight as a plain string (without line numbers).
 /// Used for backwards compatibility.
 #[cfg(test)]
 fn get_range_text_highlight(source: &SourceTextInfo, byte_range: Span) -> String {
-    let entries = get_range_highlight_entries(source, byte_range);
+    let (entries, _) = get_range_highlight_entries(source, byte_range);
     let mut result = String::new();
     for (i, entry) in entries.iter().enumerate() {
         if i > 0 {
             result.push('\n');
         }
         match entry {
-            HighlightEntry::SourceLine { text, underline } => {
+            HighlightEntry::SourceLine { text, underline, .. } => {
                 result.push_str(text);
                 result.push('\n');
                 result.push_str(underline);
@@ -449,13 +462,14 @@ impl fmt::Display for ParseDiagnosticsError {
 #[cfg(test)]
 #[expect(
     clippy::cast_possible_truncation,
+    clippy::unwrap_used,
     reason = "Ported code not yet updated to the workspace lint rules"
 )]
 mod test {
     use oxc::span::Span;
 
     use super::get_range_text_highlight;
-    use crate::SourceTextInfo;
+    use crate::{ModuleSpecifier, ParseDiagnostic, SourceTextInfo};
 
     #[test]
     fn range_highlight_all_text() {
@@ -569,5 +583,37 @@ mod test {
             ),
             concat!("  testingtestingtestingtesting\n", "                              ~",),
         );
+    }
+
+    #[test]
+    fn diagnostic_highlight_uses_original_line_numbers() {
+        let source = SourceTextInfo::from_string("code\n  ".to_string());
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.ts").unwrap();
+        let diagnostic = ParseDiagnostic::from_message(
+            "unexpected end".to_string(),
+            &specifier,
+            source,
+            Span::new(5, 7),
+        );
+        let formatted = diagnostic.to_string();
+        assert!(formatted.contains("\n1 | code\n"));
+        assert!(formatted.contains("\n2 |   \n"));
+    }
+
+    #[test]
+    fn diagnostic_highlight_keeps_line_numbers_after_elision() {
+        let text = "a\nb\nc\nd\ne\nf\ng\nh";
+        let source = SourceTextInfo::from_string(text.to_string());
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.ts").unwrap();
+        let diagnostic = ParseDiagnostic::from_message(
+            "range".to_string(),
+            &specifier,
+            source,
+            Span::new(0, text.len() as u32),
+        );
+        let formatted = diagnostic.to_string();
+        assert!(formatted.contains("\n1 | a\n"));
+        assert!(formatted.contains("\n2 | b\n"));
+        assert!(formatted.contains("\n8 | h\n"));
     }
 }

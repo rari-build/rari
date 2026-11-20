@@ -15,8 +15,25 @@ pub struct SourceTextInfo {
 
 impl SourceTextInfo {
     pub fn new(text: Arc<str>) -> Self {
-        let line_starts =
-            std::iter::once(0).chain(text.match_indices('\n').map(|(i, _)| i + 1)).collect();
+        let mut line_starts = vec![0];
+        let mut chars = text.char_indices().peekable();
+        while let Some((index, ch)) = chars.next() {
+            match ch {
+                '\r' => {
+                    if chars.peek().is_some_and(|(_, next)| *next == '\n') {
+                        if let Some((newline_index, _)) = chars.next() {
+                            line_starts.push(newline_index + 1);
+                        }
+                    } else {
+                        line_starts.push(index + ch.len_utf8());
+                    }
+                }
+                '\n' | '\u{2028}' | '\u{2029}' => {
+                    line_starts.push(index + ch.len_utf8());
+                }
+                _ => {}
+            }
+        }
         Self { text, line_starts }
     }
 
@@ -53,15 +70,16 @@ impl SourceTextInfo {
     /// Get the byte offset of the end of a line (0-indexed).
     pub fn line_end(&self, line_index: usize) -> usize {
         if line_index + 1 < self.line_starts.len() {
-            let mut end = self.line_starts[line_index + 1];
-            // exclude \n and \r\n line endings
-            if end > 0 && self.text.as_bytes().get(end - 1) == Some(&b'\n') {
-                end -= 1;
-            }
-            if end > 0 && self.text.as_bytes().get(end - 1) == Some(&b'\r') {
-                end -= 1;
-            }
-            end
+            let end = self.line_starts[line_index + 1];
+            let Some(ch) = self.text[..end].chars().next_back() else {
+                return end;
+            };
+            let break_len = if ch == '\n' && self.text[..end - ch.len_utf8()].ends_with('\r') {
+                2
+            } else {
+                ch.len_utf8()
+            };
+            end - break_len
         } else {
             self.text.len()
         }
@@ -99,6 +117,8 @@ impl SourceTextInfo {
     ) -> LineAndColumnDisplay {
         let line_index = self.line_index(byte_pos);
         let line_start = self.line_start(line_index);
+        let line_end = self.line_end(line_index);
+        let byte_pos = byte_pos.min(line_end);
         let column = self.text[line_start..byte_pos]
             .chars()
             .map(|c| if c == '\t' { indent_width } else { 1 })
@@ -130,6 +150,28 @@ mod test {
         assert_eq!(
             info.line_and_column_display_with_indent_width(pos, 2),
             LineAndColumnDisplay { line_number: 2, column_number: 5 }
+        );
+    }
+
+    #[test]
+    fn line_endings_follow_ecmascript() {
+        let info = SourceTextInfo::from_string("a\r\nb\rc\u{2028}d\u{2029}e".to_string());
+        assert_eq!(info.lines_count(), 5);
+        assert_eq!(
+            (0..info.lines_count()).map(|i| info.line_text(i)).collect::<Vec<_>>(),
+            ["a", "b", "c", "d", "e"]
+        );
+        assert_eq!(info.line_index(2), 0);
+        assert_eq!(info.line_index(3), 1);
+        assert_eq!(info.line_index(5), 2);
+    }
+
+    #[test]
+    fn line_column_ignores_crlf_bytes() {
+        let info = SourceTextInfo::from_string("foo\r\nbar".to_string());
+        assert_eq!(
+            info.line_and_column_display(4),
+            LineAndColumnDisplay { line_number: 1, column_number: 4 }
         );
     }
 }

@@ -14,29 +14,37 @@ pub type CjsAnalysis = crate::ModuleExportsAndReExports;
 impl ParsedSource<'_> {
     /// Analyzes the script for CommonJS exports and re-exports based on similar
     /// functionality to cjs-module-lexer (https://github.com/nodejs/cjs-module-lexer).
+    ///
+    /// The result describes the source as originally parsed and does not
+    /// represent transpiled output.
     pub fn analyze_cjs(&self) -> CjsAnalysis {
-        let mut visitor = CjsVisitor::default();
+        let scoping =
+            oxc::semantic::SemanticBuilder::new().build(&self.program).semantic.into_scoping();
+        let mut visitor = CjsVisitor {
+            scoping: &scoping,
+            exports: HashSet::new(),
+            reexports: HashSet::new(),
+            var_assignments: HashMap::new(),
+            enumerated_key_scopes: Vec::new(),
+        };
         visitor.visit_program(&self.program);
         visitor.take_result()
     }
 }
 
-#[derive(Default)]
-struct CjsVisitor {
+struct CjsVisitor<'a> {
+    scoping: &'a oxc::semantic::Scoping,
     exports: HashSet<String>,
     reexports: HashSet<String>,
-    unsafe_getters: HashSet<String>,
-    var_assignments: HashMap<String, String>,
+    var_assignments: HashMap<oxc::semantic::SymbolId, String>,
+    enumerated_key_scopes: Vec<(oxc::semantic::SymbolId, oxc::semantic::SymbolId)>,
 }
 
-impl CjsVisitor {
+impl CjsVisitor<'_> {
     fn take_result(self) -> CjsAnalysis {
-        let unsafe_getters = self.unsafe_getters;
-        let mut exports =
-            self.exports.into_iter().filter(|n| !unsafe_getters.contains(n)).collect::<Vec<_>>();
+        let mut exports = self.exports.into_iter().collect::<Vec<_>>();
         exports.sort_unstable();
-        let mut reexports =
-            self.reexports.into_iter().filter(|n| !unsafe_getters.contains(n)).collect::<Vec<_>>();
+        let mut reexports = self.reexports.into_iter().collect::<Vec<_>>();
         reexports.sort_unstable();
         CjsAnalysis { exports, reexports }
     }
@@ -55,14 +63,23 @@ impl CjsVisitor {
     }
 
     fn add_unsafe_getter(&mut self, name: &str) {
-        self.unsafe_getters.insert(name.to_string());
+        self.exports.remove(name);
     }
 
-    fn get_member_require_value(&self, member: &MemberExpression, key: &str) -> Option<String> {
+    fn get_member_require_value(
+        &self,
+        member: &MemberExpression,
+        key: &IdentifierReference,
+    ) -> Option<String> {
         let obj_ident = get_static_member_obj_ident(member)?;
-        let require_value = self.var_assignments.get(obj_ident).cloned()?;
-        let prop = get_computed_member_prop_ident(member)?;
-        if prop == key { Some(require_value) } else { None }
+        let object_symbol = get_reference_symbol_id(obj_ident, self.scoping)?;
+        let key_symbol = get_reference_symbol_id(key, self.scoping)?;
+        if !self.enumerated_key_scopes.iter().any(|&(enumerated_key, enumerated_object)| {
+            enumerated_key == key_symbol && enumerated_object == object_symbol
+        }) {
+            return None;
+        }
+        self.var_assignments.get(&object_symbol).cloned()
     }
 
     fn visit_object_define(&mut self, call_expr: &CallExpression) {
@@ -80,12 +97,11 @@ impl CjsVisitor {
                 }
             }
             Argument::Identifier(ident) => {
-                let ident_name = ident.name.as_str();
                 if let Some(obj_lit) = get_arg_as_object_expr(&args[2])
                     && let Some(get_prop) = get_object_define_get_prop(obj_lit)
                     && let Some(return_expr) = get_prop_return_expr(get_prop)
                     && let Some(member) = return_expr.as_member_expression()
-                    && let Some(require_value) = self.get_member_require_value(member, ident_name)
+                    && let Some(require_value) = self.get_member_require_value(member, ident)
                 {
                     self.add_reexport(&require_value);
                 }
@@ -95,13 +111,21 @@ impl CjsVisitor {
     }
 
     fn visit_exports_right_expr(&mut self, right_expr: &Expression) {
-        match right_expr {
+        match unwrap_parenthesized(right_expr) {
             Expression::ObjectExpression(object_lit) => {
                 for prop in &object_lit.properties {
                     match prop {
                         ObjectPropertyKind::ObjectProperty(prop) => {
                             if let Some(prop_name) = get_property_key_name(&prop.key) {
-                                if is_supported_object_prop(prop) {
+                                if prop_name == "__proto__"
+                                    && !prop.computed
+                                    && !prop.method
+                                    && !prop.shorthand
+                                    && prop.kind == PropertyKind::Init
+                                {
+                                    continue;
+                                }
+                                if is_supported_object_prop(prop.as_ref()) {
                                     self.add_export(&prop_name);
                                 } else {
                                     self.add_unsafe_getter(&prop_name);
@@ -109,7 +133,9 @@ impl CjsVisitor {
                             }
                         }
                         ObjectPropertyKind::SpreadProperty(spread) => {
-                            if let Some(require_value) = get_expr_require_value(&spread.argument) {
+                            if let Some(require_value) =
+                                get_expr_require_value(&spread.argument, self.scoping)
+                            {
                                 self.add_reexport(require_value);
                             }
                         }
@@ -117,7 +143,7 @@ impl CjsVisitor {
                 }
             }
             Expression::CallExpression(call_expr) => {
-                if let Some(require_value) = get_call_expr_require_value(call_expr) {
+                if let Some(require_value) = get_call_expr_require_value(call_expr, self.scoping) {
                     self.set_reexport_assignment_value(require_value);
                 }
             }
@@ -131,55 +157,66 @@ impl CjsVisitor {
     }
 }
 
-impl<'a> Visit<'a> for CjsVisitor {
+impl<'a> Visit<'a> for CjsVisitor<'_> {
     fn visit_variable_declaration(&mut self, decl: &VariableDeclaration<'a>) {
         for declarator in &decl.declarations {
             if let Some(id) = declarator.id.get_binding_identifier()
+                && let Some(symbol_id) = id.symbol_id.get()
                 && let Some(init) = &declarator.init
-                && let Some(require_value) = get_expr_require_value(init)
+                && let Some(require_value) = get_expr_require_value(init, self.scoping)
             {
-                self.var_assignments.insert(id.name.to_string(), require_value.to_string());
+                self.var_assignments.insert(symbol_id, require_value.to_string());
             }
         }
         walk::walk_variable_declaration(self, decl);
     }
 
     fn visit_call_expression(&mut self, call_expr: &CallExpression<'a>) {
-        if is_object_define(call_expr) {
+        let enumerated_key_scope =
+            get_for_each_key_scope(call_expr, &self.var_assignments, self.scoping);
+        if let Some(scope) = enumerated_key_scope {
+            self.enumerated_key_scopes.push(scope);
+        }
+
+        if is_object_define(call_expr, self.scoping) {
             self.visit_object_define(call_expr);
         } else if is_export_callee(&call_expr.callee)
-            && let Some(name) = get_export_require_arg(call_expr, &self.var_assignments)
+            && let Some(name) =
+                get_export_require_arg(call_expr, &self.var_assignments, self.scoping)
         {
             self.add_reexport(&name);
         }
 
         walk::walk_call_expression(self, call_expr);
+        if enumerated_key_scope.is_some() {
+            self.enumerated_key_scopes.pop();
+        }
     }
 
     fn visit_assignment_expression(&mut self, assign_expr: &AssignmentExpression<'a>) {
-        if assign_expr.operator != AssignmentOperator::Assign {
-            return;
-        }
-
-        match &assign_expr.left {
-            AssignmentTarget::AssignmentTargetIdentifier(left_ident) => {
-                if is_exports_name(left_ident.name.as_str()) {
-                    self.visit_exports_right_expr(&assign_expr.right);
+        if assign_expr.operator == AssignmentOperator::Assign {
+            match &assign_expr.left {
+                AssignmentTarget::AssignmentTargetIdentifier(_) => {
+                    // Reassigning the alias does not replace `module.exports`.
+                    // Nested assignments are still discovered by walking the RHS.
                 }
-            }
-            _ => {
-                if let Some(member) = assign_expr.left.as_member_expression() {
-                    if is_module_exports_member(member) {
-                        self.visit_exports_right_expr(&assign_expr.right);
-                    } else if is_module_exports_or_exports_obj(member) {
-                        if let Some(prop_name) = get_member_expr_prop_text(member) {
-                            self.add_export(&prop_name);
-                        } else if let Some(right_member) = assign_expr.right.as_member_expression()
-                            && let Some(computed_name) = get_computed_member_prop_ident(member)
-                            && let Some(require_value) =
-                                self.get_member_require_value(right_member, computed_name)
-                        {
-                            self.add_reexport(&require_value);
+                _ => {
+                    if let Some(member) = assign_expr.left.as_member_expression() {
+                        if is_module_exports_member(member, self.scoping) {
+                            self.visit_exports_right_expr(&assign_expr.right);
+                        } else if is_module_exports_or_exports_obj(member, self.scoping) {
+                            if let Some(prop_name) = get_member_expr_prop_text(member) {
+                                if prop_name != "__proto__" {
+                                    self.add_export(&prop_name);
+                                }
+                            } else if let Some(right_member) =
+                                assign_expr.right.as_member_expression()
+                                && let Some(computed_key) = get_computed_member_prop_ident(member)
+                                && let Some(require_value) =
+                                    self.get_member_require_value(right_member, computed_key)
+                            {
+                                self.add_reexport(&require_value);
+                            }
                         }
                     }
                 }
@@ -192,46 +229,74 @@ impl<'a> Visit<'a> for CjsVisitor {
 
 // --- Helper functions ---
 
-fn is_module_exports_or_exports_obj(member: &MemberExpression) -> bool {
-    is_module_exports_expr(member.object()) || is_exports_expr(member.object())
+fn is_module_exports_or_exports_obj(
+    member: &MemberExpression,
+    scoping: &oxc::semantic::Scoping,
+) -> bool {
+    is_module_exports_expr(member.object(), scoping) || is_exports_expr(member.object(), scoping)
 }
 
-fn is_module_exports_expr(expr: &Expression) -> bool {
+fn is_module_exports_expr(expr: &Expression, scoping: &oxc::semantic::Scoping) -> bool {
     if let Some(member) = expr.as_member_expression() {
-        is_module_exports_member(member)
+        is_module_exports_member(member, scoping)
     } else {
         false
     }
 }
 
-fn is_module_exports_member(member: &MemberExpression) -> bool {
-    if let Some(obj_name) = get_expr_ident_name(member.object())
-        && obj_name == "module"
+fn is_module_exports_member(member: &MemberExpression, scoping: &oxc::semantic::Scoping) -> bool {
+    if let Some(ident) = get_expr_ident(member.object())
+        && is_global_identifier("module", ident, scoping)
     {
         return get_member_expr_prop_text(member).map(|p| p == "exports").unwrap_or(false);
     }
     false
 }
 
-fn is_exports_expr(expr: &Expression) -> bool {
-    get_expr_ident_name(expr).map(is_exports_name).unwrap_or(false)
+fn is_exports_expr(expr: &Expression, scoping: &oxc::semantic::Scoping) -> bool {
+    get_expr_ident(expr).is_some_and(|ident| is_global_identifier("exports", ident, scoping))
 }
 
-fn is_exports_name(name: &str) -> bool {
-    name == "exports"
+fn get_expr_ident<'a>(expr: &'a Expression<'a>) -> Option<&'a IdentifierReference<'a>> {
+    if let Expression::Identifier(ident) = expr { Some(ident) } else { None }
 }
 
-fn get_expr_require_value<'a>(expr: &'a Expression) -> Option<&'a str> {
+fn is_global_identifier(
+    name: &str,
+    ident: &IdentifierReference,
+    scoping: &oxc::semantic::Scoping,
+) -> bool {
+    ident.name == name && get_reference_symbol_id(ident, scoping).is_none()
+}
+
+fn get_reference_symbol_id(
+    ident: &IdentifierReference,
+    scoping: &oxc::semantic::Scoping,
+) -> Option<oxc::semantic::SymbolId> {
+    ident.reference_id.get().and_then(|id| scoping.get_reference(id).symbol_id())
+}
+
+fn get_expr_require_value<'a>(
+    expr: &'a Expression,
+    scoping: &oxc::semantic::Scoping,
+) -> Option<&'a str> {
     match expr {
-        Expression::CallExpression(call_expr) => get_call_expr_require_value(call_expr),
+        Expression::CallExpression(call_expr) => get_call_expr_require_value(call_expr, scoping),
+        Expression::ParenthesizedExpression(paren) => {
+            get_expr_require_value(&paren.expression, scoping)
+        }
         _ => None,
     }
 }
 
-fn get_call_expr_require_value<'a>(call_expr: &'a CallExpression) -> Option<&'a str> {
-    let callee_name = get_expr_ident_name(&call_expr.callee)?;
+fn get_call_expr_require_value<'a>(
+    call_expr: &'a CallExpression,
+    scoping: &oxc::semantic::Scoping,
+) -> Option<&'a str> {
+    let callee = get_expr_ident(&call_expr.callee)?;
+    let callee_name = callee.name.as_str();
     match callee_name {
-        "require" => {
+        "require" if is_global_identifier("require", callee, scoping) => {
             let arg = call_expr.arguments.first()?;
             if let Argument::StringLiteral(str_lit) = arg {
                 return str_lit.value.as_str();
@@ -240,7 +305,7 @@ fn get_call_expr_require_value<'a>(call_expr: &'a CallExpression) -> Option<&'a 
         "_interopRequireWildcard" => {
             let arg = call_expr.arguments.first()?;
             if let Argument::CallExpression(inner_call) = arg {
-                return get_call_expr_require_value(inner_call);
+                return get_call_expr_require_value(inner_call, scoping);
             }
         }
         _ => {}
@@ -255,17 +320,60 @@ fn get_expr_ident_name<'a>(expr: &'a Expression) -> Option<&'a str> {
     }
 }
 
-fn get_static_member_obj_ident<'a>(member: &'a MemberExpression) -> Option<&'a str> {
-    get_expr_ident_name(member.object())
+fn get_static_member_obj_ident<'a>(
+    member: &'a MemberExpression<'a>,
+) -> Option<&'a IdentifierReference<'a>> {
+    get_expr_ident(member.object())
 }
 
-fn get_computed_member_prop_ident<'a>(member: &'a MemberExpression) -> Option<&'a str> {
+fn get_computed_member_prop_ident<'a>(
+    member: &'a MemberExpression<'a>,
+) -> Option<&'a IdentifierReference<'a>> {
     match member {
         MemberExpression::ComputedMemberExpression(computed) => {
-            get_expr_ident_name(&computed.expression)
+            get_expr_ident(&computed.expression)
         }
         _ => None,
     }
+}
+
+fn get_for_each_key_scope(
+    call_expr: &CallExpression,
+    var_assignments: &HashMap<oxc::semantic::SymbolId, String>,
+    scoping: &oxc::semantic::Scoping,
+) -> Option<(oxc::semantic::SymbolId, oxc::semantic::SymbolId)> {
+    let for_each = call_expr.callee.as_member_expression()?;
+    if get_member_expr_prop_text(for_each)?.as_str() != "forEach" {
+        return None;
+    }
+
+    let Expression::CallExpression(keys_call) = for_each.object() else {
+        return None;
+    };
+    let keys_callee = get_callee_member_expr(&keys_call.callee)?;
+    let object_ident = get_expr_ident(keys_callee.object())?;
+    if !is_global_identifier("Object", object_ident, scoping)
+        || get_member_expr_prop_text(keys_callee)?.as_str() != "keys"
+    {
+        return None;
+    }
+
+    let [Argument::Identifier(object_ident)] = keys_call.arguments.as_slice() else {
+        return None;
+    };
+    let object_symbol = get_reference_symbol_id(object_ident, scoping)?;
+    if !var_assignments.contains_key(&object_symbol) {
+        return None;
+    }
+
+    let callback = call_expr.arguments.first()?;
+    let params = match callback {
+        Argument::ArrowFunctionExpression(arrow) => &arrow.params,
+        Argument::FunctionExpression(function) => &function.params,
+        _ => return None,
+    };
+    let key = params.items.first()?.pattern.get_binding_identifier()?;
+    Some((key.symbol_id.get()?, object_symbol))
 }
 
 fn get_member_expr_prop_text(member: &MemberExpression) -> Option<String> {
@@ -274,31 +382,31 @@ fn get_member_expr_prop_text(member: &MemberExpression) -> Option<String> {
             Some(static_member.property.name.to_string())
         }
         MemberExpression::ComputedMemberExpression(computed) => {
-            if let Expression::StringLiteral(str_lit) = &computed.expression {
-                Some(str_lit.value.to_string_lossy())
-            } else {
-                None
+            match unwrap_parenthesized(&computed.expression) {
+                Expression::StringLiteral(str_lit) => Some(str_lit.value.to_string_lossy()),
+                Expression::NumericLiteral(num) => Some(number_property_name(num.value)),
+                _ => None,
             }
         }
         MemberExpression::PrivateFieldExpression(_) => None,
     }
 }
 
-fn is_object_define(call_expr: &CallExpression) -> bool {
-    is_object_define_callee(&call_expr.callee)
+fn is_object_define(call_expr: &CallExpression, scoping: &oxc::semantic::Scoping) -> bool {
+    is_object_define_callee(&call_expr.callee, scoping)
         && call_expr.arguments.len() >= 3
-        && is_module_exports_or_exports_arg(&call_expr.arguments[0])
+        && is_module_exports_or_exports_arg(&call_expr.arguments[0], scoping)
         && !call_expr.arguments[0].is_spread()
         && !call_expr.arguments[1].is_spread()
         && !call_expr.arguments[2].is_spread()
 }
 
-fn is_module_exports_or_exports_arg(arg: &Argument) -> bool {
+fn is_module_exports_or_exports_arg(arg: &Argument, scoping: &oxc::semantic::Scoping) -> bool {
     match arg {
-        Argument::Identifier(ident) => is_exports_name(ident.name.as_str()),
+        Argument::Identifier(ident) => is_global_identifier("exports", ident, scoping),
         _ => {
             if let Some(member) = arg.as_member_expression() {
-                is_module_exports_member(member)
+                is_module_exports_member(member, scoping)
             } else {
                 false
             }
@@ -306,9 +414,10 @@ fn is_module_exports_or_exports_arg(arg: &Argument) -> bool {
     }
 }
 
-fn is_object_define_callee(callee: &Expression) -> bool {
+fn is_object_define_callee(callee: &Expression, scoping: &oxc::semantic::Scoping) -> bool {
     if let Some(member) = get_callee_member_expr(callee) {
-        get_expr_ident_name(member.object()) == Some("Object")
+        get_expr_ident(member.object())
+            .is_some_and(|ident| is_global_identifier("Object", ident, scoping))
             && get_member_expr_prop_text(member).map(|p| p == "defineProperty").unwrap_or(false)
     } else {
         false
@@ -353,35 +462,43 @@ fn get_callee_member_expr<'a>(expr: &'a Expression<'a>) -> Option<&'a MemberExpr
 
 fn get_export_require_arg(
     call_expr: &CallExpression,
-    var_assignments: &HashMap<String, String>,
+    var_assignments: &HashMap<oxc::semantic::SymbolId, String>,
+    scoping: &oxc::semantic::Scoping,
 ) -> Option<String> {
     if call_expr.arguments.iter().any(oxc::ast::ast::Argument::is_spread) {
         return None;
     }
 
     if call_expr.arguments.len() == 1
-        || (call_expr.arguments.len() == 2 && is_exports_arg(&call_expr.arguments[1]))
+        || (call_expr.arguments.len() == 2 && is_exports_arg(&call_expr.arguments[1], scoping))
     {
-        if let Some(require_value) = get_arg_expr_require_value(&call_expr.arguments[0]) {
+        if let Some(require_value) = get_arg_expr_require_value(&call_expr.arguments[0], scoping) {
             return Some(require_value.to_string());
         }
         if let Argument::Identifier(ident) = &call_expr.arguments[0] {
-            return var_assignments.get(ident.name.as_str()).cloned();
+            return get_reference_symbol_id(ident, scoping)
+                .and_then(|id| var_assignments.get(&id).cloned());
         }
     }
     None
 }
 
-fn is_exports_arg(arg: &Argument) -> bool {
+fn is_exports_arg(arg: &Argument, scoping: &oxc::semantic::Scoping) -> bool {
     match arg {
-        Argument::Identifier(ident) => is_exports_name(ident.name.as_str()),
+        Argument::Identifier(ident) => is_global_identifier("exports", ident, scoping),
         _ => false,
     }
 }
 
-fn get_arg_expr_require_value<'a>(arg: &'a Argument) -> Option<&'a str> {
+fn get_arg_expr_require_value<'a>(
+    arg: &'a Argument,
+    scoping: &oxc::semantic::Scoping,
+) -> Option<&'a str> {
     match arg {
-        Argument::CallExpression(call_expr) => get_call_expr_require_value(call_expr),
+        Argument::CallExpression(call_expr) => get_call_expr_require_value(call_expr, scoping),
+        Argument::ParenthesizedExpression(paren) => {
+            get_expr_require_value(&paren.expression, scoping)
+        }
         _ => None,
     }
 }
@@ -396,28 +513,49 @@ fn is_valid_object_define_obj_lit(arg: &Argument) -> bool {
 fn get_arg_as_object_expr<'a>(arg: &'a Argument) -> Option<&'a ObjectExpression<'a>> {
     match arg {
         Argument::ObjectExpression(obj) => Some(obj),
+        Argument::ParenthesizedExpression(paren) => get_expr_as_object_expr(&paren.expression),
+        _ => None,
+    }
+}
+
+fn get_expr_as_object_expr<'a>(expr: &'a Expression) -> Option<&'a ObjectExpression<'a>> {
+    match expr {
+        Expression::ObjectExpression(obj) => Some(obj),
+        Expression::ParenthesizedExpression(paren) => get_expr_as_object_expr(&paren.expression),
         _ => None,
     }
 }
 
 fn has_supported_get_prop(obj: &ObjectExpression) -> bool {
-    let Some(get_prop) = get_object_define_get_prop(obj) else {
-        return true;
-    };
-    is_supported_get_prop(get_prop)
+    match get_effective_get_prop(obj) {
+        Ok(Some(get_prop)) => is_supported_get_prop(get_prop),
+        Ok(None) => true,
+        Err(()) => false,
+    }
 }
 
 fn get_object_define_get_prop<'a>(obj: &'a ObjectExpression) -> Option<&'a ObjectProperty<'a>> {
-    obj.properties.iter().find_map(|p| match p {
-        ObjectPropertyKind::ObjectProperty(prop) => {
-            if get_property_key_name(&prop.key).map(|n| n == "get").unwrap_or(false) {
-                Some(prop.as_ref())
-            } else {
-                None
+    get_effective_get_prop(obj).ok().flatten()
+}
+
+fn get_effective_get_prop<'a>(
+    obj: &'a ObjectExpression,
+) -> Result<Option<&'a ObjectProperty<'a>>, ()> {
+    for property in obj.properties.iter().rev() {
+        match property {
+            ObjectPropertyKind::ObjectProperty(prop) => {
+                let name = get_property_key_name(&prop.key);
+                if prop.computed && name.is_none() {
+                    return Err(());
+                }
+                if name.as_deref() == Some("get") {
+                    return Ok(Some(prop));
+                }
             }
+            ObjectPropertyKind::SpreadProperty(_) => return Err(()),
         }
-        ObjectPropertyKind::SpreadProperty(_) => None,
-    })
+    }
+    Ok(None)
 }
 
 fn is_supported_object_prop(prop: &ObjectProperty) -> bool {
@@ -503,6 +641,9 @@ fn get_block_stmt_return_expr<'a>(body: &'a FunctionBody<'a>) -> Option<&'a Expr
 }
 
 fn is_non_side_effect_expr(expr: &Expression) -> bool {
+    if let Expression::ParenthesizedExpression(paren) = expr {
+        return is_non_side_effect_expr(&paren.expression);
+    }
     if let Some(member) = expr.as_member_expression() {
         return is_non_side_effect_expr(member.object()) && is_non_side_effect_member_prop(member);
     }
@@ -513,8 +654,19 @@ fn is_non_side_effect_expr(expr: &Expression) -> bool {
             | Expression::NumericLiteral(_)
             | Expression::BooleanLiteral(_)
             | Expression::NullLiteral(_)
-            | Expression::ObjectExpression(_)
-    )
+    ) || matches!(expr, Expression::ObjectExpression(object) if is_non_side_effect_object(object))
+}
+
+fn is_non_side_effect_object(object: &ObjectExpression) -> bool {
+    object.properties.iter().all(|property| match property {
+        ObjectPropertyKind::ObjectProperty(property) => {
+            (!property.computed || is_non_side_effect_expr(property.key.to_expression()))
+                && (property.method
+                    || matches!(property.kind, PropertyKind::Get | PropertyKind::Set)
+                    || is_non_side_effect_expr(&property.value))
+        }
+        ObjectPropertyKind::SpreadProperty(_) => false,
+    })
 }
 
 fn is_non_side_effect_member_prop(member: &MemberExpression) -> bool {
@@ -531,8 +683,40 @@ fn get_property_key_name(key: &PropertyKey) -> Option<String> {
     match key {
         PropertyKey::StaticIdentifier(ident) => Some(ident.name.to_string()),
         PropertyKey::StringLiteral(str_lit) => Some(str_lit.value.to_string_lossy()),
+        PropertyKey::NumericLiteral(num) => Some(number_property_name(num.value)),
         _ => None,
     }
+}
+
+fn number_property_name(value: f64) -> String {
+    if value == 0.0 {
+        return "0".to_string();
+    }
+    if value.is_nan() {
+        return "NaN".to_string();
+    }
+    if value.is_infinite() {
+        return if value.is_sign_positive() { "Infinity" } else { "-Infinity" }.to_string();
+    }
+    if value.abs() >= 1e21 || value.abs() < 1e-6 {
+        let scientific = format!("{value:e}");
+        let Some((mantissa, exponent)) = scientific.split_once('e') else {
+            return scientific;
+        };
+        let Ok(exponent) = exponent.parse::<i32>() else {
+            return scientific;
+        };
+        format!("{mantissa}e{}{exponent}", if exponent >= 0 { "+" } else { "" })
+    } else {
+        value.to_string()
+    }
+}
+
+fn unwrap_parenthesized<'a>(mut expr: &'a Expression<'a>) -> &'a Expression<'a> {
+    while let Expression::ParenthesizedExpression(paren) = expr {
+        expr = &paren.expression;
+    }
+    expr
 }
 
 #[cfg(test)]
@@ -701,6 +885,164 @@ mod test {
         );
 
         tester.assert_exports(vec!["A", "B", "C"]);
+    }
+
+    #[test]
+    fn shadowed_bindings_are_not_commonjs_globals() {
+        let tester = parse_cjs(
+            r#"
+      const dep = require("real");
+      function shadowed(require, dep, exports, module) {
+        const local = require("fake");
+        __export(dep);
+        exports.notAnExport = 1;
+        module.exports = { notAReplacement: 1 };
+        __export(local);
+      }
+      __export(dep);
+    "#,
+        );
+
+        tester.assert_exports(vec![]);
+        tester.assert_reexports(vec!["real"]);
+    }
+
+    #[test]
+    fn parenthesized_export_rhs_and_require_are_detected() {
+        let tester = parse_cjs(
+            r#"
+      module.exports = (require("./dependency"));
+      exports.value = ((1));
+      module.exports = (({ objectKey: true }));
+    "#,
+        );
+
+        tester.assert_exports(vec!["objectKey", "value"]);
+        tester.assert_reexports(vec!["./dependency"]);
+    }
+
+    #[test]
+    fn compound_assignments_still_visit_nested_exports() {
+        let tester = parse_cjs("exports.answer += (exports.nested = 42);");
+        tester.assert_exports(vec!["nested"]);
+    }
+
+    #[test]
+    fn only_module_exports_reassignment_replaces_the_reexport_target() {
+        let tester = parse_cjs(
+            r#"
+      module.exports = require("./original");
+      exports = require("./alias");
+    "#,
+        );
+        tester.assert_reexports(vec!["./original"]);
+
+        let tester = parse_cjs("module.exports = exports = require('./chained');");
+        tester.assert_reexports(vec!["./chained"]);
+    }
+
+    #[test]
+    fn computed_member_reexports_require_key_enumeration() {
+        let tester = parse_cjs(
+            r#"
+      const dependency = require("./dependency");
+      exports[key] = dependency[key];
+      Object.defineProperty(exports, key, {
+        enumerable: true,
+        get: () => dependency[key]
+      });
+      exports.named = dependency.named;
+    "#,
+        );
+        tester.assert_exports(vec!["named"]);
+        tester.assert_reexports(vec![]);
+
+        let tester = parse_cjs(
+            r#"
+      const dependency = require("./dependency");
+      Object.keys(dependency).forEach(key => {
+        exports[key] = dependency[key];
+      });
+    "#,
+        );
+        tester.assert_reexports(vec!["./dependency"]);
+
+        let tester = parse_cjs(
+            r#"
+      const dependency = require("./dependency");
+      Object.keys(dependency).forEach(key => {
+        Object.defineProperty(exports, key, {
+          enumerable: true,
+          get: () => dependency[key]
+        });
+      });
+    "#,
+        );
+        tester.assert_reexports(vec!["./dependency"]);
+    }
+
+    #[test]
+    fn numeric_export_keys_are_stringified() {
+        let tester = parse_cjs(
+            r#"
+      module.exports = { 1: a, 2.5: b, 1e21: c, 1e-7: d };
+      exports[3] = c;
+      exports["4"] = d;
+    "#,
+        );
+
+        tester.assert_exports(vec!["1", "1e+21", "1e-7", "2.5", "3", "4"]);
+    }
+
+    #[test]
+    fn object_literal_proto_setter_is_not_an_export() {
+        let tester = parse_cjs("module.exports = { __proto__: prototype, actual: value };");
+
+        tester.assert_exports(vec!["actual"]);
+    }
+
+    #[test]
+    fn last_effective_getter_controls_unsafe_export_filtering() {
+        let tester = parse_cjs(
+            r#"
+      Object.defineProperty(exports, "safe", {
+        get: () => dynamic(),
+        get: () => dependency.value
+      });
+      Object.defineProperty(exports, "unsafe", {
+        get: () => dependency.value,
+        get: () => dynamic()
+      });
+    "#,
+        );
+
+        tester.assert_exports(vec!["safe"]);
+    }
+
+    #[test]
+    fn getter_safety_checks_object_initializers_and_dynamic_overrides() {
+        let tester = parse_cjs(
+            r#"
+      Object.defineProperty(exports, "safe", {
+        get: () => ({ value: 1 })
+      });
+      Object.defineProperty(exports, "unsafeValue", {
+        get: () => ({ value: dynamic() })
+      });
+      Object.defineProperty(exports, "unsafeKey", {
+        get: () => ({ [dynamic()]: 1 })
+      });
+      Object.defineProperty(exports, "unsafeSpread", {
+        get: () => dependency.value,
+        ...overrides
+      });
+      Object.defineProperty(exports, "unsafeDynamicKey", {
+        get: () => dependency.value,
+        [getKey()]: descriptor
+      });
+    "#,
+        );
+        tester.assert_exports(vec!["safe"]);
     }
 
     #[test]
@@ -984,8 +1326,6 @@ mod test {
             "./Accordion",
             // extra values not matched in cjs-module-lexer
             "not",           // why not?
-            "notexternal12", // seems like an unrealistic test?
-            "notexternal13", // seems like an unrealistic test?
             "notexternal16", // might as well match
             "notexternal17", // might as well match
         ]);
