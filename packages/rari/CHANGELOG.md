@@ -1,3 +1,24 @@
+## [rari@0.17.11] - 2026-11-20
+
+### 🚀 Features
+
+- enhance CJS and ESM analysis, improve diagnostics, and update Cargo.toml dependencies by @skiniks
+- improve CJS analysis caching logic by @skiniks
+- update eviction handling to support multiple pending evictions in navigation by @skiniks
+- add pending navigation location reference to commit navigation payload by @skiniks
+
+### 🚜 Refactor
+
+- remove unnecessary reference paths from multiple files by @skiniks
+- replace RouteLocation reference with committedNavigationId state in navigation handling by @skiniks
+
+### ⚙️ Miscellaneous Tasks
+
+- update dependencies by @skiniks
+- update optional dependencies to version 0.17.11
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/rari@0.17.10...rari@0.17.11
 ## [rari@0.17.10] - 2026-11-16
 
 ### 🐛 Bug Fixes
