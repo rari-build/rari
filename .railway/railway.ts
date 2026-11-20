@@ -22,12 +22,8 @@ export default defineRailway((): ProjectDefinition => {
     },
     env: {
       GITHUB_TOKEN: preserve(),
-      NODE_ENV: preserve(),
-      NO_CACHE: preserve(),
-      RAILPACK_CONFIG_FILE: 'web/railpack.json',
+      RAILPACK_CONFIG_FILE: preserve(),
       RAILPACK_DEPLOY_APT_PACKAGES: preserve(),
-      RARI_CSRF_SECRET: preserve(),
-      RARI_MODE: preserve(),
       VITE_POSTHOG_HOST: preserve(),
       VITE_POSTHOG_KEY: preserve(),
       VITE_SENTRY_DSN: preserve(),
