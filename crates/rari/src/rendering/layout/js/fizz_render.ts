@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 ;(function initFizzRenderer() {
   const ReactDOMServer = g['~reactServer']
 

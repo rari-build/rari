@@ -1,5 +1,3 @@
-/// <reference path="./types.d.ts" />
-
 import { loadFullReactVendors, loadRscReactVendors } from 'ext:rari/react/vendor_loaders.ts'
 import 'ext:rari/http/cookies.ts'
 import 'ext:rari/http/headers.ts'

@@ -1,6 +1,3 @@
-/// <reference path="../../types.d.ts" />
-/// <reference path="./action_flight_shared.ts" />
-
 void (async () => {
   if (typeof g['~rari']?.loadRscReactVendors === 'function') g['~rari'].loadRscReactVendors()
 

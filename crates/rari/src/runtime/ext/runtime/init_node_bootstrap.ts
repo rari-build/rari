@@ -1,6 +1,4 @@
 /// <reference types="node" />
-/// <reference path="../types.d.ts" />
-/// <reference path="../rari/core/types.d.ts" />
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { core, internals } from 'ext:core/mod.js'

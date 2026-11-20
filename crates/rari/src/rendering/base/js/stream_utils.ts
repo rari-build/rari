@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 async function readStreamToUint8Array(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   const reader = stream.getReader()
   const chunks: Uint8Array[] = []

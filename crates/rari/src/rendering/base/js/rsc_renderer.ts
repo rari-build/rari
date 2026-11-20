@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 async function renderToRsc(element: unknown): Promise<string> {
   const ReactServerRenderer = g['~reactServerRenderer']
 

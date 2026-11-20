@@ -1,6 +1,3 @@
-/// <reference path="../types.d.ts" />
-/// <reference path="../rari/core/types.d.ts" />
-
 import {
   applyToGlobal,
   lazyExtScript,

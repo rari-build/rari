@@ -1,6 +1,3 @@
-/// <reference path="../runtime/ext/rari/core/types.d.ts" />
-/// <reference path="../runtime/ext/types.d.ts" />
-
 declare global {
   const args_json: Array<unknown>
   const props_json: Record<string, unknown>

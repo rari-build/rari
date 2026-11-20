@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 interface ResolveResult {
   success: boolean
   registered: number

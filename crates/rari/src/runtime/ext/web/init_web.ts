@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import {
   applyToDeno,
   applyToGlobal,

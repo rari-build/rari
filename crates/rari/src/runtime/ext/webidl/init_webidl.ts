@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { core } from 'ext:core/mod.js'
 import { applyToGlobal, nonEnumerable } from 'ext:init_utilities/utilities.ts'
 

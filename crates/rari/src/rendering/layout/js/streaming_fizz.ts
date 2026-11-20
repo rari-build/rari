@@ -1,5 +1,4 @@
 // oxlint-disable typescript/prefer-readonly-parameter-types
-/// <reference path="../../types.d.ts" />
 
 declare function rariCreateHtmlBoundaryTracker(): {
   reset: () => void

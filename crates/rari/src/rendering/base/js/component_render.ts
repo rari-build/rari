@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 void (async function () {
   let Component: (props: unknown) => unknown
   let componentSource = 'not found'

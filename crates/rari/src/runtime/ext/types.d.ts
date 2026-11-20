@@ -1,7 +1,3 @@
-/// <reference path="./deno-namespace.d.ts" />
-/// <reference path="./deno-extensions.d.ts" />
-/// <reference path="./extension-module-types.d.ts" />
-
 declare global {
   // Deno websocket extension; not in lib.dom.
   class WebSocketStream {}

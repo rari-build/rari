@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 type ActionModule = Record<string, unknown> & { default?: unknown }
 type ActionFn = (...args: readonly unknown[]) => unknown
 

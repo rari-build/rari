@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 ;(function () {
   interface RariCookie {
     name: string

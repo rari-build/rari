@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 interface MetadataParams {
   readonly params: Readonly<Record<string, string>>
   readonly searchParams: Readonly<Record<string, string>>

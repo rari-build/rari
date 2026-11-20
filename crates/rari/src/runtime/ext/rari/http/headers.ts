@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 ;(function () {
   interface RariReadonlyHeaders {
     get: (name: string) => string | null

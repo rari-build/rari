@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 interface ComponentInfo {
   readonly id: string
   readonly path: string

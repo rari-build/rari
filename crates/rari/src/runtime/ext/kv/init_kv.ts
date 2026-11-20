@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { core } from 'ext:core/mod.js'
 
 const init = core.loadExtScript<typeof import('ext:deno_kv/01_db.ts')>('ext:deno_kv/01_db.ts')

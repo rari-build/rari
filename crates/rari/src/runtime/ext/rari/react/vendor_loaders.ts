@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 import { lazyExtModule } from 'ext:init_utilities/utilities.ts'
 
 interface ReactDefaultExport {
