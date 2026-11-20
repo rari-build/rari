@@ -12,7 +12,6 @@ use std::{
 
 use cow_utils::CowUtils;
 use dashmap::DashMap;
-use deno_ast::MediaType;
 use deno_core::{
     FastString, ModuleLoadOptions, ModuleLoadReferrer, ModuleLoadResponse, ModuleLoader,
     ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, ResolutionKind, resolve_import,
@@ -23,6 +22,7 @@ use deno_resolver::npm::DenoInNpmPackageChecker;
 use node_resolver::{
     NodeResolution, NodeResolutionKind, ResolutionMode, errors::NodeResolveErrorKind,
 };
+use rari_ast::MediaType;
 use sys_traits::impls::RealSys;
 
 use super::{

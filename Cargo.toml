@@ -23,6 +23,7 @@ cow-utils = "0.1.3"
 hex = "0.4.3"
 parking_lot = "0.13.0"
 rari = { path = "crates/rari" }
+rari_ast = { path = "crates/rari_ast" }
 rari_error = { path = "crates/rari_error" }
 regex = "1.13.1"
 rustc-hash = "2.1.3"
@@ -37,7 +38,6 @@ url = "2.5.8"
 uuid = { version = "1.29.2", features = ["v4"] }
 
 # Deno ecosystem aligned exact pins; bump as a coordinated set with Deno releases
-deno_ast = "=0.53.3"
 deno_bundle_runtime = "=0.47.0"
 deno_cache = "=0.193.0"
 deno_core = "=0.413.0"

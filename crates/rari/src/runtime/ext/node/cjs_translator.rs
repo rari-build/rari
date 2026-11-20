@@ -2,7 +2,6 @@
 
 use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
-use deno_ast::{MediaType, ModuleExportsAndReExports, ModuleSpecifier, ParseParams};
 use deno_core::unsync;
 use deno_error::JsErrorBox;
 use deno_fs::FileSystemRc;
@@ -12,6 +11,9 @@ use deno_runtime::deno_fs;
 use node_resolver::{
     DenoIsBuiltInNodeModuleChecker,
     analyze::{self, CjsAnalysis as ExtNodeCjsAnalysis, CjsAnalysisExports, EsmAnalysisMode},
+};
+use rari_ast::{
+    MediaType, ModuleExportsAndReExports, ModuleSpecifier, ParseParams, oxc::allocator::Allocator,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -88,14 +90,19 @@ impl CjsCodeAnalyzer {
         let analysis = unsync::spawn_blocking({
             let source: Arc<str> = source.into();
             move || -> Result<CjsAnalysis, JsErrorBox> {
-                let parsed_source = deno_ast::parse_program(ParseParams {
-                    specifier: specifier_clone.clone(),
-                    text: source,
-                    media_type,
-                    capture_tokens: true,
-                    scope_analysis: false,
-                    maybe_syntax: None,
-                })
+                let allocator = Allocator::default();
+
+                let parsed_source = rari_ast::parse_program(
+                    &allocator,
+                    ParseParams {
+                        specifier: specifier_clone.clone(),
+                        text: source,
+                        media_type,
+                        capture_tokens: false,
+                        scope_analysis: false,
+                        maybe_source_type: None,
+                    },
+                )
                 .map_err(JsErrorBox::from_err)?;
 
                 let is_script = parsed_source.compute_is_script();

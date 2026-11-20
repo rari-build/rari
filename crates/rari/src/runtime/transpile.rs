@@ -7,12 +7,12 @@ use std::{
 };
 
 use cow_utils::CowUtils;
-use deno_ast::{MediaType, ParseParams, SourceMapOption};
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData, url::Url, v8::VERSION_STRING};
 use deno_error::JsErrorBox;
+use rari_ast::{MediaType, ParseParams, SourceMapOption, oxc::allocator::Allocator};
 
-deno_error::js_error_wrapper!(deno_ast::ParseDiagnostic, JsParseDiagnostic, "Error");
-deno_error::js_error_wrapper!(deno_ast::TranspileError, JsTranspileError, "Error");
+deno_error::js_error_wrapper!(rari_ast::ParseDiagnostic, JsParseDiagnostic, "Error");
+deno_error::js_error_wrapper!(rari_ast::TranspileError, JsTranspileError, "Error");
 
 const NODE_VERSION_TOKEN: &str = "__NODE_VERSION__";
 const V8_VERSION_TOKEN: &str = "__V8_VERSION__";
@@ -69,37 +69,42 @@ pub fn maybe_transpile_source(
         }
     }
 
-    let parsed = deno_ast::parse_module(ParseParams {
-        specifier: Url::parse(name).unwrap_or_else(|_| {
-            #[expect(clippy::expect_used, reason = "Fallback URL construction is infallible")]
-            Url::parse(&format!("file:///__rari_script__/{name}"))
-                .expect("failed to create fallback URL")
-        }),
-        text: source.into(),
-        media_type,
-        capture_tokens: false,
-        scope_analysis: false,
-        maybe_syntax: None,
-    })
+    let allocator = Allocator::default();
+    let mut parsed = rari_ast::parse_module(
+        &allocator,
+        ParseParams {
+            specifier: Url::parse(name).unwrap_or_else(|_| {
+                #[expect(clippy::expect_used, reason = "Fallback URL construction is infallible")]
+                Url::parse(&format!("file:///__rari_script__/{name}"))
+                    .expect("failed to create fallback URL")
+            }),
+            text: source.into(),
+            media_type,
+            capture_tokens: false,
+            scope_analysis: false,
+            maybe_source_type: None,
+        },
+    )
     .map_err(|e| JsErrorBox::from_err(JsParseDiagnostic(e)))?;
     let transpiled_source = parsed
         .transpile(
-            &deno_ast::TranspileOptions {
-                imports_not_used_as_values: deno_ast::ImportsNotUsedAsValues::Remove,
+            &allocator,
+            &rari_ast::TranspileOptions {
+                imports_not_used_as_values: rari_ast::ImportsNotUsedAsValues::Remove,
                 ..Default::default()
             },
-            &deno_ast::TranspileModuleOptions::default(),
-            &deno_ast::EmitOptions {
+            &rari_ast::TranspileModuleOptions::default(),
+            &rari_ast::EmitOptions {
                 source_map: if cfg!(debug_assertions) {
                     SourceMapOption::Separate
                 } else {
                     SourceMapOption::None
                 },
+                ascii_only: true,
                 ..Default::default()
             },
         )
-        .map_err(|e| JsErrorBox::from_err(JsTranspileError(e)))?
-        .into_source();
+        .map_err(|e| JsErrorBox::from_err(JsTranspileError(e)))?;
 
     let maybe_source_map: Option<SourceMapData> =
         transpiled_source.source_map.map(|sm| sm.into_bytes().into());

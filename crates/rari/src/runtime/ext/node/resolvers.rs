@@ -7,7 +7,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use deno_ast::{MediaType, ModuleSpecifier};
 use deno_core::FastString;
 use deno_error::JsErrorBox;
 use deno_fs::{FileSystem, RealFs};
@@ -30,6 +29,7 @@ use node_resolver::{
         PackageNotFoundError,
     },
 };
+use rari_ast::{MediaType, ModuleSpecifier};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use sys_traits::{FileType, impls::RealSys};
