@@ -1,3 +1,11 @@
+## [create-rari-app@0.6.0] - 2026-11-20
+
+### ⚙️ Miscellaneous Tasks
+
+- update rari and vite-plus dependencies to version 0.17.11
+
+
+**Full Changelog**: https://github.com/rari-build/rari/compare/create-rari-app@0.5.36...create-rari-app@0.6.0
 ## [create-rari-app@0.5.35] - 2026-11-12
 
 ### 🐛 Bug Fixes
