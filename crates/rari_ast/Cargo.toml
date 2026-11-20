@@ -19,12 +19,7 @@ base64 = { workspace = true, optional = true }
 deno_error = { workspace = true }
 deno_media_type = "0.4.0"
 deno_terminal = "0.2.2"
-oxc = { version = "0.159.0", features = [
-  "semantic",
-  "codegen",
-  "transformer",
-  "ast_visit",
-] }
+oxc = { version = "0.159.0", features = ["semantic", "codegen", "transformer", "ast_visit"] }
 percent-encoding = "2.3.2"
 serde = { workspace = true }
 thiserror = { workspace = true }
@@ -32,7 +27,7 @@ unicode-width = "0.2.3"
 url = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true, features = ["preserve_order"]  }
+serde_json = { workspace = true, features = ["preserve_order"] }
 
 [lints]
 workspace = true

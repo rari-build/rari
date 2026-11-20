@@ -536,6 +536,7 @@ fn get_property_key_name(key: &PropertyKey) -> Option<String> {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod test {
     use std::cell::RefCell;
 
@@ -570,7 +571,7 @@ mod test {
                 analysis.reexports.is_empty(),
                 "Had reexports: {}",
                 analysis.reexports.join(", ")
-            )
+            );
         }
     }
 
@@ -749,6 +750,7 @@ mod test {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn rollup_babel_reexports() {
         let tester = parse_cjs(
             r#"
