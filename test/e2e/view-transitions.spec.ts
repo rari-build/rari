@@ -1,5 +1,12 @@
+import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { waitForRariRuntime } from './shared/helpers'
+
+interface ViewTransitionSample {
+  readonly path: string
+  readonly types: readonly string[]
+  readonly animations: readonly string[] | null
+}
 
 interface SoftNavSample {
   readonly path: string
@@ -11,12 +18,38 @@ interface SoftNavSample {
 }
 
 type SoftNavWindow = Window & {
+  __viewTransitions?: ViewTransitionSample[]
   __softNav?: {
     samples: SoftNavSample[]
     pathAtStart: string | null
     pathBeforeCommit: string | null
     pathAtCommit: string | null
   }
+}
+
+async function resetSamples(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as SoftNavWindow
+    if (w.__softNav) w.__softNav.samples = []
+    if (w.__viewTransitions) w.__viewTransitions.length = 0
+  })
+}
+
+async function expectPageViewTransition(page: Page, path: string): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        target =>
+          (window as SoftNavWindow).__viewTransitions?.find(
+            sample => sample.path === target && sample.animations != null,
+          ) ?? null,
+        path,
+      ),
+    )
+    .toMatchObject({
+      types: expect.arrayContaining(['nav', 'nav-forward']),
+      animations: expect.arrayContaining(['rari-page-exit', 'rari-page-enter']),
+    })
 }
 
 const ROUTES = [
@@ -37,6 +70,33 @@ test.describe('Soft-nav view transitions', () => {
         pathAtCommit: null,
       };
       window.__softNav = softNav;
+
+      const viewTransitions = [];
+      window.__viewTransitions = viewTransitions;
+      const startViewTransition = Document.prototype.startViewTransition;
+      if (typeof startViewTransition === 'function') {
+        Document.prototype.startViewTransition = function (arg) {
+          const transition = startViewTransition.call(this, arg);
+          const sample = {
+            path: location.pathname,
+            types: arg && typeof arg === 'object' && arg.types ? Array.from(arg.types) : [],
+            animations: null,
+          };
+          viewTransitions.push(sample);
+          transition.ready
+            .then(() => {
+              sample.animations = Array.from(new Set(
+                document.getAnimations()
+                  .map((animation) => String(animation.animationName || ''))
+                  .filter((name) => name !== '' && name !== 'none')
+              ));
+            })
+            .catch(() => {
+              sample.animations = [];
+            });
+          return transition;
+        };
+      }
 
       window.addEventListener('rari:navigation-start', () => {
         softNav.pathAtStart = location.pathname;
@@ -85,10 +145,7 @@ test.describe('Soft-nav view transitions', () => {
       await expect(page.locator('h1')).toContainText('Test App Home')
       await expect(page.getByTestId('site-nav')).toBeVisible()
 
-      await page.evaluate(() => {
-        const softNav = (window as SoftNavWindow).__softNav
-        if (softNav) softNav.samples = []
-      })
+      await resetSamples(page)
 
       await page.locator(`nav a[href="${route.href}"]`).first().click()
       await expect(page).toHaveURL(route.href)
@@ -107,6 +164,21 @@ test.describe('Soft-nav view transitions', () => {
       expect(sample.urlHeldUntilCommit).toBe(true)
       expect(sample.pathBeforeCommit).toBe('/')
       expect(sample.pathAtCommit).toBe(route.href)
+      await expectPageViewTransition(page, route.href)
     })
   }
+
+  test('soft-nav from a non-root page runs both exit and enter animations', async ({ page }) => {
+    await page.goto('/about')
+    await waitForRariRuntime(page)
+    await expect(page.locator('h1')).toHaveText(/About Page/)
+
+    await resetSamples(page)
+
+    await page.locator('nav a[href="/blog"]').first().click()
+    await expect(page).toHaveURL('/blog')
+    await expect(page.locator('h1')).toHaveText(/Blog/)
+
+    await expectPageViewTransition(page, '/blog')
+  })
 })

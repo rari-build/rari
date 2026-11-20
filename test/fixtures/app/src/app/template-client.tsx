@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useRef, useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore, ViewTransition } from 'react'
+import { navEnterExit } from './page-transition'
 
 function createMountId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
@@ -26,8 +27,10 @@ export function RootTemplateClient({ children }: Readonly<{ children: ReactNode 
   const mountCount = useMountId()
 
   return (
-    <div data-testid="root-template" data-mount-count={mountCount}>
-      <div data-testid="root-template-children">{children}</div>
-    </div>
+    <ViewTransition enter={navEnterExit} exit={navEnterExit} default="none">
+      <div data-testid="root-template" data-mount-count={mountCount}>
+        <div data-testid="root-template-children">{children}</div>
+      </div>
+    </ViewTransition>
   )
 }

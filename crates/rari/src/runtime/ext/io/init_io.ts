@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { core } from 'ext:core/mod.js'
 
 const io = core.loadExtScript<typeof import('ext:deno_io/12_io.js')>('ext:deno_io/12_io.js')

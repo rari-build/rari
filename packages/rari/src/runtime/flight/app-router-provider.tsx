@@ -358,6 +358,8 @@ export function AppRouterProvider({
   const hmrRouteCacheSeqRef = useRef(new Map<string, number>())
   const pendingFormScrollRestoreRef = useRef<RscPayload | null>(null)
   const pendingNavigateCommittedIdRef = useRef<number | null>(null)
+  const [committedNavigationId, setCommittedNavigationId] = useState<number | null>(null)
+  const pendingEvictLeavesRef = useRef<PendingLeafEviction[]>([])
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
   const failureHistoryRef = useRef<HmrFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
@@ -382,15 +384,26 @@ export function AppRouterProvider({
     pendingScrollPayloadRef.current = nextPending
     if (shouldScroll) window.scrollTo(0, 0)
 
-    const committedNavigationId = pendingNavigateCommittedIdRef.current
-    if (committedNavigationId == null) return
+    const pendingNavigationId = pendingNavigateCommittedIdRef.current
+    if (pendingNavigationId == null) return
+    if (committedNavigationId !== pendingNavigationId) return
     pendingNavigateCommittedIdRef.current = null
+
+    const evictions = pendingEvictLeavesRef.current
+    if (evictions.length > 0) {
+      pendingEvictLeavesRef.current = []
+      const current = currentRouteLocation()
+      for (const evict of evictions) {
+        if (evict.pathname !== current.pathname || evict.search !== current.search)
+          flightRouteCache.evictLeaf(evict.pathname, evict.search)
+      }
+    }
     window.dispatchEvent(
       new CustomEvent('rari:navigate-committed', {
-        detail: { navigationId: committedNavigationId },
+        detail: { navigationId: pendingNavigationId },
       }),
     )
-  }, [rscPayload, renderKey])
+  }, [rscPayload, renderKey, committedNavigationId])
 
   useEffect(() => {
     syncNavigationTransitionFromWindow()
@@ -793,6 +806,7 @@ export function AppRouterProvider({
         pendingHistory: detail.pendingHistory,
         routeLocation: nextLocation,
         pendingEvictLeaf: resolvedPayload.pendingEvictLeaf,
+        pendingEvictLeavesRef,
         startTransition,
         currentNavigationIdRef,
         pendingScrollPayloadRef,
@@ -804,6 +818,7 @@ export function AppRouterProvider({
           setHmrError(null)
         },
         pendingNavigateCommittedIdRef,
+        setCommittedNavigationId,
       })
 
       if (resolvedPayload.flightProtocol != null && resolvedPayload.flightProtocol !== '')

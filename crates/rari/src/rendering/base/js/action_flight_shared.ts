@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 async function readStreamToLastRscBinary(stream: ReadableStream<Uint8Array>): Promise<void> {
   const rari = (g['~rari'] ??= {})
   rari.lastRscBinary = await readStreamToUint8Array(stream)

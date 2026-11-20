@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { lazyExtScript, loadExtScriptOnce } from 'ext:init_utilities/utilities.ts'
 
 const lazyTelemetry = lazyExtScript<DenoTelemetryModule>('ext:deno_telemetry/telemetry.ts')

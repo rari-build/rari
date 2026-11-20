@@ -1,5 +1,4 @@
 // oxlint-disable typescript/no-unnecessary-type-parameters, typescript/no-unsafe-type-assertion
-/// <reference path="../types.d.ts" />
 
 import { core } from 'ext:core/mod.js'
 

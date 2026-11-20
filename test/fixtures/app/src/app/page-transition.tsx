@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { ViewTransition } from 'react'
 
-const navEnterExit = {
+export const navEnterExit = {
   'nav-forward': 'rari-page-vt',
   'nav-traverse': 'rari-page-vt',
   'nav-replace': 'rari-page-vt',

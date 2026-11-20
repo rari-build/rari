@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 interface FlightServerActions {
   decodeAction: (
     body: FormData,

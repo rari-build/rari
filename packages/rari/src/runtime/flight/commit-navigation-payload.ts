@@ -4,7 +4,6 @@ import type { PendingLeafEviction } from './apply-flight-patch'
 import type { PendingLoadingLeaf } from './pending-loading'
 import type { PendingScrollToTop } from './pending-scroll'
 import { addTransitionType, startTransition as defaultStartTransition } from 'react'
-import { flightRouteCache } from './route-cache'
 
 export interface PendingHistoryUpdate {
   readonly url: string
@@ -35,7 +34,9 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly setPendingLoadingLeaf?: Dispatch<SetStateAction<PendingLoadingLeaf | null>>
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
+  readonly setCommittedNavigationId?: Dispatch<SetStateAction<number | null>>
   readonly pendingEvictLeaf?: PendingLeafEviction
+  readonly pendingEvictLeavesRef?: RefObject<PendingLeafEviction[]>
 }
 
 export function resolveNavigationTransitionTypes(options: {
@@ -96,7 +97,9 @@ export function commitNavigationPayload<T extends object>(
     setPendingLoadingLeaf,
     clearHmrError,
     pendingNavigateCommittedIdRef,
+    setCommittedNavigationId,
     pendingEvictLeaf,
+    pendingEvictLeavesRef,
   } = options
 
   if (currentNavigationIdRef.current !== navigationId) return
@@ -116,9 +119,7 @@ export function commitNavigationPayload<T extends object>(
     setPendingLoadingLeaf?.(null)
     if (!maySuspend) applyPendingHistory(pendingHistory)
     if (routeLocation != null) setRouteLocation?.(routeLocation)
-    if (pendingEvictLeaf != null) {
-      flightRouteCache.evictLeaf(pendingEvictLeaf.pathname, pendingEvictLeaf.search)
-    }
+    if (pendingEvictLeaf != null) pendingEvictLeavesRef?.current.push(pendingEvictLeaf)
 
     setRenderKey(prev => {
       const commitKey = prev + 1
@@ -130,6 +131,7 @@ export function commitNavigationPayload<T extends object>(
     setRscPayload(parsedPayload)
     clearHmrError()
     pendingNavigateCommittedIdRef.current = navigationId
+    setCommittedNavigationId?.(navigationId)
   }
 
   startNavTransition(() => {

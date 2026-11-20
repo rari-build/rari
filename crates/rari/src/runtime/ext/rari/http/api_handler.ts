@@ -1,5 +1,3 @@
-/// <reference path="../core/types.d.ts" />
-
 interface RequestData {
   readonly url: string
   readonly method: string

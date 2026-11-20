@@ -1,5 +1,3 @@
-/// <reference path="../../types.d.ts" />
-
 ;(function initActionArgsValidationCore() {
   if (g.__RARI_ACTION_ARGS_VALIDATION__ !== undefined) return
 

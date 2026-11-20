@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { defineDenoLazyProps, lazyExtScript } from 'ext:init_utilities/utilities.ts'
 
 interface FsModule {

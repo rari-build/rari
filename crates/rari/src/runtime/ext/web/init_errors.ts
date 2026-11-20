@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { core, internals, primordials } from 'ext:core/mod.js'
 import { op_set_format_exception_callback } from 'ext:core/ops'
 import {

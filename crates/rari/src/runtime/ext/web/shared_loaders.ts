@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { primordials } from 'ext:core/mod.js'
 import { lazyExtScript, nonEnumerableGetter } from 'ext:init_utilities/utilities.ts'
 

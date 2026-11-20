@@ -1,5 +1,3 @@
-/// <reference path="../types.d.ts" />
-
 import { op_net_listen_udp, op_net_listen_unixpacket } from 'ext:core/ops'
 import { lazyExtScript } from 'ext:init_utilities/utilities.ts'
 

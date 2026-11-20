@@ -1,4 +1,3 @@
-/// <reference path="./deno-namespace.d.ts" />
 /** `Error` as exposed via `primordials`, matching the legacy 3-arg (message, fileName, lineNumber) constructor still used by some runtime shims. */
 interface PrimordialErrorConstructor extends ErrorConstructor {
   new (message?: string, fileName?: string, lineNumber?: number): Error

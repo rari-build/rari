@@ -1,5 +1,3 @@
-/// <reference path="./types.d.ts" />
-
 /** Types for exports from Deno extension scripts loaded via loadExtScript / lazyExtScript / lazyExtModule. */
 
 type DenoWebEventModule = typeof import('ext:deno_web/02_event.js')
