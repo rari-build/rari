@@ -280,9 +280,7 @@ fn resolve_transpile_options(
     Cow::Borrowed(options)
 }
 
-/// Scan leading comments for `@jsxImportSource` pragma. If found and the
-/// current JSX runtime is Classic, upgrade to Automatic to match the behavior
-/// of SWC/Babel where `@jsxImportSource` implies automatic runtime.
+/// Resolve file-level JSX pragmas before import analysis and transformation.
 fn maybe_upgrade_jsx_for_pragma<'a>(
     options: &Cow<'a, TranspileOptions>,
     comments: &[oxc::ast::ast::Comment],
@@ -342,24 +340,37 @@ fn jsx_pragma(
     source_text: &str,
     pragma: &str,
 ) -> Option<String> {
-    comments.iter().find_map(|comment| {
-        let text = comment.content_span().source_text(source_text);
-        parse_jsx_pragma(text, pragma)
-    })
+    comments
+        .iter()
+        .filter_map(|comment| {
+            parse_jsx_pragma(comment.content_span().source_text(source_text), pragma)
+        })
+        .last()
 }
 
 fn parse_jsx_pragma(text: &str, pragma: &str) -> Option<String> {
-    text.lines().find_map(|line| {
-        let line = line.trim();
-        let line = line.strip_prefix('*').unwrap_or(line).trim();
-        let after_pragma = line.strip_prefix(pragma)?;
-        if !after_pragma.chars().next().is_some_and(char::is_whitespace) {
-            return None;
+    let mut value = None;
+    for (index, _) in text.match_indices('@') {
+        if index > 0 && !matches!(text.as_bytes()[index - 1], b' ' | b'\t' | b'\r' | b'\n' | b'*') {
+            continue;
         }
-        let mut values = after_pragma.split_whitespace();
-        let import_source = values.next()?;
-        values.next().is_none().then(|| import_source.to_string())
-    })
+        let Some(after_pragma) = text[index..].strip_prefix(pragma) else {
+            continue;
+        };
+        if !after_pragma.as_bytes().first().is_some_and(|byte| matches!(byte, b' ' | b'\t')) {
+            continue;
+        }
+
+        let after_pragma = after_pragma.trim_start_matches([' ', '\t']);
+        let pragma_value = after_pragma
+            .split(|character: char| character.is_ascii_whitespace())
+            .next()
+            .unwrap_or("");
+        if !pragma_value.is_empty() {
+            value = Some(pragma_value.to_string());
+        }
+    }
+    value
 }
 
 fn parse_jsx_import_source_pragma(text: &str) -> Option<String> {
@@ -641,14 +652,23 @@ mod tests {
     }
 
     #[test]
-    fn jsx_import_source_pragma_requires_a_complete_directive() {
+    fn jsx_import_source_pragma_matches_oxc_directive_grammar() {
         assert_eq!(
             parse_jsx_import_source_pragma("* @jsxImportSource jsx_lib"),
             Some("jsx_lib".to_string())
         );
         assert_eq!(parse_jsx_import_source_pragma("@jsxImportSource"), None);
         assert_eq!(parse_jsx_import_source_pragma("@jsxImportSourceExtra jsx_lib"), None);
-        assert_eq!(parse_jsx_import_source_pragma("@jsxImportSource jsx_lib trailing"), None);
+        assert_eq!(
+            parse_jsx_import_source_pragma("@jsxImportSource jsx_lib trailing"),
+            Some("jsx_lib".to_string())
+        );
+        assert_eq!(parse_jsx_pragma("@jsx h @jsxFrag Fragment", "@jsx"), Some("h".to_string()));
+        assert_eq!(
+            parse_jsx_pragma("@jsx h @jsxFrag Fragment", "@jsxFrag"),
+            Some("Fragment".to_string())
+        );
+        assert_eq!(parse_jsx_pragma("mentions `@jsx h` in docs", "@jsx"), None);
     }
 
     #[test]
@@ -1006,8 +1026,7 @@ function App() {
     fn jsx_pragmas_keep_factory_imports_for_fragment_only_output() {
         let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
         let source = r#"
-/** @jsx h */
-/** @jsxFrag Fragment */
+/** @jsx h @jsxFrag Fragment */
 import { h, Fragment } from "./jsx.ts";
 type HFactory = typeof h;
 type FragmentFactory = typeof Fragment;

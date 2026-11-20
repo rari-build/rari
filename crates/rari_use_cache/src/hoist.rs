@@ -177,12 +177,12 @@ pub fn create_cache_declarations(input: CacheDeclarationInput<'_, '_>) -> Vec<St
     vec![inner, name_define, wrapper, register]
 }
 
-fn try_body(cache_name: &str, has_bound_args: bool, indent: usize) -> String {
+fn try_body(cache_name: &str, has_bound_args: bool, args_name: &str, indent: usize) -> String {
     let pad = " ".repeat(indent);
     let apply_args = if has_bound_args {
-        format!("{pad}            $$ACTION_BOUND_ARGS,\n{pad}            ...args")
+        format!("{pad}            $$ACTION_BOUND_ARGS,\n{pad}            ...{args_name}")
     } else {
-        format!("{pad}            ...args")
+        format!("{pad}            ...{args_name}")
     };
     format!(
         "{{\n{pad}    try {{\n{pad}        return {cache_name}.apply(null, [\n{apply_args}\n{pad}        ]);\n{pad}    }} catch (e) {{\n{pad}        if (e !== null && typeof e.then === \"function\") return await e;\n{pad}        throw e;\n{pad}    }}\n{pad}}}"
@@ -195,7 +195,12 @@ pub fn create_bound_replacement_init(
     closure_vars: &[String],
 ) -> String {
     if closure_vars.is_empty() {
-        return format!("async function(...args) {}", try_body(cache_name, false, 0));
+        return format!("async function(...args) {}", try_body(cache_name, false, "args", 0));
+    }
+
+    let mut args_name = "args".to_string();
+    while closure_vars.iter().any(|var_name| var_name == &args_name) {
+        args_name.push('_');
     }
 
     let mut bound_args = format!("[\n        {}", js_string(ref_id));
@@ -205,8 +210,8 @@ pub fn create_bound_replacement_init(
     bound_args.push_str("\n    ]");
 
     format!(
-        "async (...args) => {{\n    const $$ACTION_BOUND_ARGS = {bound_args};\n    {}\n}}",
-        try_body(cache_name, true, 4),
+        "async ({args_name}) => (async ($$ACTION_BOUND_ARGS) => {})({bound_args})",
+        try_body(cache_name, true, &args_name, 4),
     )
 }
 
@@ -266,10 +271,24 @@ mod tests {
         let replacement =
             create_bound_replacement_init("cache", "action-id", &["initialized_later".to_string()]);
 
-        assert!(replacement.starts_with("async (...args) => {"));
+        assert!(replacement.starts_with("async (args) => (async ($$ACTION_BOUND_ARGS) =>"));
+        assert!(
+            replacement.contains("})([\n        \"action-id\",\n        initialized_later\n    ])")
+        );
+    }
+
+    #[test]
+    fn bound_replacement_args_parameter_does_not_shadow_captured_args() {
+        let replacement = create_bound_replacement_init(
+            "cache",
+            "action-id",
+            &["args".to_string(), "args_".to_string(), "$$ACTION_BOUND_ARGS".to_string()],
+        );
+
+        assert!(replacement.starts_with("async (args__) => (async ($$ACTION_BOUND_ARGS) =>"));
         assert!(replacement.contains(
-            "const $$ACTION_BOUND_ARGS = [\n        \"action-id\",\n        initialized_later\n    ];"
+            "\"action-id\",\n        args,\n        args_,\n        $$ACTION_BOUND_ARGS"
         ));
-        assert!(!replacement.starts_with("(($$ACTION_BOUND_ARGS)"));
+        assert!(replacement.contains("...args__"));
     }
 }
