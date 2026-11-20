@@ -109,18 +109,12 @@ impl CjsCodeAnalyzer {
                 let is_cjs = cjs_tracker.is_cjs(parsed_source.specifier(), media_type, is_script);
 
                 if is_cjs {
-                    Ok(CjsAnalysis::Cjs(ModuleExportsAndReExports {
-                        exports: vec![],
-                        reexports: vec![],
-                    }))
+                    Ok(CjsAnalysis::Cjs(parsed_source.analyze_cjs()))
                 } else {
                     match esm_analysis_mode {
                         EsmAnalysisMode::SourceOnly => Ok(CjsAnalysis::Esm),
                         EsmAnalysisMode::SourceImportsAndExports => {
-                            Ok(CjsAnalysis::EsmAnalysis(ModuleExportsAndReExports {
-                                exports: vec![],
-                                reexports: vec![],
-                            }))
+                            Ok(CjsAnalysis::EsmAnalysis(parsed_source.analyze_es_runtime_exports()))
                         }
                     }
                 }

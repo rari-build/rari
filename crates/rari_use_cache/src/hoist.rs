@@ -47,16 +47,15 @@ fn params_text_without_this<'s>(
 
     let params_start = function.params.span.start as usize + 1;
     let this_end = this_param.span.end as usize - params_start;
-    let mut remaining_start = this_end;
-    while params.as_bytes().get(remaining_start).is_some_and(u8::is_ascii_whitespace) {
-        remaining_start += 1;
-    }
-    if params.as_bytes().get(remaining_start) == Some(&b',') {
-        remaining_start += 1;
-    }
-
+    let remaining_start = function
+        .params
+        .items
+        .first()
+        .map(|param| param.span.start)
+        .or_else(|| function.params.rest.as_ref().map(|rest| rest.span.start))
+        .map_or(params.len(), |start| start as usize - params_start);
     let this_text = &params[..this_end];
-    (Some(this_text), params[remaining_start..].trim_start())
+    (Some(this_text), &params[remaining_start..])
 }
 
 fn body_without_directives(source: &str, function: &Function<'_>) -> String {
@@ -236,8 +235,7 @@ mod tests {
 
     #[test]
     fn explicit_this_parameter_is_not_a_runtime_argument() {
-        let source =
-            "async function f(this: { value: number }, a: number) { \"use cache\"; return a }";
+        let source = "async function f(this: { value: number } /* comment */, a: number) { \"use cache\"; return a }";
         let allocator = Allocator::default();
         let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
         assert!(matches!(ret.program.body.first(), Some(Statement::FunctionDeclaration(_))));
@@ -260,5 +258,6 @@ mod tests {
             declarations[0]
                 .contains("function f(this: { value: number }, $$ACTION_BOUND_ARGS, a: number)")
         );
+        assert!(!declarations[0].contains("/* comment */"));
     }
 }

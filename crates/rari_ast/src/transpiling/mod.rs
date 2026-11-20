@@ -6,8 +6,8 @@ use deno_error::JsError;
 use deno_media_type::MediaType;
 use oxc::{
     allocator::{Allocator, CloneIn},
-    ast::ast::{Program, Statement},
-    ast_visit::VisitMut,
+    ast::ast::{JSXElement, JSXFragment, Program, Statement},
+    ast_visit::{Visit, VisitMut, walk},
     semantic::{Scoping, SemanticBuilder},
     transformer::{DecoratorOptions, JsxOptions, TransformOptions, Transformer, TypeScriptOptions},
 };
@@ -222,6 +222,13 @@ impl<'a> ParsedSource<'a> {
             self.text.as_ref(),
         );
 
+        let mut scoping = build_scoping(&program, &self.specifier, self.text_info_lazy())?;
+        if transpile_options.imports_not_used_as_values == ImportsNotUsedAsValues::Error {
+            ensure_no_type_only_imports(&program, &scoping, &transpile_options)?;
+        } else if transpile_options.imports_not_used_as_values == ImportsNotUsedAsValues::Preserve {
+            transforms::preserve_type_only_imports(&mut program, &scoping, &transpile_options);
+        }
+
         // Apply custom pre-transforms
         if transpile_options.var_decl_imports {
             let mut strip_exports = transforms::StripExports::new(allocator);
@@ -231,41 +238,11 @@ impl<'a> ParsedSource<'a> {
             // the TS pass so that the transformer doesn't optimize them away
             let mut import_to_var = transforms::ImportDeclsToVarDecls::new(allocator);
             import_to_var.visit_program(&mut program);
+            scoping = build_scoping(&program, &self.specifier, self.text_info_lazy())?;
         }
 
         // Build OXC TransformOptions
         let transform_options = build_transform_options(&transpile_options, &self.specifier);
-
-        // Run semantic analysis to get scoping info. This also checks for early
-        // errors the parser doesn't report (ex. legacy octal literals in strict
-        // mode).
-        let semantic_ret = SemanticBuilder::new()
-            .with_check_syntax_error(true)
-            .with_enum_eval(true)
-            .build(&program);
-        if semantic_ret.diagnostics.has_errors() {
-            let text_info = self.text_info_lazy().clone();
-            return Err(TranspileError::ParseErrors(ParseDiagnosticsError(
-                semantic_ret
-                    .diagnostics
-                    .into_iter()
-                    .filter(|err| err.severity == oxc::diagnostics::Severity::Error)
-                    .map(|err| {
-                        ParseDiagnostic::from_oxc_diagnostic(
-                            err,
-                            &self.specifier,
-                            text_info.clone(),
-                        )
-                    })
-                    .collect(),
-            )));
-        }
-        let scoping = semantic_ret.semantic.into_scoping();
-        if transpile_options.imports_not_used_as_values == ImportsNotUsedAsValues::Error {
-            ensure_no_type_only_imports(&program, &scoping)?;
-        } else if transpile_options.imports_not_used_as_values == ImportsNotUsedAsValues::Preserve {
-            transforms::preserve_type_only_imports(&mut program, &scoping);
-        }
 
         // Run OXC transformer (TS strip, JSX, decorators, etc.)
         let transformer =
@@ -363,12 +340,16 @@ fn build_transform_options(
     options: &TranspileOptions,
     _specifier: &ModuleSpecifier,
 ) -> TransformOptions {
-    let typescript = TypeScriptOptions {
+    let mut typescript = TypeScriptOptions {
         only_remove_type_imports: options.verbatim_module_syntax,
         // inline `const enum` values like TypeScript does
         optimize_const_enums: true,
         ..Default::default()
     };
+    if let Some(JsxRuntime::Classic(classic)) = &options.jsx {
+        typescript.jsx_pragma = Cow::Owned(classic.factory.clone());
+        typescript.jsx_pragma_frag = Cow::Owned(classic.fragment_factory.clone());
+    }
 
     let jsx = if let Some(jsx_runtime) = &options.jsx {
         match jsx_runtime {
@@ -448,9 +429,9 @@ pub fn transform_program<'a>(
     let semantic_ret = SemanticBuilder::new().with_enum_eval(true).build(program);
     let scoping = semantic_ret.semantic.into_scoping();
     if options.imports_not_used_as_values == ImportsNotUsedAsValues::Error {
-        ensure_no_type_only_imports(program, &scoping)?;
+        ensure_no_type_only_imports(program, &scoping, options)?;
     } else if options.imports_not_used_as_values == ImportsNotUsedAsValues::Preserve {
-        transforms::preserve_type_only_imports(program, &scoping);
+        transforms::preserve_type_only_imports(program, &scoping, options);
     }
 
     // Run transformer
@@ -476,7 +457,9 @@ fn ensure_supported_decorators(options: &TranspileOptions) -> Result<(), Transfo
 fn ensure_no_type_only_imports(
     program: &Program<'_>,
     scoping: &Scoping,
+    options: &TranspileOptions,
 ) -> Result<(), TransformProgramError> {
+    let jsx_factory_names = jsx_factory_import_names(program, options);
     for stmt in &program.body {
         let Statement::ImportDeclaration(import_decl) = stmt else {
             continue;
@@ -505,6 +488,10 @@ fn ensure_no_type_only_imports(
                     has_value_reference = true;
                 }
             }
+            has_value_reference |= jsx_factory_names
+                .iter()
+                .flatten()
+                .any(|name| *name == specifier.local().name.as_str());
             if has_type_reference && !has_value_reference {
                 return Err(TransformProgramError::Transform(format!(
                     "Import '{}' is only used as a type; use an explicit type-only import",
@@ -514,6 +501,58 @@ fn ensure_no_type_only_imports(
         }
     }
     Ok(())
+}
+
+struct JsxUsage {
+    element: bool,
+    fragment: bool,
+}
+
+impl<'a> Visit<'a> for JsxUsage {
+    fn visit_jsx_element(&mut self, element: &JSXElement<'a>) {
+        self.element = true;
+        walk::walk_jsx_element(self, element);
+    }
+
+    fn visit_jsx_fragment(&mut self, fragment: &JSXFragment<'a>) {
+        self.fragment = true;
+        walk::walk_jsx_fragment(self, fragment);
+    }
+}
+
+fn jsx_factory_import_names<'a>(
+    program: &Program<'_>,
+    options: &'a TranspileOptions,
+) -> [Option<&'a str>; 2] {
+    let Some(JsxRuntime::Classic(classic)) = &options.jsx else {
+        return [None, None];
+    };
+    let mut usage = JsxUsage { element: false, fragment: false };
+    usage.visit_program(program);
+    [
+        usage.element.then(|| classic.factory.split('.').next().unwrap_or("")),
+        usage.fragment.then(|| classic.fragment_factory.split('.').next().unwrap_or("")),
+    ]
+}
+
+fn build_scoping(
+    program: &Program<'_>,
+    specifier: &ModuleSpecifier,
+    source: &crate::SourceTextInfo,
+) -> Result<Scoping, TranspileError> {
+    let semantic_ret =
+        SemanticBuilder::new().with_check_syntax_error(true).with_enum_eval(true).build(program);
+    if semantic_ret.diagnostics.has_errors() {
+        return Err(TranspileError::ParseErrors(ParseDiagnosticsError(
+            semantic_ret
+                .diagnostics
+                .into_iter()
+                .filter(|err| err.severity == oxc::diagnostics::Severity::Error)
+                .map(|err| ParseDiagnostic::from_oxc_diagnostic(err, specifier, source.clone()))
+                .collect(),
+        )));
+    }
+    Ok(semantic_ret.semantic.into_scoping())
 }
 
 fn ensure_no_transform_errors(
@@ -2236,5 +2275,77 @@ export function formatter(record: Record) {
         assert!(!removed.contains("./foo.ts"));
         assert!(preserved.contains("import \"./foo.ts\";"));
         assert!(errored.unwrap_err().to_string().contains("only used as a type"));
+
+        let verbatim_preserved = program
+            .transpile(
+                &allocator,
+                &TranspileOptions {
+                    verbatim_module_syntax: true,
+                    imports_not_used_as_values: ImportsNotUsedAsValues::Preserve,
+                    ..Default::default()
+                },
+                &TranspileModuleOptions::default(),
+                &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+            )
+            .unwrap()
+            .text;
+        assert!(verbatim_preserved.contains("import { Foo } from \"./foo.ts\";"));
+
+        let errored_before_lowering = program.transpile(
+            &allocator,
+            &TranspileOptions {
+                imports_not_used_as_values: ImportsNotUsedAsValues::Error,
+                var_decl_imports: true,
+                ..Default::default()
+            },
+            &TranspileModuleOptions::default(),
+            &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+        );
+        assert!(errored_before_lowering.unwrap_err().to_string().contains("only used as a type"));
+    }
+
+    #[test]
+    fn jsx_factory_and_fragment_imports_are_value_references() {
+        let allocator = Allocator::default();
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
+        let source = r#"
+import { h, Fragment } from "./jsx.ts";
+type HFactory = typeof h;
+type FragmentFactory = typeof Fragment;
+const element = <><div /></>;
+"#;
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::Tsx,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+        let jsx = Some(JsxRuntime::Classic(JsxClassicOptions {
+            factory: "h".to_string(),
+            fragment_factory: "Fragment".to_string(),
+        }));
+        for mode in [ImportsNotUsedAsValues::Error, ImportsNotUsedAsValues::Preserve] {
+            let code = program
+                .transpile(
+                    &allocator,
+                    &TranspileOptions {
+                        jsx: jsx.clone(),
+                        imports_not_used_as_values: mode,
+                        ..Default::default()
+                    },
+                    &TranspileModuleOptions::default(),
+                    &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+                )
+                .unwrap()
+                .text;
+            assert!(code.contains("import { h, Fragment } from \"./jsx.ts\";"));
+            assert!(code.contains("h(Fragment"));
+        }
     }
 }

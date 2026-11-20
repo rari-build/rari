@@ -23,6 +23,7 @@ impl ParsedSource<'_> {
         let mut visitor = CjsVisitor {
             scoping: &scoping,
             exports: HashSet::new(),
+            unsafe_exports: HashSet::new(),
             reexports: HashSet::new(),
             var_assignments: HashMap::new(),
             enumerated_key_scopes: Vec::new(),
@@ -35,6 +36,7 @@ impl ParsedSource<'_> {
 struct CjsVisitor<'a> {
     scoping: &'a oxc::semantic::Scoping,
     exports: HashSet<String>,
+    unsafe_exports: HashSet<String>,
     reexports: HashSet<String>,
     var_assignments: HashMap<oxc::semantic::SymbolId, String>,
     enumerated_key_scopes: Vec<(oxc::semantic::SymbolId, oxc::semantic::SymbolId)>,
@@ -42,7 +44,11 @@ struct CjsVisitor<'a> {
 
 impl CjsVisitor<'_> {
     fn take_result(self) -> CjsAnalysis {
-        let mut exports = self.exports.into_iter().collect::<Vec<_>>();
+        let mut exports = self
+            .exports
+            .into_iter()
+            .filter(|name| !self.unsafe_exports.contains(name))
+            .collect::<Vec<_>>();
         exports.sort_unstable();
         let mut reexports = self.reexports.into_iter().collect::<Vec<_>>();
         reexports.sort_unstable();
@@ -63,6 +69,7 @@ impl CjsVisitor<'_> {
     }
 
     fn add_unsafe_getter(&mut self, name: &str) {
+        self.unsafe_exports.insert(name.to_string());
         self.exports.remove(name);
     }
 
@@ -74,6 +81,11 @@ impl CjsVisitor<'_> {
         let obj_ident = get_static_member_obj_ident(member)?;
         let object_symbol = get_reference_symbol_id(obj_ident, self.scoping)?;
         let key_symbol = get_reference_symbol_id(key, self.scoping)?;
+        let member_key = get_computed_member_prop_ident(member)?;
+        let member_key_symbol = get_reference_symbol_id(member_key, self.scoping)?;
+        if member_key_symbol != key_symbol {
+            return None;
+        }
         if !self.enumerated_key_scopes.iter().any(|&(enumerated_key, enumerated_object)| {
             enumerated_key == key_symbol && enumerated_object == object_symbol
         }) {
@@ -162,10 +174,14 @@ impl<'a> Visit<'a> for CjsVisitor<'_> {
         for declarator in &decl.declarations {
             if let Some(id) = declarator.id.get_binding_identifier()
                 && let Some(symbol_id) = id.symbol_id.get()
-                && let Some(init) = &declarator.init
-                && let Some(require_value) = get_expr_require_value(init, self.scoping)
             {
-                self.var_assignments.insert(symbol_id, require_value.to_string());
+                if let Some(init) = &declarator.init {
+                    if let Some(require_value) = get_expr_require_value(init, self.scoping) {
+                        self.var_assignments.insert(symbol_id, require_value.to_string());
+                    } else {
+                        self.var_assignments.remove(&symbol_id);
+                    }
+                }
             }
         }
         walk::walk_variable_declaration(self, decl);
@@ -194,12 +210,20 @@ impl<'a> Visit<'a> for CjsVisitor<'_> {
     }
 
     fn visit_assignment_expression(&mut self, assign_expr: &AssignmentExpression<'a>) {
+        if let AssignmentTarget::AssignmentTargetIdentifier(ident) = &assign_expr.left
+            && let Some(reference_id) = ident.reference_id.get()
+        {
+            let reference = self.scoping.get_reference(reference_id);
+            if reference.is_write()
+                && let Some(symbol_id) = reference.symbol_id()
+            {
+                self.var_assignments.remove(&symbol_id);
+            }
+        }
+
         if assign_expr.operator == AssignmentOperator::Assign {
             match &assign_expr.left {
-                AssignmentTarget::AssignmentTargetIdentifier(_) => {
-                    // Reassigning the alias does not replace `module.exports`.
-                    // Nested assignments are still discovered by walking the RHS.
-                }
+                AssignmentTarget::AssignmentTargetIdentifier(_) => {}
                 _ => {
                     if let Some(member) = assign_expr.left.as_member_expression() {
                         if is_module_exports_member(member, self.scoping) {
@@ -979,6 +1003,36 @@ mod test {
     "#,
         );
         tester.assert_reexports(vec!["./dependency"]);
+
+        let tester = parse_cjs(
+            r#"
+      const dependency = require("./dependency");
+      Object.keys(dependency).forEach(key => {
+        exports[key] = dependency.one;
+      });
+      Object.keys(dependency).forEach(key => {
+        Object.defineProperty(exports, key, {
+          enumerable: true,
+          get: () => dependency.one
+        });
+      });
+    "#,
+        );
+        tester.assert_reexports(vec![]);
+        tester.assert_exports(vec![]);
+    }
+
+    #[test]
+    fn reassigned_require_aliases_are_not_reexports() {
+        let tester = parse_cjs(
+            r#"
+      var dependency = require("./dependency");
+      __export(dependency);
+      dependency = {};
+      __export(dependency);
+    "#,
+        );
+        tester.assert_reexports(vec!["./dependency"]);
     }
 
     #[test]
@@ -1017,6 +1071,25 @@ mod test {
         );
 
         tester.assert_exports(vec!["safe"]);
+    }
+
+    #[test]
+    fn unsafe_getter_exclusions_apply_after_local_export_analysis() {
+        let tester = parse_cjs(
+            r#"
+      Object.defineProperty(exports, "unsafe", {
+        get: () => dynamic()
+      });
+      exports.unsafe = 1;
+      module.exports = { unsafe: 2, safe: 3 };
+      Object.defineProperty(exports, "./dependency", {
+        get: () => dynamic()
+      });
+      module.exports = require("./dependency");
+    "#,
+        );
+        tester.assert_exports(vec!["safe"]);
+        tester.assert_reexports(vec!["./dependency"]);
     }
 
     #[test]

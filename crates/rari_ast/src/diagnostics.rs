@@ -470,7 +470,7 @@ fn print_snippet(
                     highlight.range.end.byte_index(source).clamp(highlight_start, line_end_pos);
                 (
                     display_width(source.range_text(line_start_pos, highlight_start)),
-                    display_width(source.range_text(highlight_start, highlight_end)),
+                    display_width(source.range_text(highlight_start, highlight_end)).max(1),
                 )
             } else if is_first_line {
                 let highlight_start =
@@ -698,6 +698,34 @@ mod tests {
         );
         assert!(output.contains("1 | a\n"));
         assert!(output.contains("2 | b\n"));
+    }
+
+    #[test]
+    fn test_snippet_zero_width_ranges_render_one_caret() {
+        for (text, range, source_line) in [
+            (
+                "a\r\nb",
+                DiagnosticSourceRange {
+                    start: DiagnosticSourcePos::ByteIndex(1),
+                    end: DiagnosticSourcePos::ByteIndex(2),
+                },
+                "| a",
+            ),
+            (
+                "abc",
+                DiagnosticSourceRange {
+                    start: DiagnosticSourcePos::ByteIndex(3),
+                    end: DiagnosticSourcePos::ByteIndex(3),
+                },
+                "| abc",
+            ),
+        ] {
+            let output = render(text, range);
+            let source_line_index =
+                output.lines().position(|line| line.contains(source_line)).unwrap();
+            let underline = output.lines().nth(source_line_index + 1).unwrap();
+            assert_eq!(underline.matches('^').count(), 1, "{output}");
+        }
     }
 
     #[test]

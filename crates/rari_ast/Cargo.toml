@@ -12,14 +12,14 @@ semantic = ["oxc/semantic"]
 visit = ["oxc/ast_visit"]
 cjs = ["visit"]
 emit = ["codegen", "dep:base64"]
-transpiling = ["emit", "semantic", "visit"]
+transpiling = ["emit", "semantic", "visit", "oxc/transformer"]
 
 [dependencies]
 base64 = { workspace = true, optional = true }
 deno_error = { workspace = true }
 deno_media_type = "0.4.0"
 deno_terminal = "0.2.2"
-oxc = { version = "0.159.0", features = ["semantic", "codegen", "transformer", "ast_visit"] }
+oxc = { version = "0.159.0", features = ["semantic", "ast_visit"] }
 percent-encoding = "2.3.2"
 serde = { workspace = true }
 thiserror = { workspace = true }

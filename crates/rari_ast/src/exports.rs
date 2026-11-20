@@ -1,6 +1,7 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
 use oxc::{
+    ast::ast::{ExportDefaultDeclarationKind, Statement},
     semantic::SemanticBuilder,
     str::Ident,
     syntax::module_record::{ExportEntry, ExportExportName, ExportLocalName},
@@ -26,7 +27,7 @@ impl ParsedSource<'_> {
     /// to know the exports of the ESM module so it can create its
     /// wrapper ESM module.
     pub fn analyze_es_runtime_exports(&self) -> ModuleExportsAndReExports {
-        fn is_local_type_only(entry: &ExportEntry<'_>, scoping: &oxc::semantic::Scoping) -> bool {
+        fn is_local_non_runtime(entry: &ExportEntry<'_>, scoping: &oxc::semantic::Scoping) -> bool {
             if entry.module_request.is_some() {
                 return false;
             }
@@ -35,7 +36,29 @@ impl ParsedSource<'_> {
             };
             scoping
                 .get_binding(scoping.root_scope_id(), Ident::from(name.name.as_str()))
-                .is_some_and(|symbol| scoping.symbol_flags(symbol).is_type())
+                .is_some_and(|symbol| {
+                    let flags = scoping.symbol_flags(symbol);
+                    flags.is_type() || flags.is_ambient()
+                })
+        }
+
+        fn is_runtime_default_class(
+            entry: &ExportEntry<'_>,
+            program: &oxc::ast::ast::Program<'_>,
+        ) -> bool {
+            entry.module_request.is_none()
+                && matches!(&entry.export_name, ExportExportName::Default(_))
+                && program.body.iter().any(|statement| {
+                    matches!(
+                        statement,
+                        Statement::ExportDefaultDeclaration(declaration)
+                            if matches!(
+                                &declaration.declaration,
+                                ExportDefaultDeclarationKind::ClassDeclaration(class)
+                                    if !class.declare
+                            )
+                    )
+                })
         }
 
         let module_record = self.module_record();
@@ -48,7 +71,10 @@ impl ParsedSource<'_> {
             .local_export_entries
             .iter()
             .chain(module_record.indirect_export_entries.iter())
-            .filter(|entry| !entry.is_type && !is_local_type_only(entry, &scoping))
+            .filter(|entry| {
+                (!entry.is_type || is_runtime_default_class(entry, self.program()))
+                    && !is_local_non_runtime(entry, &scoping)
+            })
             .collect();
         // The module record groups entries by kind, so sort them back into
         // source order.
@@ -227,6 +253,7 @@ export type { F };
 export { type H, i };
 export type * from './types.js';
 export declare const f: number;
+export declare class Ambient {}
 export const g = 1;
 ",
         );
@@ -257,6 +284,8 @@ export { value as directValue } from './other.js';
     #[test]
     fn runtime_exports_default_decl() {
         let tester = parse("export default class A {}");
+        tester.assert_exports(&["default"]);
+        let tester = parse("export default abstract class Base {}");
         tester.assert_exports(&["default"]);
         let tester = parse("export default function () {}");
         tester.assert_exports(&["default"]);

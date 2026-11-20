@@ -11,6 +11,7 @@ use oxc::{
     syntax::operator::AssignmentOperator,
 };
 
+use super::{TranspileOptions, jsx_factory_import_names};
 use crate::JSStrExt;
 
 /// Transforms import declarations to variable declarations
@@ -166,7 +167,12 @@ fn import_property_key<'a>(
     }
 }
 
-pub fn preserve_type_only_imports(program: &mut Program<'_>, scoping: &Scoping) {
+pub fn preserve_type_only_imports(
+    program: &mut Program<'_>,
+    scoping: &Scoping,
+    options: &TranspileOptions,
+) {
+    let jsx_factory_names = jsx_factory_import_names(program, options);
     for stmt in &mut program.body {
         let Statement::ImportDeclaration(import_decl) = stmt else {
             continue;
@@ -195,11 +201,17 @@ pub fn preserve_type_only_imports(program: &mut Program<'_>, scoping: &Scoping) 
                     has_value_reference = true;
                 }
             }
+            if !explicit_type {
+                has_value_reference |= jsx_factory_names
+                    .iter()
+                    .flatten()
+                    .any(|name| *name == specifier.local().name.as_str());
+            }
             has_type_only_import |= has_type_reference;
             has_value_import |= has_value_reference;
         }
 
-        if has_type_only_import && !has_value_import {
+        if has_type_only_import && !has_value_import && !options.verbatim_module_syntax {
             import_decl.specifiers = None;
         }
     }

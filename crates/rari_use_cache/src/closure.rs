@@ -3,7 +3,8 @@ use rari_ast::oxc::{
         ArrowFunctionBody, ArrowFunctionExpression, BindingPattern, BlockStatement, CatchClause,
         Class, Declaration, ExportDefaultDeclarationKind, ForInStatement, ForOfStatement,
         ForStatement, FormalParameters, Function, FunctionBody, IdentifierReference,
-        ImportDeclarationSpecifier, Statement, VariableDeclaration, VariableDeclarationKind,
+        ImportDeclarationSpecifier, Statement, StaticBlock, VariableDeclaration,
+        VariableDeclarationKind,
     },
     ast_visit::{Visit, walk},
     syntax::scope::ScopeFlags,
@@ -55,7 +56,17 @@ pub fn collect_module_level_idents(stmt: &Statement<'_>) -> FxHashSet<String> {
             _ => {}
         },
         Statement::ImportDeclaration(import) => {
+            if import.import_kind.is_type() {
+                return idents;
+            }
             for spec in import.specifiers.iter().flatten() {
+                if matches!(
+                    spec,
+                    ImportDeclarationSpecifier::ImportSpecifier(named)
+                        if named.import_kind.is_type()
+                ) {
+                    continue;
+                }
                 let local = match spec {
                     ImportDeclarationSpecifier::ImportSpecifier(named) => &named.local,
                     ImportDeclarationSpecifier::ImportDefaultSpecifier(default) => &default.local,
@@ -169,6 +180,8 @@ impl<'a> Visit<'a> for FunctionVarCollector {
     fn visit_function(&mut self, _function: &Function<'a>, _flags: ScopeFlags) {}
 
     fn visit_arrow_function_expression(&mut self, _arrow: &ArrowFunctionExpression<'a>) {}
+
+    fn visit_static_block(&mut self, _block: &StaticBlock<'a>) {}
 }
 
 fn collect_function_var_names(body: &FunctionBody<'_>) -> FxHashSet<String> {
@@ -337,6 +350,17 @@ impl<'a> Visit<'a> for ClosureCollector<'_> {
 
     fn visit_for_of_statement(&mut self, stmt: &ForOfStatement<'a>) {
         self.with_block_scope(FxHashSet::default(), |this| walk::walk_for_of_statement(this, stmt));
+    }
+
+    fn visit_static_block(&mut self, block: &StaticBlock<'a>) {
+        let mut var_collector = FunctionVarCollector { names: FxHashSet::default() };
+        for stmt in &block.body {
+            var_collector.visit_statement(stmt);
+        }
+        let block_names = collect_block_names(&block.body);
+        self.with_function_scope(var_collector.names, |this| {
+            this.with_block_scope(block_names, |this| walk::walk_static_block(this, block));
+        });
     }
 }
 
@@ -507,5 +531,34 @@ mod tests {
         let body = function.body.as_ref().expect("expected a body");
         let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
         assert_eq!(found, vec!["inner".to_string()]);
+    }
+
+    #[test]
+    fn static_block_bindings_are_scoped_separately() {
+        let allocator = Allocator::default();
+        let source = "const shared = 1; const used = 2; async function f() { class C { static { var shared; console.log(shared, used); } } return shared; }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(2) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        assert_eq!(
+            collect_closure_idents(body, &module, &FxHashSet::default(), Some("f")),
+            vec!["used".to_string(), "shared".to_string()]
+        );
+    }
+
+    #[test]
+    fn type_only_imports_are_not_module_runtime_idents() {
+        let allocator = Allocator::default();
+        let source = r#"import type Foo from "types"; import { type Bar, value } from "values";"#;
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let idents: FxHashSet<String> =
+            ret.program.body.iter().flat_map(collect_module_level_idents).collect();
+        assert_eq!(idents, FxHashSet::from_iter(["value".to_string()]));
     }
 }

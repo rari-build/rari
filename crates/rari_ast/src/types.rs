@@ -306,57 +306,25 @@ fn get_range_highlight_entries(
     source: &SourceTextInfo,
     byte_range: Span,
 ) -> (Vec<HighlightEntry>, usize) {
-    fn get_column_index_of_pos(text: &str, pos: usize) -> usize {
-        let line_start_byte_pos = get_line_start_byte_pos(text, pos);
-        text[line_start_byte_pos..pos].chars().count()
+    fn get_column_index_of_pos(source: &SourceTextInfo, line_index: usize, pos: usize) -> usize {
+        let line_start = source.line_start(line_index);
+        let line_end = source.line_end(line_index);
+        source.range_text(line_start, pos.clamp(line_start, line_end)).chars().count()
     }
 
-    fn get_line_start_byte_pos(text: &str, pos: usize) -> usize {
-        let text_bytes = text.as_bytes();
-        for i in (0..pos).rev() {
-            if text_bytes.get(i) == Some(&(b'\n')) {
-                return i + 1;
-            }
-        }
-        0
+    let start = byte_range.start as usize;
+    let end = byte_range.end as usize;
+    let start_line_index = source.line_index(start);
+    let end_line_index = source.line_index(end);
+    let mut first_line_index = start_line_index;
+    while first_line_index > 0 && source.line_text(first_line_index).trim().is_empty() {
+        first_line_index -= 1;
     }
-
-    fn get_text_and_error_range(
-        source: &SourceTextInfo,
-        byte_range: Span,
-    ) -> (&str, (usize, usize), usize) {
-        let start = byte_range.start as usize;
-        let end = byte_range.end as usize;
-        let mut first_line_index = source.line_index(start);
-        let mut first_line_start = source.line_start(first_line_index);
-        let last_line_end = source.line_end(source.line_index(end));
-        let mut sub_text = source.range_text(first_line_start, last_line_end);
-
-        // while the text is empty, show the previous line
-        while sub_text.trim().is_empty() && first_line_index > 0 {
-            first_line_index -= 1;
-            first_line_start = source.line_start(first_line_index);
-            sub_text = source.range_text(first_line_start, last_line_end);
-        }
-
-        let error_start = start - first_line_start;
-        let error_end = error_start + (end - start);
-        (sub_text, (error_start, error_end), first_line_index)
-    }
-
-    let (sub_text, (error_start, error_end), first_line_index) =
-        get_text_and_error_range(source, byte_range);
 
     let mut entries = Vec::new();
-    // don't use .lines() here because it will trim any empty
-    // lines, which might for some reason be part of the range
-    let lines = sub_text.split('\n').collect::<Vec<_>>();
-    let line_count = lines.len();
-    for (i, mut line) in lines.into_iter().enumerate() {
-        if line.ends_with('\r') {
-            line = &line[..line.len() - 1];
-        }
-        let is_last_line = i == line_count - 1;
+    for (i, line_index) in (first_line_index..=end_line_index).enumerate() {
+        let line = source.line_text(line_index);
+        let is_last_line = line_index == end_line_index;
         if i > 2 && !is_last_line {
             continue;
         }
@@ -365,10 +333,16 @@ fn get_range_highlight_entries(
             continue;
         }
 
-        let mut error_start_char_index =
-            if i == 0 { get_column_index_of_pos(sub_text, error_start) } else { 0 };
-        let mut error_end_char_index = if is_last_line {
-            get_column_index_of_pos(sub_text, error_end)
+        let has_highlight = (start_line_index..=end_line_index).contains(&line_index);
+        let mut error_start_char_index = if has_highlight && line_index == start_line_index {
+            get_column_index_of_pos(source, line_index, start)
+        } else {
+            0
+        };
+        let mut error_end_char_index = if !has_highlight {
+            0
+        } else if is_last_line {
+            get_column_index_of_pos(source, line_index, end)
         } else {
             line.chars().count()
         };
@@ -399,20 +373,20 @@ fn get_range_highlight_entries(
             line.to_string()
         };
 
-        let underline = format!(
-            "{}{}",
-            " ".repeat(error_start_char_index),
-            "~".repeat(std::cmp::max(
-                1, // this means it's the end of the line, so display a single ~
-                error_end_char_index - error_start_char_index,
-            ))
-        );
+        let underline = if has_highlight {
+            format!(
+                "{}{}",
+                " ".repeat(error_start_char_index),
+                "~".repeat(std::cmp::max(
+                    1, // this means it's the end of the line, so display a single ~
+                    error_end_char_index - error_start_char_index,
+                ))
+            )
+        } else {
+            String::new()
+        };
 
-        entries.push(HighlightEntry::SourceLine {
-            line_number: first_line_index + i + 1,
-            text,
-            underline,
-        });
+        entries.push(HighlightEntry::SourceLine { line_number: line_index + 1, text, underline });
     }
     (entries, first_line_index)
 }
@@ -571,6 +545,28 @@ mod test {
             ),
             concat!("  testing\n", "        ~\n", "test\n", "~~~~",),
         );
+    }
+
+    #[test]
+    fn range_highlight_uses_ecmascript_line_boundaries() {
+        let text = SourceTextInfo::from_string("a\r\nb\rc\u{2028}d\u{2029}e".to_string());
+        for (line_index, expected) in ["a", "b", "c", "d", "e"].into_iter().enumerate() {
+            assert_eq!(
+                get_range_text_highlight(
+                    &text,
+                    Span::new(text.line_start(line_index) as u32, text.line_end(line_index) as u32,)
+                ),
+                format!("{expected}\n~")
+            );
+        }
+    }
+
+    #[test]
+    fn range_highlight_retains_preceding_code_line_for_whitespace() {
+        let text = SourceTextInfo::from_string("code\n  ".to_string());
+        let highlight = get_range_text_highlight(&text, Span::new(5, 7));
+        assert!(highlight.starts_with("code\n"));
+        assert!(highlight.ends_with("  \n~~"));
     }
 
     #[test]

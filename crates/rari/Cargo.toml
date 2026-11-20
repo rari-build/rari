@@ -65,7 +65,7 @@ deno_ffi = { workspace = true }
 deno_napi = { workspace = true }
 
 # === Deno Tooling ===
-rari_ast = { workspace = true, features = ["transpiling"] }
+rari_ast = { workspace = true, features = ["transpiling", "cjs"] }
 deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
