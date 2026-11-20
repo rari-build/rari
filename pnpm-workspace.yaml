@@ -16,7 +16,7 @@ minimumReleaseAgeExclude:
   - rari-linux-x64@0.17.11
   - rari-win32-arm64@0.17.11
   - rari-win32-x64@0.17.11
-  - rari@0.17.10
+  - rari@0.17.11
 
 shellEmulator: true
 
@@ -84,7 +84,7 @@ catalogs:
     '@sentry/react': ^11.15.0
   rari:
     '@rari/use-cache': ^0.17.11
-    rari: ^0.17.10
+    rari: ^0.17.11
   react:
     '@types/react': ^19.3.0
     '@types/react-dom': ^19.3.0

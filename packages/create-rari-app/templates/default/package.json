@@ -19,7 +19,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "rari": "^0.17.10",
+    "rari": "^0.17.11",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
@@ -30,6 +30,6 @@
     "@types/react-dom": "^19.3.0",
     "tailwindcss": "^4.3.5",
     "typescript-7": "npm:typescript@^7.0.2",
-    "vite-plus": "^1.6.0"
+    "vite-plus": "^1.7.0"
   }
 }
