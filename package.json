@@ -28,6 +28,7 @@
     "@vitest/coverage-v8": "catalog:testing",
     "eslint": "catalog:lint",
     "knip": "catalog:lint",
+    "railway": "catalog:deploy",
     "react": "catalog:react",
     "typescript": "catalog:typescript",
     "vite-plus": "catalog:build"

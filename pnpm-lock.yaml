@@ -196,6 +196,10 @@ catalogs:
     '@clack/prompts':
       specifier: ^1.9.0
       version: 1.9.0
+  deploy:
+    railway:
+      specifier: ^3.17.0
+      version: 3.17.0
   font:
     '@capsizecss/metrics':
       specifier: ^4.5.0
@@ -370,6 +374,9 @@ importers:
       knip:
         specifier: catalog:lint
         version: 6.46.1
+      railway:
+        specifier: catalog:deploy
+        version: 3.17.0
       react:
         specifier: catalog:react
         version: 19.3.1
@@ -1043,6 +1050,11 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@graphql-typed-document-node/core@3.2.0':
+    resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
+    peerDependencies:
+      graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -3867,6 +3879,10 @@ packages:
   graceful-fs@4.2.12:
     resolution: {integrity: sha512-iuyGF2E4oafQfPsRrG2wtY2ILupMhvtdrhzrxB+0VcjsPpSPttpfYdjnGFGsTi5MaJFjI1jOKHPQ6UTbTj9TAw==}
 
+  graphql@16.15.0:
+    resolution: {integrity: sha512-32kz9FecohDiC/tgcViwnRXM7HFBVTPiW7pHO+DikKOI5KjhU/jNULOReXsrFqt2WAYbE9xFXsTffJw6iTO8qw==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
@@ -4524,6 +4540,11 @@ packages:
 
   query-selector-shadow-dom@1.0.1:
     resolution: {integrity: sha512-lT5yCqEBgfoMYpf3F2xQRK7zEr1rhIIZuceDK6+xRkJQ4NMbHTwXqk4NkwDwQMNqXgG9r9fyHnzwNVs6zV5KRw==}
+
+  railway@3.17.0:
+    resolution: {integrity: sha512-bVyzBcLUJfKuSvYT+8MFg0p2AUzylSdjJoCWpx2uk05p6DoAnhrq0Xm4VIoJ+gZ7BGI8YddYlEpp4rgsZIr8Ww==}
+    engines: {node: '>=22'}
+    hasBin: true
 
   rari-darwin-arm64@0.17.11:
     resolution: {integrity: sha512-csGlZRJvv2hM4KPm82mtm4G3r91v7Q5mYPiYxwQw5HkIha7AHKWpWSwQJPd0rLnf5lvI5teGz3q4dNtjXtF0xg==}
@@ -5492,6 +5513,10 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@graphql-typed-document-node/core@3.2.0(graphql@16.15.0)':
+    dependencies:
+      graphql: 16.15.0
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -7820,6 +7845,8 @@ snapshots:
 
   graceful-fs@4.2.12: {}
 
+  graphql@16.15.0: {}
+
   has-flag@4.0.0: {}
 
   hashery@1.5.1:
@@ -8812,6 +8839,11 @@ snapshots:
       hookified: 2.2.0
 
   query-selector-shadow-dom@1.0.1: {}
+
+  railway@3.17.0:
+    dependencies:
+      '@graphql-typed-document-node/core': 3.2.0(graphql@16.15.0)
+      graphql: 16.15.0
 
   rari-darwin-arm64@0.17.11:
     optional: true

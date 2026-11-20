@@ -48,6 +48,8 @@ catalogs:
     vite-plus: ^1.7.0
   cli:
     '@clack/prompts': ^1.9.0
+  deploy:
+    railway: ^3.17.0
   font:
     '@capsizecss/metrics': ^4.5.0
     '@capsizecss/unpack': ^4.0.1
