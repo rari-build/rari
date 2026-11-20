@@ -44,7 +44,6 @@ try {
   const platform = `${process.platform}-${process.arch}`
 
   const candidates = [
-    path.join(repoRoot, '.build/rari_use_cache', platform, 'rari_use_cache.node'),
     path.join(repoRoot, 'packages', `use-cache-${platform}`, 'rari_use_cache.node'),
     path.join(repoRoot, 'target/debug/rari_use_cache.node'),
     path.join(repoRoot, `target/debug/librari_use_cache${ext}`),

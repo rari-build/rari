@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -7,7 +7,9 @@ use anyhow::{Context, Result};
 use cow_utils::CowUtils;
 use tokio::process::Command;
 
-use crate::common::{Target, get_current_platform_target, log, log_error, log_success};
+use crate::common::{
+    Target, get_current_platform_target, log, log_error, log_success, log_warning,
+};
 
 const ADDON_BUILD_DIR: &str = ".build/rari_use_cache";
 const ADDON_OUTPUT_FILE: &str = "rari_use_cache.node";
@@ -230,6 +232,24 @@ pub fn validate_addon(target_info: &Target, project_root: &Path) -> Result<bool>
     let size_kb = metadata.len() as f64 / 1024.0;
     log_success(&format!("Addon validated: {} ({:.2} KB)", dest.display(), size_kb));
     Ok(true)
+}
+
+pub fn remove_staging_artifact(target_info: &Target, project_root: &Path) {
+    let stable = addon_stable_output_path(target_info, project_root);
+    let Some(platform_dir) = stable.parent() else {
+        return;
+    };
+    match fs::remove_dir_all(platform_dir) {
+        Ok(()) => {}
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Err(err) => {
+            log_warning(&format!("Could not remove staging dir {}: {err}", platform_dir.display()));
+            return;
+        }
+    }
+    for dir in [project_root.join(ADDON_BUILD_DIR), project_root.join(".build")] {
+        let _ = fs::remove_dir(dir);
+    }
 }
 
 pub fn addon_stable_output_path_public(target_info: &Target, project_root: &Path) -> PathBuf {
