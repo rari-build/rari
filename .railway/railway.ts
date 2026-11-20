@@ -3,7 +3,7 @@ import type {
   RailwayProvidedVariable,
   ReferencableServiceNode,
 } from 'railway/iac'
-import { defineRailway, github, project, service } from 'railway/iac'
+import { defineRailway, github, preserve, project, service } from 'railway/iac'
 
 export default defineRailway((): ProjectDefinition => {
   const web: ReferencableServiceNode<RailwayProvidedVariable> = service('rari', {
@@ -19,6 +19,18 @@ export default defineRailway((): ProjectDefinition => {
     deploy: {
       restartPolicyType: 'ON_FAILURE',
       restartPolicyMaxRetries: 3,
+    },
+    env: {
+      GITHUB_TOKEN: preserve(),
+      NODE_ENV: preserve(),
+      NO_CACHE: preserve(),
+      RAILPACK_CONFIG_FILE: 'web/railpack.json',
+      RAILPACK_DEPLOY_APT_PACKAGES: preserve(),
+      RARI_CSRF_SECRET: preserve(),
+      RARI_MODE: preserve(),
+      VITE_POSTHOG_HOST: preserve(),
+      VITE_POSTHOG_KEY: preserve(),
+      VITE_SENTRY_DSN: preserve(),
     },
   })
 
