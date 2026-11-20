@@ -39,7 +39,7 @@ packages:
 
 catalogs:
   analytics:
-    posthog-js: ^1.451.2
+    posthog-js: ^1.453.0
   build:
     '@napi-rs/cli': ^3.10.12
     oxc-transform-react: ^0.158.0
@@ -81,7 +81,7 @@ catalogs:
     pele: ^1.13.0
     remark-gfm: ^4.0.1
   monitoring:
-    '@sentry/react': ^11.14.0
+    '@sentry/react': ^11.15.0
   rari:
     '@rari/use-cache': ^0.17.10
     rari: ^0.17.10
