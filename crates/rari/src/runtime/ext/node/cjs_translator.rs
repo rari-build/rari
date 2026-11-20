@@ -2,7 +2,6 @@
 
 use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
-use deno_ast::{MediaType, ModuleExportsAndReExports, ModuleSpecifier, ParseParams};
 use deno_core::unsync;
 use deno_error::JsErrorBox;
 use deno_fs::FileSystemRc;
@@ -12,6 +11,9 @@ use deno_runtime::deno_fs;
 use node_resolver::{
     DenoIsBuiltInNodeModuleChecker,
     analyze::{self, CjsAnalysis as ExtNodeCjsAnalysis, CjsAnalysisExports, EsmAnalysisMode},
+};
+use rari_ast::{
+    MediaType, ModuleExportsAndReExports, ModuleSpecifier, ParseParams, oxc::allocator::Allocator,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -59,6 +61,10 @@ pub struct CjsCodeAnalyzer {
     cjs_tracker: Arc<Resolver>,
 }
 
+fn cached_analysis_is_sufficient(analysis: &CjsAnalysis, mode: EsmAnalysisMode) -> bool {
+    !matches!((analysis, mode), (CjsAnalysis::Esm, EsmAnalysisMode::SourceImportsAndExports))
+}
+
 impl CjsCodeAnalyzer {
     pub fn new(fs: FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
         Self { fs, cache: RefCell::new(FxHashMap::default()), cjs_tracker }
@@ -70,8 +76,10 @@ impl CjsCodeAnalyzer {
         source: &str,
         esm_analysis_mode: EsmAnalysisMode,
     ) -> Result<CjsAnalysis, JsErrorBox> {
-        if let Some(analysis) = self.cache.borrow().get(specifier.as_str()) {
-            return Ok(analysis.clone());
+        if let Some(analysis) = self.cache.borrow().get(specifier.as_str()).cloned()
+            && cached_analysis_is_sufficient(&analysis, esm_analysis_mode)
+        {
+            return Ok(analysis);
         }
 
         let source = source.strip_prefix('\u{FEFF}').unwrap_or(source);
@@ -88,32 +96,31 @@ impl CjsCodeAnalyzer {
         let analysis = unsync::spawn_blocking({
             let source: Arc<str> = source.into();
             move || -> Result<CjsAnalysis, JsErrorBox> {
-                let parsed_source = deno_ast::parse_program(ParseParams {
-                    specifier: specifier_clone.clone(),
-                    text: source,
-                    media_type,
-                    capture_tokens: true,
-                    scope_analysis: false,
-                    maybe_syntax: None,
-                })
+                let allocator = Allocator::default();
+
+                let parsed_source = rari_ast::parse_program(
+                    &allocator,
+                    ParseParams {
+                        specifier: specifier_clone.clone(),
+                        text: source,
+                        media_type,
+                        capture_tokens: false,
+                        scope_analysis: false,
+                        maybe_source_type: None,
+                    },
+                )
                 .map_err(JsErrorBox::from_err)?;
 
                 let is_script = parsed_source.compute_is_script();
                 let is_cjs = cjs_tracker.is_cjs(parsed_source.specifier(), media_type, is_script);
 
                 if is_cjs {
-                    Ok(CjsAnalysis::Cjs(ModuleExportsAndReExports {
-                        exports: vec![],
-                        reexports: vec![],
-                    }))
+                    Ok(CjsAnalysis::Cjs(parsed_source.analyze_cjs()))
                 } else {
                     match esm_analysis_mode {
                         EsmAnalysisMode::SourceOnly => Ok(CjsAnalysis::Esm),
                         EsmAnalysisMode::SourceImportsAndExports => {
-                            Ok(CjsAnalysis::EsmAnalysis(ModuleExportsAndReExports {
-                                exports: vec![],
-                                reexports: vec![],
-                            }))
+                            Ok(CjsAnalysis::EsmAnalysis(parsed_source.analyze_es_runtime_exports()))
                         }
                     }
                 }
@@ -216,5 +223,34 @@ impl analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
         _member: &str,
     ) -> Result<Option<Vec<String>>, JsErrorBox> {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use node_resolver::analyze::EsmAnalysisMode;
+    use rari_ast::ModuleExportsAndReExports;
+
+    use super::{CjsAnalysis, cached_analysis_is_sufficient};
+
+    #[test]
+    fn source_only_esm_cache_entry_is_incomplete_for_export_analysis() {
+        assert!(!cached_analysis_is_sufficient(
+            &CjsAnalysis::Esm,
+            EsmAnalysisMode::SourceImportsAndExports,
+        ));
+        assert!(cached_analysis_is_sufficient(&CjsAnalysis::Esm, EsmAnalysisMode::SourceOnly,));
+    }
+
+    #[test]
+    fn populated_esm_and_cjs_cache_entries_are_reused() {
+        assert!(cached_analysis_is_sufficient(
+            &CjsAnalysis::EsmAnalysis(ModuleExportsAndReExports::default()),
+            EsmAnalysisMode::SourceImportsAndExports,
+        ));
+        assert!(cached_analysis_is_sufficient(
+            &CjsAnalysis::Cjs(ModuleExportsAndReExports::default()),
+            EsmAnalysisMode::SourceImportsAndExports,
+        ));
     }
 }

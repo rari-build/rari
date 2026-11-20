@@ -1,111 +1,112 @@
-use deno_ast::swc::{
-    ast::{BlockStmt, Expr, ExprStmt, Lit, ModuleItem, Stmt, Str},
-    ecma_visit::Visit,
+use rari_ast::oxc::{
+    ast::ast::{Directive, Expression, Statement},
+    span::Span,
 };
 
-#[non_exhaustive]
-pub struct UseCacheDirective {
-    pub found: bool,
-    pub cache_kind: Option<String>,
+struct PrologueEntry<'s> {
+    span: Span,
+    value: &'s str,
 }
 
-impl Visit for UseCacheDirective {
-    fn visit_stmt(&mut self, stmt: &Stmt) {
-        if self.found {
-            return;
-        }
-        if let Stmt::Expr(ExprStmt { expr, .. }) = stmt
-            && let Expr::Lit(Lit::Str(Str { value, .. })) = expr.as_ref()
-        {
-            if value == "use cache" {
-                self.found = true;
-                self.cache_kind = None;
-            } else if let Some(kind) = value.to_string_lossy().strip_prefix("use cache: ") {
-                self.found = true;
-                self.cache_kind = Some(kind.to_string());
-            }
-        }
-    }
-}
-
-pub fn has_use_cache_directive(body: &BlockStmt) -> bool {
-    let mut visitor = UseCacheDirective { found: false, cache_kind: None };
-    for stmt in &body.stmts {
-        visitor.visit_stmt(stmt);
-        if visitor.found {
-            return true;
-        }
+fn prologue<'s>(
+    directives: &'s [Directive<'_>],
+    statements: &'s [Statement<'_>],
+) -> Vec<PrologueEntry<'s>> {
+    let mut entries: Vec<PrologueEntry<'s>> = directives
+        .iter()
+        .map(|d| PrologueEntry {
+            span: d.span,
+            value: d.expression.value.as_str().unwrap_or_default(),
+        })
+        .collect();
+    for stmt in statements {
         match stmt {
-            Stmt::Expr(expr_stmt) => {
-                if !matches!(*expr_stmt.expr, Expr::Lit(Lit::Str(_))) {
-                    return false;
+            Statement::ExpressionStatement(expr_stmt) => match &expr_stmt.expression {
+                Expression::StringLiteral(lit) => {
+                    entries.push(PrologueEntry {
+                        span: expr_stmt.span,
+                        value: lit.value.as_str().unwrap_or_default(),
+                    });
                 }
-            }
-            Stmt::Empty(..) => {}
-            _ => return false,
+                _ => break,
+            },
+            Statement::EmptyStatement(_) => {}
+            _ => break,
         }
     }
-    false
+    entries
 }
 
-pub fn extract_cache_kind(body: &BlockStmt) -> Option<String> {
-    let mut visitor = UseCacheDirective { found: false, cache_kind: None };
-    for stmt in &body.stmts {
-        visitor.visit_stmt(stmt);
-        if visitor.found {
-            return visitor.cache_kind;
-        }
-        match stmt {
-            Stmt::Expr(expr_stmt) => {
-                if !matches!(*expr_stmt.expr, Expr::Lit(Lit::Str(_))) {
-                    return None;
-                }
-            }
-            Stmt::Empty(..) => {}
-            _ => return None,
-        }
+enum UseCache {
+    Plain,
+    Kind(String),
+}
+
+fn parse_use_cache(value: &str) -> Option<UseCache> {
+    if value == "use cache" {
+        return Some(UseCache::Plain);
     }
-    None
+    value.strip_prefix("use cache: ").map(|kind| UseCache::Kind(kind.to_string()))
+}
+
+pub fn has_use_cache_directive(directives: &[Directive<'_>], statements: &[Statement<'_>]) -> bool {
+    prologue(directives, statements).iter().any(|entry| parse_use_cache(entry.value).is_some())
+}
+
+pub fn extract_cache_kind(
+    directives: &[Directive<'_>],
+    statements: &[Statement<'_>],
+) -> Option<String> {
+    match prologue(directives, statements).iter().find_map(|entry| parse_use_cache(entry.value))? {
+        UseCache::Plain => None,
+        UseCache::Kind(kind) => Some(kind),
+    }
 }
 
 fn cache_kind_from_directive_value(value: &str) -> Option<String> {
-    if value == "use cache" {
-        return Some("default".to_string());
-    }
-    value.strip_prefix("use cache: ").map(str::to_string)
+    parse_use_cache(value).map(|directive| match directive {
+        UseCache::Plain => "default".to_string(),
+        UseCache::Kind(kind) => kind,
+    })
 }
 
-fn cache_kind_from_string_literal(expr: &Expr) -> Option<String> {
-    if let Expr::Lit(Lit::Str(Str { value, .. })) = expr {
-        return cache_kind_from_directive_value(&value.to_string_lossy());
-    }
-    None
+pub fn extract_file_level_cache_kind(
+    directives: &[Directive<'_>],
+    statements: &[Statement<'_>],
+) -> Option<String> {
+    prologue(directives, statements)
+        .iter()
+        .find_map(|entry| cache_kind_from_directive_value(entry.value))
 }
 
-pub fn extract_file_level_cache_kind(items: &[ModuleItem]) -> Option<String> {
-    for item in items {
-        match item {
-            ModuleItem::Stmt(Stmt::Expr(ExprStmt { expr, .. })) => {
-                if let Some(kind) = cache_kind_from_string_literal(expr) {
-                    return Some(kind);
-                }
-                if matches!(expr.as_ref(), Expr::Lit(Lit::Str(_))) {
-                    continue;
-                }
-                return None;
-            }
-            ModuleItem::Stmt(Stmt::Empty(..)) => {}
-            _ => return None,
+pub fn file_level_cache_directive_spans(
+    directives: &[Directive<'_>],
+    statements: &[Statement<'_>],
+) -> Vec<Span> {
+    prologue(directives, statements)
+        .into_iter()
+        .filter(|entry| cache_kind_from_directive_value(entry.value).is_some())
+        .map(|entry| entry.span)
+        .collect()
+}
+
+pub fn leading_framework_directive_spans(
+    directives: &[Directive<'_>],
+    statements: &[Statement<'_>],
+) -> Vec<Span> {
+    let mut spans = Vec::new();
+    for entry in prologue(directives, statements) {
+        let value = entry.value;
+        let is_framework_directive = value == "use cache"
+            || value.starts_with("use cache: ")
+            || value == "use server"
+            || value == "use client";
+        if !is_framework_directive {
+            break;
         }
+        spans.push(entry.span);
     }
-    None
-}
-
-pub fn is_file_level_cache_directive_item(item: &ModuleItem) -> bool {
-    matches!(
-        item,
-        ModuleItem::Stmt(Stmt::Expr(ExprStmt { expr, .. })) if cache_kind_from_string_literal(expr).is_some()
-    )
+    spans
 }
 
 pub fn detect_use_cache(source: &str) -> bool {
@@ -142,49 +143,60 @@ pub fn detect_use_cache(source: &str) -> bool {
 }
 
 #[cfg(test)]
-#[expect(clippy::default_trait_access)]
+#[expect(clippy::panic, reason = "Test helpers fail fast when a snippet parses unexpectedly")]
 mod tests {
+    use rari_ast::oxc::{
+        allocator::Allocator,
+        ast::ast::{Function, Statement},
+        parser::Parser,
+        span::SourceType,
+    };
+
     use super::*;
+
+    fn with_function<R>(source: &str, check: impl FnOnce(&Function<'_>) -> R) -> R {
+        let allocator = Allocator::default();
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.first() else {
+            panic!("expected a function declaration");
+        };
+        check(function)
+    }
+
+    fn body_has_directive(source: &str) -> bool {
+        with_function(source, |f| {
+            f.body.as_ref().is_some_and(|b| has_use_cache_directive(&b.directives, &b.statements))
+        })
+    }
 
     #[test]
     fn test_detect_use_cache_directive() {
-        let body = BlockStmt {
-            span: Default::default(),
-            ctxt: Default::default(),
-            stmts: vec![Stmt::Expr(ExprStmt {
-                span: Default::default(),
-                expr: Box::new(Expr::Lit(Lit::Str(Str {
-                    span: Default::default(),
-                    value: "use cache".into(),
-                    raw: None,
-                }))),
-            })],
-        };
-        assert!(has_use_cache_directive(&body));
+        assert!(body_has_directive("async function f() { 'use cache' }"));
     }
 
     #[test]
     fn test_detect_no_directive() {
-        let body = BlockStmt { span: Default::default(), ctxt: Default::default(), stmts: vec![] };
-        assert!(!has_use_cache_directive(&body));
+        assert!(!body_has_directive("async function f() {}"));
     }
 
     #[test]
     fn test_detect_use_cache_kind() {
-        let body = BlockStmt {
-            span: Default::default(),
-            ctxt: Default::default(),
-            stmts: vec![Stmt::Expr(ExprStmt {
-                span: Default::default(),
-                expr: Box::new(Expr::Lit(Lit::Str(Str {
-                    span: Default::default(),
-                    value: "use cache: stale-while-revalidate".into(),
-                    raw: None,
-                }))),
-            })],
-        };
-        assert!(has_use_cache_directive(&body));
-        assert_eq!(extract_cache_kind(&body), Some("stale-while-revalidate".to_string()));
+        let source = "async function f() { \"use cache: stale-while-revalidate\" }";
+        assert!(body_has_directive(source));
+        let kind = with_function(source, |f| {
+            f.body.as_ref().and_then(|b| extract_cache_kind(&b.directives, &b.statements))
+        });
+        assert_eq!(kind, Some("stale-while-revalidate".to_string()));
+    }
+
+    #[test]
+    fn test_directive_after_other_statement_is_ignored() {
+        assert!(!body_has_directive("async function f() { const x = 1; 'use cache' }"));
+    }
+
+    #[test]
+    fn test_directive_after_empty_statement_is_detected() {
+        assert!(body_has_directive("async function f() { 'use strict';; 'use cache' }"));
     }
 
     #[test]
@@ -206,60 +218,38 @@ mod tests {
 
     #[test]
     fn test_extract_remote_cache_kind_from_ast() {
-        let body = BlockStmt {
-            span: Default::default(),
-            ctxt: Default::default(),
-            stmts: vec![Stmt::Expr(ExprStmt {
-                span: Default::default(),
-                expr: Box::new(Expr::Lit(Lit::Str(Str {
-                    span: Default::default(),
-                    value: "use cache: remote".into(),
-                    raw: None,
-                }))),
-            })],
-        };
-        assert!(has_use_cache_directive(&body));
-        assert_eq!(extract_cache_kind(&body), Some("remote".to_string()));
+        let source = "async function f() { \"use cache: remote\" }";
+        assert!(body_has_directive(source));
+        let kind = with_function(source, |f| {
+            f.body.as_ref().and_then(|b| extract_cache_kind(&b.directives, &b.statements))
+        });
+        assert_eq!(kind, Some("remote".to_string()));
     }
 
     #[test]
     fn test_file_level_skips_non_cache_string_literals() {
-        let items = vec![
-            ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                span: Default::default(),
-                expr: Box::new(Expr::Lit(Lit::Str(Str {
-                    span: Default::default(),
-                    value: "use strict".into(),
-                    raw: None,
-                }))),
-            })),
-            ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                span: Default::default(),
-                expr: Box::new(Expr::Lit(Lit::Str(Str {
-                    span: Default::default(),
-                    value: "use cache".into(),
-                    raw: None,
-                }))),
-            })),
-        ];
+        let allocator = Allocator::default();
+        let ret = Parser::new(&allocator, "'use strict'\n'use cache'\n", SourceType::tsx()).parse();
+        assert_eq!(
+            extract_file_level_cache_kind(&ret.program.directives, &ret.program.body),
+            Some("default".to_string())
+        );
+    }
 
-        assert_eq!(extract_file_level_cache_kind(&items), Some("default".to_string()));
+    #[test]
+    fn test_file_level_cache_string_after_statement_is_not_a_directive() {
+        let allocator = Allocator::default();
+        let source = "1; 'use cache'; foo()";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        assert_eq!(extract_file_level_cache_kind(&ret.program.directives, &ret.program.body), None);
+        assert_eq!(
+            file_level_cache_directive_spans(&ret.program.directives, &ret.program.body),
+            Vec::new()
+        );
     }
 
     #[test]
     fn test_non_directive_statement_stops_search() {
-        let body = BlockStmt {
-            span: Default::default(),
-            ctxt: Default::default(),
-            stmts: vec![Stmt::Expr(ExprStmt {
-                span: Default::default(),
-                expr: Box::new(Expr::Lit(Lit::Str(Str {
-                    span: Default::default(),
-                    value: "use server".into(),
-                    raw: None,
-                }))),
-            })],
-        };
-        assert!(!has_use_cache_directive(&body));
+        assert!(!body_has_directive("async function f() { \"use server\" }"));
     }
 }

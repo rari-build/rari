@@ -1,20 +1,16 @@
-use std::{error, fmt, mem, panic, path::PathBuf, rc::Rc};
+use std::{error, fmt, panic};
 
-use deno_ast::swc::{
-    ast::{
-        Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnDecl, Id,
-        Ident, Module, ModuleDecl, ModuleItem, Stmt,
-    },
-    codegen::{Config, Emitter, text_writer::JsWriter},
-    common::{
-        DUMMY_SP, FileName, FilePathMapping, GLOBALS, Globals, SourceMap, SyntaxContext, sync::Lrc,
-    },
-    ecma_visit::VisitMut,
-    parser::{Parser, StringInput, Syntax, TsSyntax},
+use rari_ast::oxc::{
+    allocator::Allocator,
+    ast::ast::{Declaration, ExportDefaultDeclarationKind, Function, Program, Statement},
+    parser::Parser,
+    span::{GetSpan, SourceType, Span},
 };
 use rustc_hash::FxHashSet;
 
 use crate::{closure, directive, hoist, id};
+
+const DEFAULT_EXPORT_BINDING: &str = "$$RSC_SERVER_CACHE_DEFAULT_EXPORT";
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -46,27 +42,87 @@ pub struct TransformOutput {
     pub needs_register_ref: bool,
 }
 
+struct Edit {
+    span: Span,
+    text: String,
+}
+
+enum ExportShape {
+    None,
+    Named,
+    Default,
+}
+
+struct CacheCandidate<'p, 'a> {
+    function: &'p Function<'a>,
+    shape: ExportShape,
+    reference_export_name: String,
+    local_binding_name: String,
+}
+
+fn candidate<'p, 'a>(stmt: &'p Statement<'a>) -> Option<CacheCandidate<'p, 'a>> {
+    match stmt {
+        Statement::FunctionDeclaration(function) => {
+            let name = function.id.as_ref()?.name.to_string();
+            Some(CacheCandidate {
+                function,
+                shape: ExportShape::None,
+                reference_export_name: name.clone(),
+                local_binding_name: name,
+            })
+        }
+        Statement::ExportDeclaration(export) => match &export.declaration {
+            Declaration::FunctionDeclaration(function) => {
+                let name = function.id.as_ref()?.name.to_string();
+                Some(CacheCandidate {
+                    function,
+                    shape: ExportShape::Named,
+                    reference_export_name: name.clone(),
+                    local_binding_name: name,
+                })
+            }
+            _ => None,
+        },
+        Statement::ExportDefaultDeclaration(export) => match &export.declaration {
+            ExportDefaultDeclarationKind::FunctionDeclaration(function) => {
+                let name = function.id.as_ref().map(|id| id.name.to_string());
+                Some(CacheCandidate {
+                    function,
+                    shape: ExportShape::Default,
+                    reference_export_name: name.clone().unwrap_or_else(|| "default".to_string()),
+                    local_binding_name: name.unwrap_or_else(|| DEFAULT_EXPORT_BINDING.to_string()),
+                })
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Boolean flags track independent transform states, grouping into enum would be less clear"
 )]
-struct TransformVisitor {
-    filename: String,
-    hash_salt: String,
+struct TransformVisitor<'s> {
+    source: &'s str,
+    filename: &'s str,
+    hash_salt: &'s str,
     index: usize,
     has_cache_fns: bool,
     file_cache_kind: Option<String>,
-    module_idents: FxHashSet<Id>,
+    module_idents: FxHashSet<String>,
     needs_react_cache: bool,
     needs_cache_wrapper: bool,
     needs_register_ref: bool,
+    edits: Vec<Edit>,
 }
 
-impl TransformVisitor {
-    fn new(filename: &str, hash_salt: &str) -> Self {
+impl<'s> TransformVisitor<'s> {
+    fn new(source: &'s str, filename: &'s str, hash_salt: &'s str) -> Self {
         Self {
-            filename: filename.to_string(),
-            hash_salt: hash_salt.to_string(),
+            source,
+            filename,
+            hash_salt,
             index: 0,
             has_cache_fns: false,
             file_cache_kind: None,
@@ -74,180 +130,140 @@ impl TransformVisitor {
             needs_react_cache: false,
             needs_cache_wrapper: false,
             needs_register_ref: false,
+            edits: Vec::new(),
         }
     }
-}
 
-impl VisitMut for TransformVisitor {
-    fn visit_mut_module(&mut self, module: &mut Module) {
-        self.file_cache_kind = directive::extract_file_level_cache_kind(&module.body);
+    fn visit_program(&mut self, program: &Program<'_>) {
+        self.file_cache_kind =
+            directive::extract_file_level_cache_kind(&program.directives, &program.body);
 
-        for item in &module.body {
-            for ident in closure::collect_module_level_idents(item) {
-                self.module_idents.insert(ident);
+        for stmt in &program.body {
+            self.module_idents.extend(closure::collect_module_level_idents(stmt));
+        }
+
+        for span in directive::file_level_cache_directive_spans(&program.directives, &program.body)
+        {
+            self.edits.push(Edit { span, text: String::new() });
+        }
+
+        for stmt in &program.body {
+            if let Some(text) = self.maybe_transform_item(stmt) {
+                self.edits.push(Edit { span: stmt.span(), text });
             }
         }
-
-        let mut items = mem::take(&mut module.body);
-        items.retain(|item| !directive::is_file_level_cache_directive_item(item));
-        self.visit_mut_module_items(&mut items);
-        module.body = items;
     }
 
-    fn visit_mut_module_items(&mut self, items: &mut Vec<ModuleItem>) {
-        let mut extra_items = Vec::new();
-        let mut new_items = Vec::new();
-        let mut i = 0;
+    fn maybe_transform_item(&mut self, stmt: &Statement<'_>) -> Option<String> {
+        let candidate = candidate(stmt)?;
+        let function = candidate.function;
+        let body = function.body.as_ref()?;
 
-        while i < items.len() {
-            let processed = self.maybe_transform_item(&items[i], &mut extra_items);
-            if let Some(replacement) = processed {
-                new_items.append(&mut extra_items);
-                new_items.push(replacement);
-            } else {
-                new_items.push(items[i].clone());
-            }
-            i += 1;
-        }
-
-        *items = new_items;
-    }
-}
-
-impl TransformVisitor {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "Function handles complex AST pattern matching for various export patterns"
-    )]
-    fn maybe_transform_item(
-        &mut self,
-        item: &ModuleItem,
-        extra_items: &mut Vec<ModuleItem>,
-    ) -> Option<ModuleItem> {
-        let (fn_decl, is_exported, is_default_export, reference_export_name, local_binding_name) =
-            match item {
-                ModuleItem::Stmt(Stmt::Decl(Decl::Fn(fn_decl))) => {
-                    let export_name = fn_decl.ident.sym.to_string();
-                    (fn_decl.clone(), false, false, export_name.clone(), export_name)
-                }
-                ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-                    decl: Decl::Fn(fn_decl),
-                    ..
-                })) => {
-                    let export_name = fn_decl.ident.sym.to_string();
-                    (fn_decl.clone(), true, false, export_name.clone(), export_name)
-                }
-                ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
-                    decl: DefaultDecl::Fn(fn_expr),
-                    ..
-                })) => {
-                    let ident = fn_expr.ident.clone().unwrap_or_else(|| {
-                        Ident::new(
-                            "$$RSC_SERVER_CACHE_DEFAULT_EXPORT".into(),
-                            DUMMY_SP,
-                            SyntaxContext::default(),
-                        )
-                    });
-                    let reference_export_name = fn_expr
-                        .ident
-                        .as_ref()
-                        .map(|ident| ident.sym.to_string())
-                        .unwrap_or_else(|| "default".to_string());
-                    let local_binding_name = ident.sym.to_string();
-                    (
-                        FnDecl { ident, function: fn_expr.function.clone(), declare: false },
-                        true,
-                        true,
-                        reference_export_name,
-                        local_binding_name,
-                    )
-                }
-                _ => return None,
-            };
-
-        let body = fn_decl.function.body.as_ref()?;
-
-        if !fn_decl.function.is_async {
+        if !function.r#async {
             return None;
         }
 
-        let body_has_directive = directive::has_use_cache_directive(body);
+        let body_has_directive =
+            directive::has_use_cache_directive(&body.directives, &body.statements);
         if !body_has_directive && self.file_cache_kind.is_none() {
             return None;
         }
 
         self.has_cache_fns = true;
         let cache_kind = if body_has_directive {
-            directive::extract_cache_kind(body)
-                .map(|kind| if kind.is_empty() { "default".to_string() } else { kind })
+            directive::extract_cache_kind(&body.directives, &body.statements)
+                .filter(|kind| !kind.is_empty())
                 .unwrap_or_else(|| "default".to_string())
         } else {
             self.file_cache_kind.clone().unwrap_or_else(|| "default".to_string())
         };
 
-        let fn_params = closure::collect_fn_params(&fn_decl.function);
+        let fn_params = closure::collect_fn_params(function);
         let closure_vars = closure::collect_closure_idents(
             body,
             &self.module_idents,
             &fn_params,
-            Some(&fn_decl.ident),
+            Some(&candidate.local_binding_name),
         );
 
-        let ref_id = id::generate_reference_id(
-            &self.hash_salt,
-            &self.filename,
-            &reference_export_name,
-            true,
-        );
+        let export_name = &candidate.reference_export_name;
+        let ref_id = id::generate_reference_id(self.hash_salt, self.filename, export_name, true);
+        let cache_name = id::generate_cache_export_name(self.index, export_name);
+        let inner_name = id::generate_cache_inner_name(self.index, export_name);
 
-        let cache_name = id::generate_cache_export_name(self.index, &reference_export_name);
-        let inner_name = id::generate_cache_inner_name(self.index, &reference_export_name);
-
-        hoist::create_cache_declarations(
-            extra_items,
-            hoist::CacheDeclarationInput {
-                fn_decl: &fn_decl,
-                export_name: &reference_export_name,
-                closure_vars: &closure_vars,
-                ref_id: &ref_id,
-                cache_kind: &cache_kind,
-                cache_name: &cache_name,
-                inner_name: &inner_name,
-            },
-        );
+        let mut statements = hoist::create_cache_declarations(hoist::CacheDeclarationInput {
+            source: self.source,
+            function,
+            function_name: &candidate.local_binding_name,
+            export_name,
+            closure_vars: &closure_vars,
+            ref_id: &ref_id,
+            cache_kind: &cache_kind,
+            cache_name: &cache_name,
+            inner_name: &inner_name,
+        });
 
         self.needs_cache_wrapper = true;
         self.needs_register_ref = true;
-
-        let replacement = hoist::create_bound_replacement(
-            &local_binding_name,
-            &cache_name,
-            &ref_id,
-            &closure_vars,
-        );
-
         self.index += 1;
 
-        if is_default_export {
-            extra_items.push(replacement);
-            Some(ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(ExportDefaultExpr {
-                span: DUMMY_SP,
-                expr: Box::new(Expr::Ident(Ident::new(
-                    local_binding_name.into(),
-                    DUMMY_SP,
-                    SyntaxContext::default(),
-                ))),
-            })))
-        } else if is_exported {
-            Some(ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-                span: DUMMY_SP,
-                decl: match replacement {
-                    ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl))) => Decl::Var(var_decl),
-                    _ => return None,
-                },
-            })))
+        let init = hoist::create_bound_replacement_init(&cache_name, &ref_id, &closure_vars);
+        let local = &candidate.local_binding_name;
+        match candidate.shape {
+            ExportShape::None => statements.push(format!("var {local} = {init};")),
+            ExportShape::Named => statements.push(format!("export var {local} = {init};")),
+            ExportShape::Default => {
+                statements.push(format!("var {local} = {init};"));
+                statements.push(format!("export default {local};"));
+            }
+        }
+
+        Some(statements.join("\n"))
+    }
+}
+
+fn apply_edits(source: &str, mut edits: Vec<Edit>) -> String {
+    edits.sort_by_key(|edit| edit.span.start);
+    let mut out =
+        String::with_capacity(source.len() + edits.iter().map(|e| e.text.len()).sum::<usize>());
+    let mut cursor = 0usize;
+    for edit in edits {
+        let start = edit.span.start as usize;
+        if start < cursor {
+            continue;
+        }
+        out.push_str(&source[cursor..start]);
+        out.push_str(&edit.text);
+        cursor = edit.span.end as usize;
+    }
+    out.push_str(&source[cursor..]);
+    out
+}
+
+fn unparsed_source_start(program: &Program<'_>, source: &str) -> Option<u32> {
+    let parsed_end = program
+        .body
+        .last()
+        .map(GetSpan::span)
+        .map(|span| span.end)
+        .into_iter()
+        .chain(program.directives.last().map(|directive| directive.span.end))
+        .chain(program.hashbang.as_ref().map(|hashbang| hashbang.span.end))
+        .max()
+        .unwrap_or(0);
+    let mut cursor = parsed_end as usize;
+    loop {
+        let rest = source.get(cursor..)?;
+        let (offset, _) = rest
+            .char_indices()
+            .find(|(_, character)| !character.is_whitespace() && *character != '\u{FEFF}')?;
+        cursor += offset;
+        if let Some(comment) =
+            program.comments.iter().find(|comment| comment.span.start as usize == cursor)
+        {
+            cursor = comment.span.end as usize;
         } else {
-            Some(replacement)
+            return u32::try_from(cursor).ok();
         }
     }
 }
@@ -256,63 +272,48 @@ impl TransformVisitor {
 ///
 /// # Errors
 ///
-/// Returns [`TransformError`] if parsing fails, code generation fails, or the
-/// transform panics.
+/// Returns [`TransformError`] if the source cannot be parsed or the transform
+/// panics.
 pub fn transform_source(
     source: &str,
     filename: &str,
     hash_salt: &str,
 ) -> Result<TransformOutput, TransformError> {
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        GLOBALS.set(&Globals::default(), || {
-            let cm: Lrc<SourceMap> = SourceMap::new(FilePathMapping::empty()).into();
-            let fm = cm.new_source_file(
-                FileName::Real(PathBuf::from(filename)).into(),
-                source.to_string(),
-            );
+        let allocator = Allocator::default();
+        let parsed = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        if parsed.fatal_error {
+            let message =
+                parsed.diagnostics.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ");
+            return Err(TransformError::Parse(message));
+        }
+        if !parsed.diagnostics.is_empty()
+            && let Some(unparsed_start) = unparsed_source_start(&parsed.program, source)
+        {
+            let message =
+                parsed.diagnostics.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ");
+            return Err(TransformError::Parse(format!(
+                "{message} (unparsed input at byte {unparsed_start})"
+            )));
+        }
 
-            let mut parser = Parser::new(
-                Syntax::Typescript(TsSyntax { tsx: true, ..Default::default() }),
-                StringInput::from(&*fm),
-                None,
-            );
+        let mut visitor = TransformVisitor::new(source, filename, hash_salt);
+        visitor.visit_program(&parsed.program);
 
-            let mut module: Module =
-                parser.parse_module().map_err(|e| TransformError::Parse(format!("{e:?}")))?;
+        if !visitor.has_cache_fns {
+            return Ok(TransformOutput {
+                code: source.to_string(),
+                needs_react_cache: false,
+                needs_cache_wrapper: false,
+                needs_register_ref: false,
+            });
+        }
 
-            let mut visitor = TransformVisitor::new(filename, hash_salt);
-            visitor.visit_mut_module(&mut module);
-
-            if !visitor.has_cache_fns {
-                return Ok(TransformOutput {
-                    code: source.to_string(),
-                    needs_react_cache: false,
-                    needs_cache_wrapper: false,
-                    needs_register_ref: false,
-                });
-            }
-
-            let mut code_buf = Vec::new();
-            {
-                let mut emitter = Emitter {
-                    cfg: Config::default(),
-                    cm: Rc::clone(&cm),
-                    comments: None,
-                    wr: JsWriter::new(Rc::clone(&cm), "\n", &mut code_buf, None),
-                };
-                emitter
-                    .emit_module(&module)
-                    .map_err(|e| TransformError::Codegen(format!("{e:?}")))?;
-            }
-            let code =
-                String::from_utf8(code_buf).map_err(|e| TransformError::Utf8(format!("{e:?}")))?;
-
-            Ok(TransformOutput {
-                code,
-                needs_react_cache: visitor.needs_react_cache,
-                needs_cache_wrapper: visitor.needs_cache_wrapper,
-                needs_register_ref: visitor.needs_register_ref,
-            })
+        Ok(TransformOutput {
+            code: apply_edits(source, visitor.edits),
+            needs_react_cache: visitor.needs_react_cache,
+            needs_cache_wrapper: visitor.needs_cache_wrapper,
+            needs_register_ref: visitor.needs_register_ref,
         })
     }));
 
@@ -328,5 +329,37 @@ pub fn transform_source(
             };
             Err(TransformError::Panic(msg))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_non_fatal_partial_parse() {
+        let result = transform_source(
+            "async function f() { \"use cache\"; return 1 }\n@",
+            "partial.ts",
+            "test",
+        );
+        assert!(matches!(result, Err(TransformError::Parse(_))));
+    }
+
+    #[test]
+    fn rejects_partial_parse_before_trailing_comment() {
+        let result = transform_source(
+            "async function f() { \"use cache\"; return 1 }\n@ // trailing",
+            "partial.ts",
+            "test",
+        );
+        assert!(matches!(result, Err(TransformError::Parse(_))));
+    }
+
+    #[test]
+    fn accepts_trailing_comments_and_whitespace() {
+        let source = "async function f() { \"use cache\"; return 1 }\n// trailing comment\n  ";
+        let result = transform_source(source, "trailing.ts", "test");
+        assert!(result.is_ok());
     }
 }

@@ -8,13 +8,16 @@ use std::{
     string::String,
 };
 
-use deno_ast::MediaType;
 use deno_core::{ModuleCodeString, ModuleName, SourceMapData, snapshot, v8};
 use deno_error::JsErrorBox;
 use deno_node::{ContextInitMode, VM_CONTEXT_INDEX, create_v8_context, init_global_template};
 use rari::runtime::{
     ext::{self, ExtensionOptions},
     transpile,
+};
+use rari_ast::{
+    ImportsNotUsedAsValues, MediaType, SourceMapOption, TranspileModuleOptions,
+    oxc::allocator::Allocator,
 };
 use rustc_hash::FxHashSet;
 
@@ -177,18 +180,22 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
         url::Url::parse(&format!("file:///{specifier}")).expect("invalid specifier")
     });
 
+    let allocator = Allocator::default();
     #[expect(
         clippy::panic,
         reason = "Build tool - parse failures should terminate snapshot generation"
     )]
-    let parsed = deno_ast::parse_module(deno_ast::ParseParams {
-        specifier: specifier_url,
-        text: source.into(),
-        media_type,
-        capture_tokens: false,
-        scope_analysis: false,
-        maybe_syntax: None,
-    })
+    let mut parsed = rari_ast::parse_module(
+        &allocator,
+        rari_ast::ParseParams {
+            specifier: specifier_url,
+            text: source.into(),
+            media_type,
+            capture_tokens: false,
+            scope_analysis: false,
+            maybe_source_type: None,
+        },
+    )
     .unwrap_or_else(|e| panic!("Failed to parse '{specifier}': {e}"));
 
     #[expect(
@@ -197,19 +204,21 @@ fn maybe_transpile(specifier: &str, source: &str) -> String {
     )]
     let transpiled = parsed
         .transpile(
-            &deno_ast::TranspileOptions {
-                imports_not_used_as_values: deno_ast::ImportsNotUsedAsValues::Remove,
+            &allocator,
+            &rari_ast::TranspileOptions {
+                imports_not_used_as_values: ImportsNotUsedAsValues::Remove,
                 ..Default::default()
             },
-            &deno_ast::TranspileModuleOptions::default(),
-            &deno_ast::EmitOptions {
-                source_map: deno_ast::SourceMapOption::None,
+            &TranspileModuleOptions::default(),
+            &rari_ast::EmitOptions {
+                source_map: SourceMapOption::None,
+                ascii_only: true,
                 ..Default::default()
             },
         )
         .unwrap_or_else(|e| panic!("Failed to transpile '{specifier}': {e}"));
 
-    transpiled.into_source().text
+    transpiled.text
 }
 
 fn min_hashes_needed(s: &str) -> usize {

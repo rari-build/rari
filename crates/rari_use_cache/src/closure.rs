@@ -1,65 +1,78 @@
-use deno_ast::swc::{
-    ast::{
-        ArrowExpr, BlockStmt, CatchClause, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl,
-        FnDecl, ForInStmt, ForOfStmt, ForStmt, Function, Id, Ident, ImportSpecifier, ModuleDecl,
-        ModuleItem, ObjectPatProp, Pat, Stmt, VarDecl, VarDeclKind,
+use rari_ast::oxc::{
+    ast::ast::{
+        ArrowFunctionBody, ArrowFunctionExpression, BindingPattern, BlockStatement, CatchClause,
+        Class, Declaration, ExportDefaultDeclarationKind, ForInStatement, ForOfStatement,
+        ForStatement, FormalParameters, Function, FunctionBody, IdentifierReference,
+        ImportDeclarationSpecifier, Statement, StaticBlock, VariableDeclaration,
+        VariableDeclarationKind,
     },
-    ecma_visit::{Visit, VisitWith},
+    ast_visit::{Visit, walk},
+    syntax::scope::ScopeFlags,
 };
 use rustc_hash::FxHashSet;
 
-pub fn collect_module_level_idents(item: &ModuleItem) -> FxHashSet<Id> {
+fn class_name(class: &Class<'_>) -> Option<String> {
+    class.id.as_ref().map(|id| id.name.to_string())
+}
+
+fn function_name(function: &Function<'_>) -> Option<String> {
+    function.id.as_ref().map(|id| id.name.to_string())
+}
+
+pub fn collect_module_level_idents(stmt: &Statement<'_>) -> FxHashSet<String> {
     let mut idents = FxHashSet::default();
 
-    match item {
-        ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl { ident, .. })))
-        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-            decl: Decl::Fn(FnDecl { ident, .. }),
-            ..
-        })) => {
-            idents.insert(ident.to_id());
-        }
-        ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl)))
-        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-            decl: Decl::Var(var_decl),
-            ..
-        })) => {
-            for decl in &var_decl.decls {
-                collect_var_decl_idents(&decl.name, &mut idents);
+    let declaration = match stmt {
+        Statement::ExportDeclaration(export) => Some(&export.declaration),
+        _ => stmt.as_declaration(),
+    };
+
+    if let Some(declaration) = declaration {
+        match declaration {
+            Declaration::FunctionDeclaration(function) => {
+                idents.extend(function_name(function));
             }
-        }
-        ModuleItem::Stmt(Stmt::Decl(Decl::Class(class_decl)))
-        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-            decl: Decl::Class(class_decl),
-            ..
-        })) => {
-            idents.insert(class_decl.ident.to_id());
-        }
-        ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
-            decl, ..
-        })) => {
-            let ident = match decl {
-                DefaultDecl::Fn(fn_expr) => fn_expr.ident.as_ref(),
-                DefaultDecl::Class(class_expr) => class_expr.ident.as_ref(),
-                DefaultDecl::TsInterfaceDecl(_) => None,
-            };
-            if let Some(ident) = ident {
-                idents.insert(ident.to_id());
-            }
-        }
-        ModuleItem::ModuleDecl(ModuleDecl::Import(import_decl)) => {
-            for spec in &import_decl.specifiers {
-                match spec {
-                    ImportSpecifier::Named(named) => {
-                        idents.insert(named.local.to_id());
-                    }
-                    ImportSpecifier::Default(default) => {
-                        idents.insert(default.local.to_id());
-                    }
-                    ImportSpecifier::Namespace(ns) => {
-                        idents.insert(ns.local.to_id());
-                    }
+            Declaration::VariableDeclaration(var_decl) => {
+                for decl in &var_decl.declarations {
+                    collect_module_var_idents(&decl.id, &mut idents);
                 }
+            }
+            Declaration::ClassDeclaration(class) => {
+                idents.extend(class_name(class));
+            }
+            _ => {}
+        }
+        return idents;
+    }
+
+    match stmt {
+        Statement::ExportDefaultDeclaration(export) => match &export.declaration {
+            ExportDefaultDeclarationKind::FunctionDeclaration(function) => {
+                idents.extend(function_name(function));
+            }
+            ExportDefaultDeclarationKind::ClassDeclaration(class) => {
+                idents.extend(class_name(class));
+            }
+            _ => {}
+        },
+        Statement::ImportDeclaration(import) => {
+            if import.import_kind.is_type() {
+                return idents;
+            }
+            for spec in import.specifiers.iter().flatten() {
+                if matches!(
+                    spec,
+                    ImportDeclarationSpecifier::ImportSpecifier(named)
+                        if named.import_kind.is_type()
+                ) {
+                    continue;
+                }
+                let local = match spec {
+                    ImportDeclarationSpecifier::ImportSpecifier(named) => &named.local,
+                    ImportDeclarationSpecifier::ImportDefaultSpecifier(default) => &default.local,
+                    ImportDeclarationSpecifier::ImportNamespaceSpecifier(ns) => &ns.local,
+                };
+                idents.insert(local.name.to_string());
             }
         }
         _ => {}
@@ -68,447 +81,484 @@ pub fn collect_module_level_idents(item: &ModuleItem) -> FxHashSet<Id> {
     idents
 }
 
-fn collect_var_decl_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
+/// Names bound by a module-level variable pattern. This intentionally mirrors
+/// the original transform: shorthand properties, nested object values, object
+/// rests, and array elements are followed, but defaulted bindings (`x = 1`)
+/// and array rests are not.
+fn collect_module_var_idents(pattern: &BindingPattern<'_>, idents: &mut FxHashSet<String>) {
     match pattern {
-        Pat::Ident(ident) => {
-            idents.insert(ident.to_id());
+        BindingPattern::BindingIdentifier(ident) => {
+            idents.insert(ident.name.to_string());
         }
-        Pat::Object(obj) => {
-            for prop in &obj.props {
-                match prop {
-                    ObjectPatProp::Assign(assign) => {
-                        idents.insert(assign.key.to_id());
-                    }
-                    ObjectPatProp::KeyValue(kv) => {
-                        collect_var_decl_idents(&kv.value, idents);
-                    }
-                    ObjectPatProp::Rest(rest) => {
-                        collect_var_decl_idents(&rest.arg, idents);
-                    }
+        BindingPattern::ObjectPattern(obj) => {
+            for prop in &obj.properties {
+                if prop.shorthand {
+                    idents.extend(shorthand_binding_name(&prop.value));
+                } else {
+                    collect_module_var_idents(&prop.value, idents);
                 }
             }
-        }
-        Pat::Array(arr) => {
-            for elem in arr.elems.iter().flatten() {
-                collect_var_decl_idents(elem, idents);
+            if let Some(rest) = &obj.rest {
+                collect_module_var_idents(&rest.argument, idents);
             }
         }
-        _ => {}
+        BindingPattern::ArrayPattern(arr) => {
+            for elem in arr.elements.iter().flatten() {
+                collect_module_var_idents(elem, idents);
+            }
+        }
+        BindingPattern::AssignmentPattern(_) => {}
     }
 }
 
-fn collect_bindings_from_pat(pat: &Pat, scope: &mut FxHashSet<Id>) {
-    match pat {
-        Pat::Ident(bi) => {
-            scope.insert(bi.id.to_id());
-        }
-        Pat::Object(obj) => {
-            for prop in &obj.props {
-                match prop {
-                    ObjectPatProp::Assign(a) => {
-                        scope.insert(a.key.to_id());
-                    }
-                    ObjectPatProp::KeyValue(kv) => collect_bindings_from_pat(&kv.value, scope),
-                    ObjectPatProp::Rest(r) => collect_bindings_from_pat(&r.arg, scope),
-                }
-            }
-        }
-        Pat::Array(arr) => {
-            for elem in arr.elems.iter().flatten() {
-                collect_bindings_from_pat(elem, scope);
-            }
-        }
-        Pat::Rest(r) => collect_bindings_from_pat(&r.arg, scope),
-        Pat::Assign(a) => collect_bindings_from_pat(&a.left, scope),
-        _ => {}
+/// The binding of a shorthand property: `{ a }` or `{ a = 1 }`.
+fn shorthand_binding_name(value: &BindingPattern<'_>) -> Option<String> {
+    match value {
+        BindingPattern::BindingIdentifier(ident) => Some(ident.name.to_string()),
+        BindingPattern::AssignmentPattern(assign) => shorthand_binding_name(&assign.left),
+        _ => None,
     }
 }
 
-#[expect(clippy::too_many_lines, reason = "AST visitor pattern requires comprehensive match arms")]
-#[expect(clippy::implicit_hasher)]
-pub fn collect_closure_idents(
-    body: &BlockStmt,
-    module_idents: &FxHashSet<Id>,
-    fn_params: &FxHashSet<Id>,
-    fn_ident: Option<&Ident>,
-) -> Vec<String> {
-    struct ClosureCollector {
-        module_idents: FxHashSet<Id>,
-        fn_params: FxHashSet<Id>,
-        function_scope_stack: Vec<FxHashSet<Id>>,
-        scope_stack: Vec<FxHashSet<Id>>,
-        found: Vec<String>,
-        seen: FxHashSet<String>,
+/// Every name bound by a pattern, including defaulted bindings and rests.
+fn collect_bound_names(pattern: &BindingPattern<'_>, names: &mut FxHashSet<String>) {
+    match pattern {
+        BindingPattern::BindingIdentifier(ident) => {
+            names.insert(ident.name.to_string());
+        }
+        BindingPattern::ObjectPattern(obj) => {
+            for prop in &obj.properties {
+                collect_bound_names(&prop.value, names);
+            }
+            if let Some(rest) = &obj.rest {
+                collect_bound_names(&rest.argument, names);
+            }
+        }
+        BindingPattern::ArrayPattern(arr) => {
+            for elem in arr.elements.iter().flatten() {
+                collect_bound_names(elem, names);
+            }
+            if let Some(rest) = &arr.rest {
+                collect_bound_names(&rest.argument, names);
+            }
+        }
+        BindingPattern::AssignmentPattern(assign) => collect_bound_names(&assign.left, names),
+    }
+}
+
+fn collect_param_names(params: &FormalParameters<'_>, names: &mut FxHashSet<String>) {
+    for param in &params.items {
+        collect_bound_names(&param.pattern, names);
+    }
+    if let Some(rest) = &params.rest {
+        collect_bound_names(&rest.rest.argument, names);
+    }
+}
+
+struct ClosureCollector<'m> {
+    module_idents: &'m FxHashSet<String>,
+    fn_params: &'m FxHashSet<String>,
+    function_scope_stack: Vec<FxHashSet<String>>,
+    scope_stack: Vec<FxHashSet<String>>,
+    found: Vec<String>,
+    seen: FxHashSet<String>,
+}
+
+struct FunctionVarCollector {
+    names: FxHashSet<String>,
+}
+
+impl<'a> Visit<'a> for FunctionVarCollector {
+    fn visit_variable_declaration(&mut self, var_decl: &VariableDeclaration<'a>) {
+        if var_decl.kind == VariableDeclarationKind::Var {
+            for decl in &var_decl.declarations {
+                collect_bound_names(&decl.id, &mut self.names);
+            }
+        }
     }
 
-    impl ClosureCollector {
-        fn is_shadowed(&self, id: &Id) -> bool {
-            for scope in self.function_scope_stack.iter().rev() {
-                if scope.contains(id) {
-                    return true;
+    fn visit_function(&mut self, _function: &Function<'a>, _flags: ScopeFlags) {}
+
+    fn visit_arrow_function_expression(&mut self, _arrow: &ArrowFunctionExpression<'a>) {}
+
+    fn visit_static_block(&mut self, _block: &StaticBlock<'a>) {}
+}
+
+fn collect_function_var_names(body: &FunctionBody<'_>) -> FxHashSet<String> {
+    let mut collector = FunctionVarCollector { names: FxHashSet::default() };
+    for stmt in &body.statements {
+        collector.visit_statement(stmt);
+    }
+    collector.names
+}
+
+fn collect_block_names(statements: &[Statement<'_>]) -> FxHashSet<String> {
+    let mut names = FxHashSet::default();
+    for stmt in statements {
+        match stmt {
+            Statement::VariableDeclaration(var_decl)
+                if var_decl.kind != VariableDeclarationKind::Var =>
+            {
+                for decl in &var_decl.declarations {
+                    collect_bound_names(&decl.id, &mut names);
                 }
             }
-            for scope in self.scope_stack.iter().rev() {
-                if scope.contains(id) {
-                    return true;
-                }
+            Statement::FunctionDeclaration(function) => {
+                names.extend(function_name(function));
             }
-            false
-        }
-
-        fn collect_var_decl_bindings(&mut self, var_decl: &VarDecl) {
-            let target_scope = if var_decl.kind == VarDeclKind::Var {
-                self.function_scope_stack.last_mut()
-            } else {
-                self.scope_stack.last_mut()
-            };
-
-            if let Some(scope) = target_scope {
-                for decl in &var_decl.decls {
-                    collect_bindings_from_pat(&decl.name, scope);
-                }
+            Statement::ClassDeclaration(class) => {
+                names.extend(class_name(class));
             }
-        }
-
-        fn collect_decl_binding(&mut self, decl: &Decl) {
-            match decl {
-                Decl::Fn(fn_decl) => {
-                    if let Some(scope) = self.function_scope_stack.last_mut() {
-                        scope.insert(fn_decl.ident.to_id());
+            Statement::ExportDeclaration(export) => match &export.declaration {
+                Declaration::FunctionDeclaration(function) => {
+                    names.extend(function_name(function));
+                }
+                Declaration::VariableDeclaration(var_decl)
+                    if var_decl.kind != VariableDeclarationKind::Var =>
+                {
+                    for decl in &var_decl.declarations {
+                        collect_bound_names(&decl.id, &mut names);
                     }
                 }
-                Decl::Class(class_decl) => {
-                    if let Some(scope) = self.scope_stack.last_mut() {
-                        scope.insert(class_decl.ident.to_id());
-                    }
+                Declaration::ClassDeclaration(class) => {
+                    names.extend(class_name(class));
                 }
                 _ => {}
-            }
+            },
+            _ => {}
+        }
+    }
+    names
+}
+
+impl ClosureCollector<'_> {
+    fn is_shadowed(&self, name: &str) -> bool {
+        self.function_scope_stack.iter().rev().any(|scope| scope.contains(name))
+            || self.scope_stack.iter().rev().any(|scope| scope.contains(name))
+    }
+
+    fn with_block_scope(&mut self, initial: FxHashSet<String>, visit: impl FnOnce(&mut Self)) {
+        self.scope_stack.push(initial);
+        visit(self);
+        self.scope_stack.pop();
+    }
+
+    fn with_function_scope(&mut self, params: FxHashSet<String>, visit: impl FnOnce(&mut Self)) {
+        self.function_scope_stack.push(params);
+        visit(self);
+        self.function_scope_stack.pop();
+    }
+}
+
+impl<'a> Visit<'a> for ClosureCollector<'_> {
+    fn visit_identifier_reference(&mut self, ident: &IdentifierReference<'a>) {
+        let name = ident.name.as_str();
+        if self.fn_params.contains(name) || self.is_shadowed(name) {
+            return;
+        }
+        if self.module_idents.contains(name) && self.seen.insert(name.to_string()) {
+            self.found.push(name.to_string());
         }
     }
 
-    impl Visit for ClosureCollector {
-        fn visit_ident(&mut self, ident: &Ident) {
-            let id = ident.to_id();
-            if self.fn_params.contains(&id) || self.is_shadowed(&id) {
-                return;
-            }
-            if self.module_idents.contains(&id) {
-                let name = ident.sym.to_string();
-                if self.seen.insert(name.clone()) {
-                    self.found.push(name);
+    fn visit_statement(&mut self, stmt: &Statement<'a>) {
+        match stmt {
+            Statement::FunctionDeclaration(function) => {
+                if let (Some(name), Some(scope)) =
+                    (function_name(function), self.scope_stack.last_mut())
+                {
+                    scope.insert(name);
                 }
             }
-        }
-
-        fn visit_block_stmt(&mut self, block: &BlockStmt) {
-            self.scope_stack.push(FxHashSet::default());
-            block.visit_children_with(self);
-            self.scope_stack.pop();
-        }
-
-        fn visit_stmt(&mut self, stmt: &Stmt) {
-            if let Stmt::Decl(decl) = stmt {
-                self.collect_decl_binding(decl);
+            Statement::ClassDeclaration(class) => {
+                if let (Some(name), Some(scope)) = (class_name(class), self.scope_stack.last_mut())
+                {
+                    scope.insert(name);
+                }
             }
-            stmt.visit_children_with(self);
+            _ => {}
         }
-
-        fn visit_var_decl(&mut self, var_decl: &VarDecl) {
-            self.collect_var_decl_bindings(var_decl);
-            var_decl.visit_children_with(self);
-        }
-
-        fn visit_function(&mut self, f: &Function) {
-            let mut new_function_scope = FxHashSet::default();
-            for param in &f.params {
-                collect_bindings_from_pat(&param.pat, &mut new_function_scope);
-            }
-            self.function_scope_stack.push(new_function_scope);
-            f.visit_children_with(self);
-            self.function_scope_stack.pop();
-        }
-
-        fn visit_arrow_expr(&mut self, a: &ArrowExpr) {
-            let mut new_function_scope = FxHashSet::default();
-            for param in &a.params {
-                collect_bindings_from_pat(param, &mut new_function_scope);
-            }
-            self.function_scope_stack.push(new_function_scope);
-            a.visit_children_with(self);
-            self.function_scope_stack.pop();
-        }
-
-        fn visit_catch_clause(&mut self, clause: &CatchClause) {
-            let mut new_scope = FxHashSet::default();
-            if let Some(param) = &clause.param {
-                collect_bindings_from_pat(param, &mut new_scope);
-            }
-            self.scope_stack.push(new_scope);
-            clause.visit_children_with(self);
-            self.scope_stack.pop();
-        }
-
-        fn visit_for_stmt(&mut self, stmt: &ForStmt) {
-            self.scope_stack.push(FxHashSet::default());
-            stmt.visit_children_with(self);
-            self.scope_stack.pop();
-        }
-
-        fn visit_for_in_stmt(&mut self, stmt: &ForInStmt) {
-            self.scope_stack.push(FxHashSet::default());
-            stmt.visit_children_with(self);
-            self.scope_stack.pop();
-        }
-
-        fn visit_for_of_stmt(&mut self, stmt: &ForOfStmt) {
-            self.scope_stack.push(FxHashSet::default());
-            stmt.visit_children_with(self);
-            self.scope_stack.pop();
-        }
+        walk::walk_statement(self, stmt);
     }
 
+    fn visit_variable_declaration(&mut self, var_decl: &VariableDeclaration<'a>) {
+        let target_scope = if var_decl.kind == VariableDeclarationKind::Var {
+            self.function_scope_stack.last_mut()
+        } else {
+            self.scope_stack.last_mut()
+        };
+        if let Some(scope) = target_scope {
+            for decl in &var_decl.declarations {
+                collect_bound_names(&decl.id, scope);
+            }
+        }
+        walk::walk_variable_declaration(self, var_decl);
+    }
+
+    fn visit_block_statement(&mut self, block: &BlockStatement<'a>) {
+        let names = collect_block_names(&block.body);
+        self.with_block_scope(names, |this| {
+            walk::walk_block_statement(this, block);
+        });
+    }
+
+    fn visit_function_body(&mut self, body: &FunctionBody<'a>) {
+        // A nested function body is its own block scope (SWC modelled it as a
+        // block statement), so its `let`/`const`/`class` bindings must not
+        // leak into the enclosing scope.
+        let names = collect_block_names(&body.statements);
+        self.with_block_scope(names, |this| {
+            walk::walk_function_body(this, body);
+        });
+    }
+
+    fn visit_function(&mut self, function: &Function<'a>, flags: ScopeFlags) {
+        let mut params = FxHashSet::default();
+        collect_param_names(&function.params, &mut params);
+        if let Some(body) = &function.body {
+            params.extend(collect_function_var_names(body));
+        }
+        self.with_function_scope(params, |this| walk::walk_function(this, function, flags));
+    }
+
+    fn visit_arrow_function_expression(&mut self, arrow: &ArrowFunctionExpression<'a>) {
+        let mut params = FxHashSet::default();
+        collect_param_names(&arrow.params, &mut params);
+        if let ArrowFunctionBody::FunctionBody(body) = &arrow.body {
+            params.extend(collect_function_var_names(body));
+        }
+        self.with_function_scope(params, |this| {
+            walk::walk_arrow_function_expression(this, arrow);
+        });
+    }
+
+    fn visit_catch_clause(&mut self, clause: &CatchClause<'a>) {
+        let mut names = FxHashSet::default();
+        if let Some(param) = &clause.param {
+            collect_bound_names(&param.pattern, &mut names);
+        }
+        self.with_block_scope(names, |this| walk::walk_catch_clause(this, clause));
+    }
+
+    fn visit_for_statement(&mut self, stmt: &ForStatement<'a>) {
+        self.with_block_scope(FxHashSet::default(), |this| walk::walk_for_statement(this, stmt));
+    }
+
+    fn visit_for_in_statement(&mut self, stmt: &ForInStatement<'a>) {
+        self.with_block_scope(FxHashSet::default(), |this| walk::walk_for_in_statement(this, stmt));
+    }
+
+    fn visit_for_of_statement(&mut self, stmt: &ForOfStatement<'a>) {
+        self.with_block_scope(FxHashSet::default(), |this| walk::walk_for_of_statement(this, stmt));
+    }
+
+    fn visit_static_block(&mut self, block: &StaticBlock<'a>) {
+        let mut var_collector = FunctionVarCollector { names: FxHashSet::default() };
+        for stmt in &block.body {
+            var_collector.visit_statement(stmt);
+        }
+        let block_names = collect_block_names(&block.body);
+        self.with_function_scope(var_collector.names, |this| {
+            this.with_block_scope(block_names, |this| walk::walk_static_block(this, block));
+        });
+    }
+}
+
+/// Module-level names referenced from `body` (in first-use order) that are not
+/// shadowed by a parameter or a local binding.
+#[expect(clippy::implicit_hasher)]
+pub fn collect_closure_idents(
+    body: &FunctionBody<'_>,
+    module_idents: &FxHashSet<String>,
+    fn_params: &FxHashSet<String>,
+    fn_ident: Option<&str>,
+) -> Vec<String> {
     let mut outer_scope = fn_params.clone();
-    if let Some(ident) = fn_ident {
-        outer_scope.insert(ident.to_id());
+    outer_scope.extend(collect_function_var_names(body));
+    outer_scope.extend(collect_block_names(&body.statements));
+    if let Some(name) = fn_ident {
+        outer_scope.insert(name.to_string());
     }
 
     let mut collector = ClosureCollector {
-        module_idents: module_idents.clone(),
-        fn_params: fn_params.clone(),
+        module_idents,
+        fn_params,
         function_scope_stack: vec![FxHashSet::default()],
         scope_stack: vec![outer_scope],
         found: Vec::new(),
         seen: FxHashSet::default(),
     };
 
-    for stmt in &body.stmts {
-        collector.visit_stmt(stmt);
+    for stmt in &body.statements {
+        collector.visit_statement(stmt);
     }
 
     collector.found
 }
 
-pub fn collect_fn_params(f: &Function) -> FxHashSet<Id> {
+pub fn collect_fn_params(function: &Function<'_>) -> FxHashSet<String> {
     let mut params = FxHashSet::default();
-    for param in &f.params {
-        collect_pat_idents(&param.pat, &mut params);
-    }
+    collect_param_names(&function.params, &mut params);
     params
 }
 
-fn collect_pat_idents(pattern: &Pat, idents: &mut FxHashSet<Id>) {
-    match pattern {
-        Pat::Ident(ident) => {
-            idents.insert(ident.to_id());
-        }
-        Pat::Object(obj) => {
-            for prop in &obj.props {
-                match prop {
-                    ObjectPatProp::Assign(assign) => {
-                        idents.insert(assign.key.to_id());
-                    }
-                    ObjectPatProp::KeyValue(kv) => {
-                        collect_pat_idents(&kv.value, idents);
-                    }
-                    ObjectPatProp::Rest(rest) => {
-                        collect_pat_idents(&rest.arg, idents);
-                    }
-                }
-            }
-        }
-        Pat::Array(arr) => {
-            for elem in arr.elems.iter().flatten() {
-                collect_pat_idents(elem, idents);
-            }
-        }
-        Pat::Rest(rest) => {
-            collect_pat_idents(&rest.arg, idents);
-        }
-        Pat::Assign(assign) => {
-            collect_pat_idents(&assign.left, idents);
-        }
-        _ => {}
-    }
-}
-
 #[cfg(test)]
-#[expect(clippy::expect_used, clippy::default_trait_access)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "Test helpers fail fast when a snippet parses unexpectedly"
+)]
 mod tests {
-    use deno_ast::swc::{
-        ast::{
-            AssignPatProp, BindingIdent, Class, ClassDecl, ClassExpr, Decl, DefaultDecl,
-            ExportDecl, ExportDefaultDecl, FnDecl, FnExpr, Function, Ident, ImportDecl,
-            ImportDefaultSpecifier, ImportPhase, ImportSpecifier, ModuleDecl, ModuleItem,
-            ObjectPat, ObjectPatProp, Param, Pat, RestPat, Stmt, Str,
-        },
-        common::{Span, SyntaxContext},
+    use rari_ast::oxc::{
+        allocator::Allocator,
+        ast::ast::{Function, Statement},
+        parser::Parser,
+        span::SourceType,
     };
 
     use super::*;
 
-    fn ident(name: &str) -> Ident {
-        Ident::new(name.into(), Span::default(), SyntaxContext::default())
+    fn module_idents(source: &str) -> FxHashSet<String> {
+        let allocator = Allocator::default();
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let stmt = ret.program.body.first().expect("expected a statement");
+        collect_module_level_idents(stmt)
     }
 
-    fn make_function(params: Vec<Param>) -> Function {
-        Function {
-            span: Default::default(),
-            ctxt: SyntaxContext::default(),
-            decorators: vec![],
-            params,
-            body: None,
-            is_async: false,
-            is_generator: false,
-            type_params: None,
-            return_type: None,
-        }
+    fn fn_params(source: &str) -> FxHashSet<String> {
+        let allocator = Allocator::default();
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.first() else {
+            panic!("expected a function declaration");
+        };
+        let function: &Function<'_> = function;
+        collect_fn_params(function)
+    }
+
+    fn single(idents: FxHashSet<String>) -> String {
+        assert_eq!(idents.len(), 1);
+        idents.into_iter().next().expect("expected one identifier")
     }
 
     #[test]
     fn test_collect_fn_params_simple() {
-        let f = make_function(vec![
-            Param {
-                span: Default::default(),
-                decorators: vec![],
-                pat: Pat::Ident(BindingIdent { id: ident("a"), type_ann: None }),
-            },
-            Param {
-                span: Default::default(),
-                decorators: vec![],
-                pat: Pat::Ident(BindingIdent { id: ident("b"), type_ann: None }),
-            },
-        ]);
-
-        let params = collect_fn_params(&f);
-        assert_eq!(params.len(), 2);
+        assert_eq!(fn_params("function f(a, b) {}").len(), 2);
     }
 
     #[test]
     fn test_collect_module_idents_import() {
-        let item = ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
-            span: Default::default(),
-            specifiers: vec![ImportSpecifier::Default(ImportDefaultSpecifier {
-                span: Default::default(),
-                local: ident("React"),
-            })],
-            src: Box::new(Str { span: Default::default(), value: "react".into(), raw: None }),
-            with: None,
-            phase: ImportPhase::Evaluation,
-            type_only: false,
-        }));
-
-        let idents = collect_module_level_idents(&item);
-        assert_eq!(idents.len(), 1);
-        let id = idents.into_iter().next().expect("expected imported React identifier");
-        assert_eq!(id.0.to_string(), "React");
+        assert_eq!(single(module_idents("import React from 'react'")), "React");
     }
 
     #[test]
     fn test_collect_module_idents_fn_decl() {
-        let item = ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl {
-            ident: ident("myFunction"),
-            function: Box::new(make_function(vec![])),
-            declare: false,
-        })));
-
-        let idents = collect_module_level_idents(&item);
-        assert_eq!(idents.len(), 1);
+        assert_eq!(module_idents("function myFunction() {}").len(), 1);
     }
 
     #[test]
     fn test_collect_module_idents_export_default_fn() {
-        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
-            span: Default::default(),
-            decl: DefaultDecl::Fn(FnExpr {
-                ident: Some(ident("myFn")),
-                function: Box::new(make_function(vec![])),
-            }),
-        }));
-
-        let idents = collect_module_level_idents(&item);
-        assert_eq!(idents.len(), 1);
-        let id = idents.into_iter().next().expect("expected myFn identifier");
-        assert_eq!(id.0.to_string(), "myFn");
+        assert_eq!(single(module_idents("export default function myFn() {}")), "myFn");
     }
 
     #[test]
     fn test_collect_module_idents_class_decl() {
-        let item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
-            ident: ident("Foo"),
-            declare: false,
-            class: Box::new(Class::default()),
-        })));
-
-        let idents = collect_module_level_idents(&item);
-        assert_eq!(idents.len(), 1);
-        let id = idents.into_iter().next().expect("expected Foo identifier");
-        assert_eq!(id.0.to_string(), "Foo");
+        assert_eq!(single(module_idents("class Foo {}")), "Foo");
     }
 
     #[test]
     fn test_collect_module_idents_export_decl_class() {
-        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-            span: Default::default(),
-            decl: Decl::Class(ClassDecl {
-                ident: ident("Bar"),
-                declare: false,
-                class: Box::new(Class::default()),
-            }),
-        }));
-
-        let idents = collect_module_level_idents(&item);
-        assert_eq!(idents.len(), 1);
-        let id = idents.into_iter().next().expect("expected Bar identifier");
-        assert_eq!(id.0.to_string(), "Bar");
+        assert_eq!(single(module_idents("export class Bar {}")), "Bar");
     }
 
     #[test]
     fn test_collect_module_idents_export_default_class() {
-        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl {
-            span: Default::default(),
-            decl: DefaultDecl::Class(ClassExpr {
-                ident: Some(ident("Baz")),
-                class: Box::new(Class::default()),
-            }),
-        }));
-
-        let idents = collect_module_level_idents(&item);
-        assert_eq!(idents.len(), 1);
-        let id = idents.into_iter().next().expect("expected Baz identifier");
-        assert_eq!(id.0.to_string(), "Baz");
+        assert_eq!(single(module_idents("export default class Baz {}")), "Baz");
     }
 
     #[test]
     fn test_collect_fn_params_with_patterns() {
-        let f = make_function(vec![
-            Param {
-                span: Default::default(),
-                decorators: vec![],
-                pat: Pat::Object(ObjectPat {
-                    span: Default::default(),
-                    props: vec![ObjectPatProp::Assign(AssignPatProp {
-                        span: Default::default(),
-                        key: ident("x").into(),
-                        value: None,
-                    })],
-                    optional: false,
-                    type_ann: None,
-                }),
-            },
-            Param {
-                span: Default::default(),
-                decorators: vec![],
-                pat: Pat::Rest(RestPat {
-                    span: Default::default(),
-                    arg: Box::new(Pat::Ident(BindingIdent { id: ident("rest"), type_ann: None })),
-                    type_ann: None,
-                    dot3_token: Default::default(),
-                }),
-            },
-        ]);
-
-        let params = collect_fn_params(&f);
+        let params = fn_params("function f({ x }, ...rest) {}");
         assert_eq!(params.len(), 2);
+        assert!(params.contains("x") && params.contains("rest"));
+    }
+
+    #[test]
+    fn test_nested_function_body_bindings_do_not_leak() {
+        let allocator = Allocator::default();
+        let source = "const shared = 1\nasync function f() { function inner() { const shared = 2 } return shared }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(1) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
+        assert_eq!(found, vec!["shared".to_string()]);
+    }
+
+    #[test]
+    fn test_var_decl_before_use_is_shadowed_without_nested_function_leak() {
+        let allocator = Allocator::default();
+        let source = "const shared = 1\nasync function f() { return shared + inner(); var shared; function inner() { return shared } }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(1) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
+        assert_eq!(found, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_block_function_does_not_shadow_outside_block() {
+        let allocator = Allocator::default();
+        let source = "const inner = 1\nasync function f() { { function inner() {} } return inner }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(1) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        let found = collect_closure_idents(body, &module, &FxHashSet::default(), Some("f"));
+        assert_eq!(found, vec!["inner".to_string()]);
+    }
+
+    #[test]
+    fn static_block_bindings_are_scoped_separately() {
+        let allocator = Allocator::default();
+        let source = "const shared = 1; const used = 2; async function f() { class C { static { var shared; console.log(shared, used); } } return shared; }";
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let mut module = FxHashSet::default();
+        for stmt in &ret.program.body {
+            module.extend(collect_module_level_idents(stmt));
+        }
+        let Some(Statement::FunctionDeclaration(function)) = ret.program.body.get(2) else {
+            panic!("expected a function declaration");
+        };
+        let body = function.body.as_ref().expect("expected a body");
+        assert_eq!(
+            collect_closure_idents(body, &module, &FxHashSet::default(), Some("f")),
+            vec!["used".to_string(), "shared".to_string()]
+        );
+    }
+
+    #[test]
+    fn type_only_imports_are_not_module_runtime_idents() {
+        let allocator = Allocator::default();
+        let source = r#"import type Foo from "types"; import { type Bar, value } from "values";"#;
+        let ret = Parser::new(&allocator, source, SourceType::tsx()).parse();
+        let idents: FxHashSet<String> =
+            ret.program.body.iter().flat_map(collect_module_level_idents).collect();
+        assert_eq!(idents, FxHashSet::from_iter(["value".to_string()]));
     }
 }

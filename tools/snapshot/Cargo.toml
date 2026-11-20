@@ -6,11 +6,11 @@ license = { workspace = true }
 publish = false
 
 [dependencies]
-deno_ast = { workspace = true, features = ["codegen", "transpiling"] }
 deno_core = { workspace = true }
 deno_error = { workspace = true }
 deno_node = { workspace = true }
 rari = { workspace = true, features = ["ext-full"] }
+rari_ast = { workspace = true, features = ["transpiling"] }
 rustc-hash = { workspace = true }
 url = { workspace = true }
 

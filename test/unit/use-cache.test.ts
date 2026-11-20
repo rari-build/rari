@@ -361,10 +361,27 @@ async function getData(id) {
       const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",\s*prefix\s*\]\)/)
-      expect(result.code).toContain('var getData = ((')
-      expect(result.code).toContain('$$ACTION_BOUND_ARGS)=>async (...args)=>')
+      expect(result.code).toContain(
+        'var getData = async (...args) => (async ($$ACTION_BOUND_ARGS) =>',
+      )
+      expect(result.code).toContain('...args')
       expect(result.code).not.toContain('async function getData([$$ACTION_ARG_0], id)')
       expect(result.code).toMatch(/"[\da-f]{66}"/)
+    })
+
+    it('does not shadow captured module bindings named args', () => {
+      const src = `
+const args = 'captured';
+async function getData(id) {
+  "use cache";
+  return args + id;
+}
+`
+      const result = addon.transformUseCache(src, defaultOpts)
+
+      expect(result.code).toContain('var getData = async (...args_) =>')
+      expect(result.code).toContain('...args_')
+      expect(result.code).toMatch(/\)\(\[\s*"[\da-f]{66}",\s*args\s*\]\)/)
     })
 
     it('transforms file-level use cache for all async exports', () => {
