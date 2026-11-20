@@ -608,11 +608,7 @@ fn ensure_no_fatal_diagnostics<'a>(
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::absolute_paths,
-    clippy::unwrap_used,
-    reason = "Ported code not yet updated to the workspace lint rules"
-)]
+#[expect(clippy::absolute_paths, clippy::unwrap_used)]
 mod tests {
     use base64::Engine;
     use oxc::allocator::Allocator;

@@ -1,10 +1,5 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-#![expect(
-    clippy::too_many_lines,
-    reason = "Ported code not yet updated to the workspace lint rules"
-)]
-
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -353,6 +348,7 @@ const HIGHLIGHT_TAIL_LINES: usize = 2;
 const MAX_HIGHLIGHT_LINES: usize = HIGHLIGHT_HEAD_LINES + HIGHLIGHT_TAIL_LINES + 1;
 
 /// Prints a snippet to the given writer and returns the line number indent.
+#[expect(clippy::too_many_lines)]
 fn print_snippet(
     io: &mut dyn std::fmt::Write,
     snippet: &DiagnosticSnippet<'_>,
@@ -563,7 +559,7 @@ fn specifier_to_file_path(specifier: &ModuleSpecifier) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, reason = "Ported code not yet updated to the workspace lint rules")]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use std::borrow::Cow;
 

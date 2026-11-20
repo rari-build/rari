@@ -1,7 +1,5 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-#![expect(clippy::needless_pass_by_value)]
-
 use std::{borrow::Cow, fmt, fmt::Write as _};
 
 use deno_error::JsError;
@@ -102,6 +100,7 @@ impl ParseDiagnostic {
         self.0.source.line_and_column_display(self.0.span.start as usize)
     }
 
+    #[expect(clippy::needless_pass_by_value)]
     pub fn from_oxc_diagnostic(
         err: OxcDiagnostic,
         specifier: &ModuleSpecifier,
@@ -434,11 +433,7 @@ impl fmt::Display for ParseDiagnosticsError {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::unwrap_used,
-    reason = "Ported code not yet updated to the workspace lint rules"
-)]
+#[expect(clippy::cast_possible_truncation, clippy::unwrap_used)]
 mod test {
     use oxc::span::Span;
 

@@ -257,12 +257,7 @@ fn strip_bom_from_arc(s: Arc<str>, should_panic_in_debug: bool) -> Arc<str> {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    clippy::panic,
-    clippy::unwrap_used,
-    reason = "Ported code not yet updated to the workspace lint rules"
-)]
+#[expect(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 mod test {
     use super::*;
 

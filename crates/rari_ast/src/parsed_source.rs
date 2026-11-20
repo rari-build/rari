@@ -230,7 +230,7 @@ impl fmt::Debug for ParsedSource<'_> {
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, reason = "Ported code not yet updated to the workspace lint rules")]
+#[expect(clippy::unwrap_used)]
 mod test {
     use oxc::allocator::Allocator;
 

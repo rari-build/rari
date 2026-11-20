@@ -1,7 +1,5 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-#![expect(clippy::unwrap_used, reason = "Ported code not yet updated to the workspace lint rules")]
-
 use oxc::{
     allocator::{Allocator, ArenaVec, CloneIn, GetAllocator},
     ast::{ast::*, builder::AstBuilder},
@@ -52,6 +50,7 @@ impl<'a> VisitMut<'a> for ImportDeclsToVarDecls<'a> {
                         continue;
                     }
 
+                    #[expect(clippy::unwrap_used)]
                     let specifiers = import_decl.specifiers.as_ref().unwrap();
 
                     // Collect named/default imports for destructuring
