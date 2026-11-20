@@ -45,34 +45,37 @@ The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway
 
 ## Railway
 
-rari has built-in support for [Railway](https://railway.app). Run the deploy command to generate the configuration files:
+rari has built-in support for [Railway](https://railway.app). Run the deploy command to generate the configuration:
 
 ```terminal
 rari deploy railway
 ```
 
-This creates a `railway.toml` and a `railpack.json` in your project root and updates your `package.json`:
+This creates a `.railway/railway.ts` file, Railway's [Infrastructure as Code](https://docs.railway.com/infrastructure-as-code) format, and updates your `package.json`:
 
-```toml title="railway.toml"
-[build]
-builder = "RAILPACK"
+```ts title=".railway/railway.ts"
+import { defineRailway, github, project, service } from 'railway/iac'
 
-[deploy]
-startCommand = "npm start"
-healthcheckPath = "/_rari/health"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+export default defineRailway(() => {
+  const app = service('my-app', {
+    source: github('acme/my-app', { branch: 'main' }),
+    start: 'npm start',
+    healthcheck: '/_rari/health',
+    healthcheckTimeout: 300,
+    deploy: {
+      restartPolicyType: 'ON_FAILURE',
+      restartPolicyMaxRetries: 3,
+    },
+    env: {
+      RAILPACK_DEPLOY_APT_PACKAGES: '... libfontconfig1',
+    },
+  })
+
+  return project('my-app', { resources: [app] })
+})
 ```
 
-```json title="railpack.json"
-{
-  "$schema": "https://schema.railpack.com",
-  "deploy": {
-    "aptPackages": ["...", "libfontconfig1"]
-  }
-}
-```
+The service and project names come from the `name` in your `package.json`, without any npm scope. The `source` comes from your `origin` remote and current branch. If your project has no GitHub remote, `source` is left out and you connect the repository in the Railway dashboard instead.
 
 Your `package.json` gets these changes:
 
@@ -81,27 +84,41 @@ Your `package.json` gets these changes:
 - `engines.node` is set to `>=24.21.0` if missing or lower (required by rari)
 - `rari` is added to `dependencies` if not already present
 
-If you have an existing `start` script, it's backed up to `start:original`.
+If you have an existing `start` script, it's backed up to `start:original`. An existing `.railway/railway.ts` is backed up to `.railway/railway.ts.backup`.
 
 ### Deploying to Railway
 
+The Railway CLI evaluates `.railway/railway.ts` with the `railway` package, so add it as a dev dependency:
+
+```package-managers
+pnpm: pnpm add -D railway
+npm: npm install -D railway
+yarn: yarn add -D railway
+bun: bun add -d railway
+```
+
+Then:
+
 1. Push your code to GitHub
-2. Go to [railway.app](https://railway.app) and create a new project
-3. Select "Deploy from GitHub repo" and choose your repository
-4. Railway detects the configuration and deploys automatically
-5. Generate a domain under Settings → Networking
+2. Install the [Railway CLI](https://docs.railway.com/cli) and run `railway init --name my-app` to create a project and link it to your directory
+3. Run `railway config plan` to preview the changes, then `railway config apply` to create the service and deploy it
+4. Generate a domain under Settings → Networking
+
+Railway needs access to your repository through its GitHub app. If `apply` can't find the repository, connect your GitHub account in the Railway dashboard first.
+
+Railway doesn't read `.railway/railway.ts` during deploys. Run `railway config apply` again whenever you change it.
+
+To manage an existing service instead, run `railway link` to link to its project, and change the name passed to `service()` to match the service in Railway.
+
+Check the `railway config plan` output before applying. If the service name doesn't match, the plan creates a new service and deletes the existing one. Railway manages service variables from the file by default, so if your service has variables that aren't in `env`, the plan stops and asks you to declare them. Wrap any secret in `preserve()` (imported from `railway/iac`) to keep the value already set in Railway without committing it.
 
 Railway is auto-detected via the `RAILWAY_ENVIRONMENT` environment variable, and the server binds to `0.0.0.0` with the platform-assigned `PORT`.
 
 ### System Dependencies
 
-The Rust runtime requires `libfontconfig1` for image and font rendering. The generated `railpack.json` installs it in the deployed image. The `"..."` entry keeps the packages Railpack would install anyway. If you already have a `railpack.json`, `rari deploy railway` adds `libfontconfig1` to its `deploy.aptPackages` instead of replacing the file.
+The Rust runtime requires `libfontconfig1` for image and font rendering. The generated `.railway/railway.ts` installs it in the deployed image through the `RAILPACK_DEPLOY_APT_PACKAGES` variable. The `...` entry keeps the packages Railpack would install anyway.
 
-If you'd rather not use a `railpack.json`, set this variable on your service in the Railway dashboard instead:
-
-| Variable                       | Value                |
-| ------------------------------ | -------------------- |
-| `RAILPACK_DEPLOY_APT_PACKAGES` | `... libfontconfig1` |
+If your project already has a `railpack.json`, `rari deploy railway` adds `libfontconfig1` to its `deploy.aptPackages` instead, and leaves the variable out of `.railway/railway.ts`. A `deploy.aptPackages` list in `railpack.json` replaces the variable, so the package has to be in the file.
 
 ## Render
 
