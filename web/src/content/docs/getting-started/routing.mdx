@@ -13,6 +13,7 @@ Each directory in `src/app/` can contain these special files:
 | --------------------- | ------------------------------------------------------------------------------------ |
 | `page.tsx`            | The UI for a route. Makes the directory publicly accessible                          |
 | `layout.tsx`          | Shared UI that wraps child routes and persists across navigation                     |
+| `template.tsx`        | Like a layout, but re-mounts on every navigation                                     |
 | `loading.tsx`         | Loading UI shown while the page is streaming (wraps the page in a Suspense boundary) |
 | `error.tsx`           | Error UI shown when a page or layout throws (wraps the page in an error boundary)    |
 | `not-found.tsx`       | Fallback UI shown when no route matches the requested path                           |
@@ -146,6 +147,60 @@ export default function UserLayout({ children, params, pathname }: LayoutProps<{
   )
 }
 ```
+
+## Templates
+
+A `template.tsx` wraps its segment just like a layout, but it re-mounts on every navigation instead of persisting. State resets, effects run again, and DOM is recreated. Use it for things like per-page enter animations or logging each page view.
+
+```tsx title="src/app/template.tsx"
+import type { ReactNode } from 'react'
+
+export default function Template({ children }: { children: ReactNode }) {
+  return <div className="page-frame">{children}</div>
+}
+```
+
+Templates render between a layout and its page:
+
+```tsx
+<Layout>
+  <Template>      {/* re-mounted on every navigation */}
+    <Page />
+  </Template>
+</Layout>
+```
+
+### Templates and View Transitions
+
+React only runs a `<ViewTransition>`'s enter and exit animations when it comes before any DOM element in the part of the tree being added or removed. Because a template re-mounts on every navigation, any DOM it renders (like the wrapper `<div>` above) sits above your pages, so a `<ViewTransition>` inside a page never animates.
+
+If you use a template that renders DOM, put your navigation `<ViewTransition>` in the template, around its wrapper element:
+
+```tsx title="src/app/template.tsx"
+import type { ReactNode } from 'react'
+import { PageFrame } from './page-frame'
+
+export default function Template({ children }: { children: ReactNode }) {
+  return <PageFrame>{children}</PageFrame>
+}
+```
+
+```tsx title="src/app/page-frame.tsx"
+'use client'
+
+import type { ReactNode } from 'react'
+import { ViewTransition } from 'react'
+
+export function PageFrame({ children }: { children: ReactNode }) {
+  return (
+    <ViewTransition enter="page-enter" exit="page-exit" default="none">
+      <div className="page-frame">{children}</div>
+    </ViewTransition>
+  )
+}
+```
+
+Templates that render no DOM of their own don't have this problem, and apps without a template can keep their `<ViewTransition>` in each page.
 
 ## Dynamic Routes
 

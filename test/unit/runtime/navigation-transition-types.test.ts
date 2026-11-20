@@ -1,11 +1,13 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { addTransitionType } from 'react'
+import type { PendingLeafEviction } from '../../../packages/rari/src/runtime/flight/apply-flight-patch'
+import { addTransitionType, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { getNavigationTransitionSnapshot } from '../../../packages/rari/src/router/navigation/navigation-transition-store'
 import {
   commitNavigationPayload,
   resolveNavigationTransitionTypes,
 } from '../../../packages/rari/src/runtime/flight/commit-navigation-payload'
+import { flightRouteCache } from '../../../packages/rari/src/runtime/flight/route-cache'
 
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof import('react')>()
@@ -304,5 +306,62 @@ describe('commitNavigationPayload', () => {
 
     expect(pendingNavigateCommittedIdRef.current).toBe(9)
     expect(window.dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('defers source-leaf eviction until after commit so the transition keeps its types', () => {
+    vi.stubGlobal('window', {
+      history: { pushState: vi.fn(), replaceState: vi.fn() },
+      dispatchEvent: vi.fn(),
+    })
+
+    flightRouteCache.clear()
+    flightRouteCache.set(
+      '/blog',
+      '',
+      createElement(
+        'html',
+        null,
+        createElement('head', null),
+        createElement('body', null, createElement('div', { 'data-rari-layout-path': '/' }, 'blog')),
+      ),
+    )
+    expect(flightRouteCache.hasRoute('/blog', '')).toBe(true)
+
+    const notify = vi.fn<() => void>()
+    const unsubscribe = flightRouteCache.subscribe(() => {
+      notify()
+    })
+    const pendingEvictLeafRef = { current: null as PendingLeafEviction | null }
+
+    try {
+      commitNavigationPayload({
+        parsedPayload: { element: 'next' },
+        shouldScrollToTop: false,
+        navigationId: 11,
+        transitionTypes: ['nav', 'nav-forward'],
+        maySuspend: true,
+        pendingHistory: { url: '/blog/post', state: {} },
+        routeLocation: { pathname: '/blog/post', search: '' },
+        pendingEvictLeaf: { pathname: '/blog', search: '' },
+        pendingEvictLeafRef,
+        startTransition: scope => {
+          void scope()
+        },
+        currentNavigationIdRef: { current: 11 },
+        pendingScrollPayloadRef: { current: null },
+        setRenderKey: () => {},
+        setRscPayload: () => {},
+        setRouteLocation: () => {},
+        clearHmrError: () => {},
+        pendingNavigateCommittedIdRef: { current: null },
+      })
+    } finally {
+      unsubscribe()
+    }
+
+    expect(notify).not.toHaveBeenCalled()
+    expect(flightRouteCache.hasRoute('/blog', '')).toBe(true)
+    expect(pendingEvictLeafRef.current).toEqual({ pathname: '/blog', search: '' })
+    flightRouteCache.clear()
   })
 })

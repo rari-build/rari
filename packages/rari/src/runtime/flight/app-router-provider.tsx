@@ -358,6 +358,7 @@ export function AppRouterProvider({
   const hmrRouteCacheSeqRef = useRef(new Map<string, number>())
   const pendingFormScrollRestoreRef = useRef<RscPayload | null>(null)
   const pendingNavigateCommittedIdRef = useRef<number | null>(null)
+  const pendingEvictLeafRef = useRef<PendingLeafEviction | null>(null)
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
   const failureHistoryRef = useRef<HmrFailure[]>([])
   const lastSuccessfulPayloadRef = useRef<string | null>(null)
@@ -385,6 +386,14 @@ export function AppRouterProvider({
     const committedNavigationId = pendingNavigateCommittedIdRef.current
     if (committedNavigationId == null) return
     pendingNavigateCommittedIdRef.current = null
+
+    const evict = pendingEvictLeafRef.current
+    pendingEvictLeafRef.current = null
+    if (evict != null) {
+      const current = currentRouteLocation()
+      if (evict.pathname !== current.pathname || evict.search !== current.search)
+        flightRouteCache.evictLeaf(evict.pathname, evict.search)
+    }
     window.dispatchEvent(
       new CustomEvent('rari:navigate-committed', {
         detail: { navigationId: committedNavigationId },
@@ -793,6 +802,7 @@ export function AppRouterProvider({
         pendingHistory: detail.pendingHistory,
         routeLocation: nextLocation,
         pendingEvictLeaf: resolvedPayload.pendingEvictLeaf,
+        pendingEvictLeafRef,
         startTransition,
         currentNavigationIdRef,
         pendingScrollPayloadRef,

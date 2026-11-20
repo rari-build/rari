@@ -4,7 +4,6 @@ import type { PendingLeafEviction } from './apply-flight-patch'
 import type { PendingLoadingLeaf } from './pending-loading'
 import type { PendingScrollToTop } from './pending-scroll'
 import { addTransitionType, startTransition as defaultStartTransition } from 'react'
-import { flightRouteCache } from './route-cache'
 
 export interface PendingHistoryUpdate {
   readonly url: string
@@ -36,6 +35,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
   readonly pendingEvictLeaf?: PendingLeafEviction
+  readonly pendingEvictLeafRef?: RefObject<PendingLeafEviction | null>
 }
 
 export function resolveNavigationTransitionTypes(options: {
@@ -97,6 +97,7 @@ export function commitNavigationPayload<T extends object>(
     clearHmrError,
     pendingNavigateCommittedIdRef,
     pendingEvictLeaf,
+    pendingEvictLeafRef,
   } = options
 
   if (currentNavigationIdRef.current !== navigationId) return
@@ -116,9 +117,7 @@ export function commitNavigationPayload<T extends object>(
     setPendingLoadingLeaf?.(null)
     if (!maySuspend) applyPendingHistory(pendingHistory)
     if (routeLocation != null) setRouteLocation?.(routeLocation)
-    if (pendingEvictLeaf != null) {
-      flightRouteCache.evictLeaf(pendingEvictLeaf.pathname, pendingEvictLeaf.search)
-    }
+    if (pendingEvictLeafRef != null) pendingEvictLeafRef.current = pendingEvictLeaf ?? null
 
     setRenderKey(prev => {
       const commitKey = prev + 1
