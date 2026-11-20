@@ -61,6 +61,10 @@ pub struct CjsCodeAnalyzer {
     cjs_tracker: Arc<Resolver>,
 }
 
+fn cached_analysis_is_sufficient(analysis: &CjsAnalysis, mode: EsmAnalysisMode) -> bool {
+    !matches!((analysis, mode), (CjsAnalysis::Esm, EsmAnalysisMode::SourceImportsAndExports))
+}
+
 impl CjsCodeAnalyzer {
     pub fn new(fs: FileSystemRc, cjs_tracker: Arc<Resolver>) -> Self {
         Self { fs, cache: RefCell::new(FxHashMap::default()), cjs_tracker }
@@ -72,8 +76,10 @@ impl CjsCodeAnalyzer {
         source: &str,
         esm_analysis_mode: EsmAnalysisMode,
     ) -> Result<CjsAnalysis, JsErrorBox> {
-        if let Some(analysis) = self.cache.borrow().get(specifier.as_str()) {
-            return Ok(analysis.clone());
+        if let Some(analysis) = self.cache.borrow().get(specifier.as_str()).cloned()
+            && cached_analysis_is_sufficient(&analysis, esm_analysis_mode)
+        {
+            return Ok(analysis);
         }
 
         let source = source.strip_prefix('\u{FEFF}').unwrap_or(source);
@@ -217,5 +223,34 @@ impl analyze::CjsCodeAnalyzer for CjsCodeAnalyzer {
         _member: &str,
     ) -> Result<Option<Vec<String>>, JsErrorBox> {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use node_resolver::analyze::EsmAnalysisMode;
+    use rari_ast::ModuleExportsAndReExports;
+
+    use super::{CjsAnalysis, cached_analysis_is_sufficient};
+
+    #[test]
+    fn source_only_esm_cache_entry_is_incomplete_for_export_analysis() {
+        assert!(!cached_analysis_is_sufficient(
+            &CjsAnalysis::Esm,
+            EsmAnalysisMode::SourceImportsAndExports,
+        ));
+        assert!(cached_analysis_is_sufficient(&CjsAnalysis::Esm, EsmAnalysisMode::SourceOnly,));
+    }
+
+    #[test]
+    fn populated_esm_and_cjs_cache_entries_are_reused() {
+        assert!(cached_analysis_is_sufficient(
+            &CjsAnalysis::EsmAnalysis(ModuleExportsAndReExports::default()),
+            EsmAnalysisMode::SourceImportsAndExports,
+        ));
+        assert!(cached_analysis_is_sufficient(
+            &CjsAnalysis::Cjs(ModuleExportsAndReExports::default()),
+            EsmAnalysisMode::SourceImportsAndExports,
+        ));
     }
 }

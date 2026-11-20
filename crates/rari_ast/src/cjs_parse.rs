@@ -172,6 +172,7 @@ impl CjsVisitor<'_> {
 impl<'a> Visit<'a> for CjsVisitor<'_> {
     fn visit_variable_declaration(&mut self, decl: &VariableDeclaration<'a>) {
         for declarator in &decl.declarations {
+            walk::walk_variable_declarator(self, declarator);
             if let Some(id) = declarator.id.get_binding_identifier()
                 && let Some(symbol_id) = id.symbol_id.get()
             {
@@ -184,7 +185,6 @@ impl<'a> Visit<'a> for CjsVisitor<'_> {
                 }
             }
         }
-        walk::walk_variable_declaration(self, decl);
     }
 
     fn visit_call_expression(&mut self, call_expr: &CallExpression<'a>) {
@@ -210,16 +210,7 @@ impl<'a> Visit<'a> for CjsVisitor<'_> {
     }
 
     fn visit_assignment_expression(&mut self, assign_expr: &AssignmentExpression<'a>) {
-        if let AssignmentTarget::AssignmentTargetIdentifier(ident) = &assign_expr.left
-            && let Some(reference_id) = ident.reference_id.get()
-        {
-            let reference = self.scoping.get_reference(reference_id);
-            if reference.is_write()
-                && let Some(symbol_id) = reference.symbol_id()
-            {
-                self.var_assignments.remove(&symbol_id);
-            }
-        }
+        walk::walk_assignment_expression(self, assign_expr);
 
         if assign_expr.operator == AssignmentOperator::Assign {
             match &assign_expr.left {
@@ -247,7 +238,16 @@ impl<'a> Visit<'a> for CjsVisitor<'_> {
             }
         }
 
-        walk::walk_assignment_expression(self, assign_expr);
+        if let AssignmentTarget::AssignmentTargetIdentifier(ident) = &assign_expr.left
+            && let Some(reference_id) = ident.reference_id.get()
+        {
+            let reference = self.scoping.get_reference(reference_id);
+            if reference.is_write()
+                && let Some(symbol_id) = reference.symbol_id()
+            {
+                self.var_assignments.remove(&symbol_id);
+            }
+        }
     }
 }
 
@@ -1029,6 +1029,30 @@ mod test {
       var dependency = require("./dependency");
       __export(dependency);
       dependency = {};
+      __export(dependency);
+    "#,
+        );
+        tester.assert_reexports(vec!["./dependency"]);
+    }
+
+    #[test]
+    fn assignment_rhs_can_resolve_the_previous_require_alias() {
+        let tester = parse_cjs(
+            r#"
+      var dependency = require("./dependency");
+      dependency = __export(dependency);
+      __export(dependency);
+    "#,
+        );
+        tester.assert_reexports(vec!["./dependency"]);
+    }
+
+    #[test]
+    fn var_redeclaration_initializer_can_resolve_the_previous_alias() {
+        let tester = parse_cjs(
+            r#"
+      var dependency = require("./dependency");
+      var dependency = __export(dependency);
       __export(dependency);
     "#,
         );

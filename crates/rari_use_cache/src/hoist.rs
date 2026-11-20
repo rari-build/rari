@@ -198,14 +198,14 @@ pub fn create_bound_replacement_init(
         return format!("async function(...args) {}", try_body(cache_name, false, 0));
     }
 
-    let mut bound_args = format!("[\n    {}", js_string(ref_id));
+    let mut bound_args = format!("[\n        {}", js_string(ref_id));
     for var_name in closure_vars {
-        let _ = write!(bound_args, ",\n    {var_name}");
+        let _ = write!(bound_args, ",\n        {var_name}");
     }
-    bound_args.push_str("\n]");
+    bound_args.push_str("\n    ]");
 
     format!(
-        "(($$ACTION_BOUND_ARGS)=>async (...args)=>{})({bound_args})",
+        "async (...args) => {{\n    const $$ACTION_BOUND_ARGS = {bound_args};\n    {}\n}}",
         try_body(cache_name, true, 4),
     )
 }
@@ -259,5 +259,17 @@ mod tests {
                 .contains("function f(this: { value: number }, $$ACTION_BOUND_ARGS, a: number)")
         );
         assert!(!declarations[0].contains("/* comment */"));
+    }
+
+    #[test]
+    fn bound_replacement_reads_closure_values_when_invoked() {
+        let replacement =
+            create_bound_replacement_init("cache", "action-id", &["initialized_later".to_string()]);
+
+        assert!(replacement.starts_with("async (...args) => {"));
+        assert!(replacement.contains(
+            "const $$ACTION_BOUND_ARGS = [\n        \"action-id\",\n        initialized_later\n    ];"
+        ));
+        assert!(!replacement.starts_with("(($$ACTION_BOUND_ARGS)"));
     }
 }

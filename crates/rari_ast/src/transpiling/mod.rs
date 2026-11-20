@@ -288,26 +288,43 @@ fn maybe_upgrade_jsx_for_pragma<'a>(
     comments: &[oxc::ast::ast::Comment],
     source_text: &str,
 ) -> Cow<'a, TranspileOptions> {
-    let Some(import_source) = jsx_import_source_pragma(comments, source_text) else {
-        return options.clone();
-    };
+    if let Some(import_source) = jsx_import_source_pragma(comments, source_text) {
+        return match &options.jsx {
+            Some(JsxRuntime::Classic(_)) => Cow::Owned(TranspileOptions {
+                jsx: Some(JsxRuntime::Automatic(JsxAutomaticOptions {
+                    development: false,
+                    import_source: Some(import_source),
+                })),
+                ..(options.as_ref().clone())
+            }),
+            Some(JsxRuntime::Automatic(automatic)) => Cow::Owned(TranspileOptions {
+                jsx: Some(JsxRuntime::Automatic(JsxAutomaticOptions {
+                    import_source: Some(import_source),
+                    ..automatic.clone()
+                })),
+                ..(options.as_ref().clone())
+            }),
+            None => options.clone(),
+        };
+    }
 
     match &options.jsx {
-        Some(JsxRuntime::Classic(_)) => Cow::Owned(TranspileOptions {
-            jsx: Some(JsxRuntime::Automatic(JsxAutomaticOptions {
-                development: false,
-                import_source: Some(import_source),
-            })),
-            ..(options.as_ref().clone())
-        }),
-        Some(JsxRuntime::Automatic(automatic)) => Cow::Owned(TranspileOptions {
-            jsx: Some(JsxRuntime::Automatic(JsxAutomaticOptions {
-                import_source: Some(import_source),
-                ..automatic.clone()
-            })),
-            ..(options.as_ref().clone())
-        }),
-        None => options.clone(),
+        Some(JsxRuntime::Classic(classic)) => {
+            let factory = jsx_pragma(comments, source_text, "@jsx");
+            let fragment_factory = jsx_pragma(comments, source_text, "@jsxFrag");
+            if factory.is_none() && fragment_factory.is_none() {
+                return options.clone();
+            }
+            Cow::Owned(TranspileOptions {
+                jsx: Some(JsxRuntime::Classic(JsxClassicOptions {
+                    factory: factory.unwrap_or_else(|| classic.factory.clone()),
+                    fragment_factory: fragment_factory
+                        .unwrap_or_else(|| classic.fragment_factory.clone()),
+                })),
+                ..(options.as_ref().clone())
+            })
+        }
+        Some(JsxRuntime::Automatic(_)) | None => options.clone(),
     }
 }
 
@@ -316,17 +333,26 @@ fn jsx_import_source_pragma(
     source_text: &str,
 ) -> Option<String> {
     comments.iter().find_map(|comment| {
-        let text = comment.content_span().source_text(source_text);
-        parse_jsx_import_source_pragma(text)
+        parse_jsx_import_source_pragma(comment.content_span().source_text(source_text))
     })
 }
 
-fn parse_jsx_import_source_pragma(text: &str) -> Option<String> {
-    const PRAGMA: &str = "@jsxImportSource";
+fn jsx_pragma(
+    comments: &[oxc::ast::ast::Comment],
+    source_text: &str,
+    pragma: &str,
+) -> Option<String> {
+    comments.iter().find_map(|comment| {
+        let text = comment.content_span().source_text(source_text);
+        parse_jsx_pragma(text, pragma)
+    })
+}
+
+fn parse_jsx_pragma(text: &str, pragma: &str) -> Option<String> {
     text.lines().find_map(|line| {
         let line = line.trim();
         let line = line.strip_prefix('*').unwrap_or(line).trim();
-        let after_pragma = line.strip_prefix(PRAGMA)?;
+        let after_pragma = line.strip_prefix(pragma)?;
         if !after_pragma.chars().next().is_some_and(char::is_whitespace) {
             return None;
         }
@@ -334,6 +360,10 @@ fn parse_jsx_import_source_pragma(text: &str) -> Option<String> {
         let import_source = values.next()?;
         values.next().is_none().then(|| import_source.to_string())
     })
+}
+
+fn parse_jsx_import_source_pragma(text: &str) -> Option<String> {
+    parse_jsx_pragma(text, "@jsxImportSource")
 }
 
 fn build_transform_options(
@@ -530,7 +560,7 @@ fn jsx_factory_import_names<'a>(
     let mut usage = JsxUsage { element: false, fragment: false };
     usage.visit_program(program);
     [
-        usage.element.then(|| classic.factory.split('.').next().unwrap_or("")),
+        (usage.element || usage.fragment).then(|| classic.factory.split('.').next().unwrap_or("")),
         usage.fragment.then(|| classic.fragment_factory.split('.').next().unwrap_or("")),
     ]
 }
@@ -974,6 +1004,46 @@ function App() {
   return h("div", null, h(Fragment, null));
 }"#;
         assert_eq!(&code[..expected.len()], expected);
+    }
+
+    #[test]
+    fn jsx_pragmas_keep_factory_imports_for_fragment_only_output() {
+        let specifier = ModuleSpecifier::parse("https://deno.land/x/mod.tsx").unwrap();
+        let source = r#"
+/** @jsx h */
+/** @jsxFrag Fragment */
+import { h, Fragment } from "./jsx.ts";
+type HFactory = typeof h;
+type FragmentFactory = typeof Fragment;
+const fragment = <></>;
+"#;
+        let allocator = Allocator::default();
+        let mut program = parse_program(
+            &allocator,
+            ParseParams {
+                specifier,
+                text: source.into(),
+                media_type: MediaType::Tsx,
+                capture_tokens: false,
+                maybe_source_type: None,
+                scope_analysis: false,
+            },
+        )
+        .unwrap();
+
+        for mode in [ImportsNotUsedAsValues::Error, ImportsNotUsedAsValues::Preserve] {
+            let code = program
+                .transpile(
+                    &allocator,
+                    &TranspileOptions { imports_not_used_as_values: mode, ..Default::default() },
+                    &TranspileModuleOptions::default(),
+                    &EmitOptions { source_map: SourceMapOption::None, ..Default::default() },
+                )
+                .unwrap()
+                .text;
+            assert!(code.contains("import { h, Fragment } from \"./jsx.ts\";"));
+            assert!(code.contains("h(Fragment, null)"));
+        }
     }
 
     #[test]
