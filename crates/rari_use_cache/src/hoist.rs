@@ -210,7 +210,7 @@ pub fn create_bound_replacement_init(
     bound_args.push_str("\n    ]");
 
     format!(
-        "async ({args_name}) => (async ($$ACTION_BOUND_ARGS) => {})({bound_args})",
+        "async (...{args_name}) => (async ($$ACTION_BOUND_ARGS) => {})({bound_args})",
         try_body(cache_name, true, &args_name, 4),
     )
 }
@@ -271,7 +271,7 @@ mod tests {
         let replacement =
             create_bound_replacement_init("cache", "action-id", &["initialized_later".to_string()]);
 
-        assert!(replacement.starts_with("async (args) => (async ($$ACTION_BOUND_ARGS) =>"));
+        assert!(replacement.starts_with("async (...args) => (async ($$ACTION_BOUND_ARGS) =>"));
         assert!(
             replacement.contains("})([\n        \"action-id\",\n        initialized_later\n    ])")
         );
@@ -285,7 +285,7 @@ mod tests {
             &["args".to_string(), "args_".to_string(), "$$ACTION_BOUND_ARGS".to_string()],
         );
 
-        assert!(replacement.starts_with("async (args__) => (async ($$ACTION_BOUND_ARGS) =>"));
+        assert!(replacement.starts_with("async (...args__) => (async ($$ACTION_BOUND_ARGS) =>"));
         assert!(replacement.contains(
             "\"action-id\",\n        args,\n        args_,\n        $$ACTION_BOUND_ARGS"
         ));

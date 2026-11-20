@@ -361,7 +361,9 @@ async function getData(id) {
       const result = addon.transformUseCache(src, defaultOpts)
 
       expect(result.code).toMatch(/\(\[\s*"[\da-f]{66}",\s*prefix\s*\]\)/)
-      expect(result.code).toContain('var getData = async (args) => (async ($$ACTION_BOUND_ARGS) =>')
+      expect(result.code).toContain(
+        'var getData = async (...args) => (async ($$ACTION_BOUND_ARGS) =>',
+      )
       expect(result.code).toContain('...args')
       expect(result.code).not.toContain('async function getData([$$ACTION_ARG_0], id)')
       expect(result.code).toMatch(/"[\da-f]{66}"/)
@@ -377,7 +379,7 @@ async function getData(id) {
 `
       const result = addon.transformUseCache(src, defaultOpts)
 
-      expect(result.code).toContain('var getData = async (args_) =>')
+      expect(result.code).toContain('var getData = async (...args_) =>')
       expect(result.code).toContain('...args_')
       expect(result.code).toMatch(/\)\(\[\s*"[\da-f]{66}",\s*args\s*\]\)/)
     })
