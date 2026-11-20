@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import type { HmrFailure } from '../boundaries/hmr-failure-banner'
 import type { PendingLeafEviction } from './apply-flight-patch'
+import type { RouteLocation } from './commit-navigation-payload'
 import type { PendingLoadingLeaf } from './pending-loading'
 import type { PendingScrollToTop } from './pending-scroll'
 import type { FlightContent } from './react-helpers'
@@ -358,6 +359,7 @@ export function AppRouterProvider({
   const hmrRouteCacheSeqRef = useRef(new Map<string, number>())
   const pendingFormScrollRestoreRef = useRef<RscPayload | null>(null)
   const pendingNavigateCommittedIdRef = useRef<number | null>(null)
+  const pendingNavigateLocationRef = useRef<RouteLocation | null>(null)
   const pendingEvictLeavesRef = useRef<PendingLeafEviction[]>([])
   const pendingFetchesRef = useRef<Map<string, Promise<RscPayload | undefined>>>(new Map())
   const failureHistoryRef = useRef<HmrFailure[]>([])
@@ -366,7 +368,7 @@ export function AppRouterProvider({
   const [hmrError, setHmrError] = useState<HmrFailure | null>(null)
   const MAX_RETRIES = 3
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     routeLocationRef.current = routeLocation
   }, [routeLocation])
 
@@ -385,7 +387,10 @@ export function AppRouterProvider({
 
     const committedNavigationId = pendingNavigateCommittedIdRef.current
     if (committedNavigationId == null) return
+    const navigationLocation = pendingNavigateLocationRef.current
+    if (navigationLocation != null && routeLocationRef.current !== navigationLocation) return
     pendingNavigateCommittedIdRef.current = null
+    pendingNavigateLocationRef.current = null
 
     const evictions = pendingEvictLeavesRef.current
     if (evictions.length > 0) {
@@ -816,6 +821,7 @@ export function AppRouterProvider({
           setHmrError(null)
         },
         pendingNavigateCommittedIdRef,
+        pendingNavigateLocationRef,
       })
 
       if (resolvedPayload.flightProtocol != null && resolvedPayload.flightProtocol !== '')

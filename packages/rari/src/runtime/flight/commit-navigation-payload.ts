@@ -34,6 +34,7 @@ export interface CommitNavigationPayloadOptions<T extends object> {
   readonly setPendingLoadingLeaf?: Dispatch<SetStateAction<PendingLoadingLeaf | null>>
   readonly clearHmrError: () => void
   readonly pendingNavigateCommittedIdRef: RefObject<number | null>
+  readonly pendingNavigateLocationRef?: RefObject<RouteLocation | null>
   readonly pendingEvictLeaf?: PendingLeafEviction
   readonly pendingEvictLeavesRef?: RefObject<PendingLeafEviction[]>
 }
@@ -96,6 +97,7 @@ export function commitNavigationPayload<T extends object>(
     setPendingLoadingLeaf,
     clearHmrError,
     pendingNavigateCommittedIdRef,
+    pendingNavigateLocationRef,
     pendingEvictLeaf,
     pendingEvictLeavesRef,
   } = options
@@ -129,6 +131,8 @@ export function commitNavigationPayload<T extends object>(
     setRscPayload(parsedPayload)
     clearHmrError()
     pendingNavigateCommittedIdRef.current = navigationId
+    if (pendingNavigateLocationRef != null)
+      pendingNavigateLocationRef.current = routeLocation ?? null
   }
 
   startNavTransition(() => {
