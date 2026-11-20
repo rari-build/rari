@@ -13,7 +13,7 @@ use std::{
     path::PathBuf,
 };
 
-use deno_terminal::colors;
+use colored::Colorize;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{ModuleSpecifier, SourceTextInfo};
@@ -124,10 +124,11 @@ pub enum DiagnosticSnippetHighlightStyle {
 
 impl DiagnosticSnippetHighlightStyle {
     fn style_underline(&self, s: impl std::fmt::Display) -> impl std::fmt::Display {
+        let text = format!("{s}");
         match self {
-            Self::Error => colors::red_bold(s),
-            Self::Warning => colors::yellow_bold(s),
-            Self::Hint => colors::intense_blue(s),
+            Self::Error => text.red().bold(),
+            Self::Warning => text.yellow().bold(),
+            Self::Hint => text.bright_blue(),
         }
     }
 
@@ -234,14 +235,14 @@ fn print_diagnostic(
 ) -> Result<(), std::fmt::Error> {
     match diagnostic.level() {
         DiagnosticLevel::Error => {
-            write!(io, "{}", colors::red_bold(format_args!("error[{}]", diagnostic.code())))?;
+            write!(io, "{}", format!("error[{}]", diagnostic.code()).red().bold())?;
         }
         DiagnosticLevel::Warning => {
-            write!(io, "{}", colors::yellow_bold(format_args!("warning[{}]", diagnostic.code())))?;
+            write!(io, "{}", format!("warning[{}]", diagnostic.code()).yellow().bold())?;
         }
     }
 
-    writeln!(io, ": {}", colors::bold(diagnostic.message()))?;
+    writeln!(io, ": {}", format!("{}", diagnostic.message()).bold())?;
 
     let mut max_line_number_digits = 1;
     // Whether any highlight spans multiple lines. When it does, a `>` marker is
@@ -278,23 +279,23 @@ fn print_diagnostic(
         io,
         "{}{}",
         RepeatingCharFmt(' ', max_line_number_digits as usize + marker_width),
-        colors::intense_blue("-->"),
+        "-->".bright_blue(),
     )?;
     match &location {
         DiagnosticLocation::Path { path } => {
-            write!(io, " {}", colors::cyan(path.display()))?;
+            write!(io, " {}", format!("{}", path.display()).cyan())?;
         }
         DiagnosticLocation::Module { specifier }
         | DiagnosticLocation::ModulePosition { specifier, .. } => {
             if let Some(path) = specifier_to_file_path(specifier) {
-                write!(io, " {}", colors::cyan(path.display()))?;
+                write!(io, " {}", format!("{}", path.display()).cyan())?;
             } else {
-                write!(io, " {}", colors::cyan(specifier.as_str()))?;
+                write!(io, " {}", specifier.as_str().cyan())?;
             }
         }
     }
     if let Some((line, column)) = location.position() {
-        write!(io, "{}", colors::yellow(format_args!(":{line}:{column}")))?;
+        write!(io, "{}", format!(":{line}:{column}").yellow())?;
     }
 
     if diagnostic.snippet().is_some()
@@ -315,9 +316,9 @@ fn print_diagnostic(
             io,
             "{} {} ",
             RepeatingCharFmt(' ', max_line_number_digits as usize + marker_width),
-            colors::intense_blue("=")
+            "=".bright_blue()
         )?;
-        writeln!(io, "{}: {}", colors::bold("hint"), hint)?;
+        writeln!(io, "{}: {}", "hint".bold(), hint)?;
     }
 
     if let Some(snippet) = diagnostic.snippet_fixed() {
@@ -329,10 +330,10 @@ fn print_diagnostic(
     }
 
     for info in diagnostic.info().iter() {
-        writeln!(io, "  {}: {}", colors::intense_blue("info"), info)?;
+        writeln!(io, "  {}: {}", "info".bright_blue(), info)?;
     }
     if let Some(docs_url) = diagnostic.docs_url() {
-        writeln!(io, "  {}: {}", colors::intense_blue("docs"), docs_url)?;
+        writeln!(io, "  {}: {}", "docs".bright_blue(), docs_url)?;
     }
 
     Ok(())
@@ -414,12 +415,12 @@ fn print_snippet(
     let mut lines_to_show = lines_to_show.into_iter().collect::<Vec<_>>();
     lines_to_show.sort();
 
-    print_padded(io, colors::intense_blue(" | "), bar_indent)?;
+    print_padded(io, " | ".bright_blue(), bar_indent)?;
     writeln!(io)?;
     let mut previous_line_number: Option<usize> = None;
     for (line_number, highlight_indexes) in lines_to_show {
         if previous_line_number.is_some_and(|previous| elided_after.contains(&previous)) {
-            print_padded(io, colors::intense_blue("..."), bar_indent)?;
+            print_padded(io, "...".bright_blue(), bar_indent)?;
             writeln!(io)?;
         }
 
@@ -431,7 +432,7 @@ fn print_snippet(
                 start_line_number != end_line_number
             });
             if is_span_line {
-                write!(io, "{}", colors::intense_blue(">"))?;
+                write!(io, "{}", ">".bright_blue())?;
                 print_padded(io, "", (marker_width - 1) as u32)?;
             } else {
                 print_padded(io, "", marker_width as u32)?;
@@ -440,7 +441,7 @@ fn print_snippet(
 
         print_padded(
             io,
-            colors::intense_blue(format_args!("{line_number} | ")),
+            format!("{line_number} | ").bright_blue(),
             max_line_number_digits - line_number.ilog10() - 1,
         )?;
 
@@ -492,7 +493,7 @@ fn print_snippet(
             };
 
             let underline = RepeatingCharFmt(highlight.style.underline_char(), highlight_width);
-            print_padded(io, colors::intense_blue(" | "), bar_indent)?;
+            print_padded(io, " | ".bright_blue(), bar_indent)?;
             write!(io, "{}", RepeatingCharFmt(' ', padding_width))?;
             write!(io, "{}", highlight.style.style_underline(underline))?;
 
@@ -505,7 +506,7 @@ fn print_snippet(
         }
 
         if wrote_description {
-            print_padded(io, colors::intense_blue(" | "), bar_indent)?;
+            print_padded(io, " | ".bright_blue(), bar_indent)?;
             writeln!(io)?;
         }
 

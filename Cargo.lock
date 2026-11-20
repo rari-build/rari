@@ -8379,9 +8379,9 @@ name = "rari_ast"
 version = "0.0.0"
 dependencies = [
  "base64 0.23.1",
+ "colored",
  "deno_error",
  "deno_media_type",
- "deno_terminal",
  "oxc",
  "percent-encoding",
  "serde",
