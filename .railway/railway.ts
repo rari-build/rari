@@ -6,7 +6,7 @@ import type {
 import { defineRailway, github, project, service } from 'railway/iac'
 
 export default defineRailway((): ProjectDefinition => {
-  const web: ReferencableServiceNode<RailwayProvidedVariable> = service('web', {
+  const web: ReferencableServiceNode<RailwayProvidedVariable> = service('rari', {
     source: github('rari-build/rari', { branch: 'main' }),
     build: {
       builder: 'RAILPACK',
@@ -22,5 +22,5 @@ export default defineRailway((): ProjectDefinition => {
     },
   })
 
-  return project('rari', { resources: [web] })
+  return project('rari.build', { resources: [web] })
 })
