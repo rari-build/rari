@@ -21,7 +21,7 @@ sha2 = { workspace = true }
 napi-build = "2.6.0"
 
 [dev-dependencies]
-divan = { package = "codspeed-divan-compat", version = "6.0.0" }
+divan = { package = "codspeed-divan-compat", version = "6.1.0" }
 
 [[bench]]
 name = "transform"
