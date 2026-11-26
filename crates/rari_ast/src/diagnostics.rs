@@ -65,9 +65,7 @@ pub enum DiagnosticLocation<'a> {
 
 impl DiagnosticLocation<'_> {
     /// Return the line and column number of the diagnostic.
-    ///
     /// The line number is 1-indexed.
-    ///
     /// The column number is 1-indexed. This is the number of UTF-16 code units
     /// from the start of the line to the diagnostic.
     fn position(&self) -> Option<(usize, usize)> {
@@ -88,7 +86,6 @@ impl DiagnosticLocation<'_> {
 }
 
 pub struct DiagnosticSnippet<'a> {
-    /// The source text for this snippet.
     pub source: Cow<'a, crate::SourceTextInfo>,
     /// The piece of the snippet that should be highlighted. For best results, the
     /// highlights should not overlap and be ordered by their start position.
@@ -135,12 +132,10 @@ impl DiagnosticSnippetHighlightStyle {
     }
 }
 
-/// Returns the text of the line with the given number (1-indexed).
 fn line_text(source: &SourceTextInfo, line_number: usize) -> &str {
     source.line_text(line_number - 1)
 }
 
-/// Returns the line number (1-indexed) of the line that contains the given
 /// position.
 fn line_number(source: &SourceTextInfo, pos: DiagnosticSourcePos) -> usize {
     source.line_index(pos.byte_index(source)) + 1
@@ -803,7 +798,7 @@ mod tests {
     fn test_position_in_file_from_text_info_emoji() {
         let specifier: ModuleSpecifier = "file:///dev/test.ts".parse().unwrap();
         let text_info = SourceTextInfo::new("🧑‍🦰text".into());
-        let pos = text_info.line_start(0) + 11; // the end of the emoji
+        let pos = text_info.line_start(0) + 11;
         let location = DiagnosticLocation::ModulePosition {
             specifier: Cow::Borrowed(&specifier),
             source_pos: DiagnosticSourcePos::ByteIndex(pos),

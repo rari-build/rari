@@ -6,18 +6,21 @@ use std::{
 
 use cow_utils::CowUtils;
 use deno_core::{Extension, JsRuntime, RuntimeOptions};
-use deno_runtime::BootstrapOptions;
 use rari_error::RariError;
+use rari_runtime::BootstrapOptions;
 use rustc_hash::FxHashMap;
 
-use crate::runtime::{
-    ext,
-    factory::{
-        create_params::runtime_create_params,
-        utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT, NODE_BOOTSTRAP_SCRIPT},
+use crate::{
+    runtime::{
+        ext,
+        factory::{
+            create_params::runtime_create_params,
+            utils::constants::{ENV_INJECTION_SCRIPT, MODULE_CHECK_SCRIPT, NODE_BOOTSTRAP_SCRIPT},
+        },
+        module_loader::RariModuleLoader,
+        ops::{self, StreamOpState},
     },
-    module_loader::RariModuleLoader,
-    ops::{self, StreamOpState},
+    telemetry,
 };
 
 const NODE_CONSOLE_SCOPE_SPECIFIER: &str = "ext:runtime/98_global_scope_shared.js";
@@ -98,6 +101,12 @@ pub fn build_js_runtime(
     runtime.execute_script("node_bootstrap.js", NODE_BOOTSTRAP_SCRIPT.to_string()).map_err(
         |err| RariError::js_runtime(format!("Failed to stash node bootstrap args: {err}")),
     )?;
+
+    if let Some(script) = telemetry::bootstrap_script() {
+        runtime.execute_script("otel_bootstrap.js", script).map_err(|err| {
+            RariError::js_runtime(format!("Failed to enable OpenTelemetry: {err}"))
+        })?;
+    }
 
     if let Some(env_vars) = env_vars {
         let env_script = ENV_INJECTION_SCRIPT.cow_replace(

@@ -5,10 +5,13 @@ use std::{
 };
 
 use clap::{Arg, ArgAction, Command};
-use rari::server::{
-    Server,
-    config::{Config, Mode},
-    image::{ImageConfig, ImageOptimizer, scan_for_image_usage},
+use rari::{
+    server::{
+        Server,
+        config::{Config, Mode},
+        image::{ImageConfig, ImageOptimizer, scan_for_image_usage},
+    },
+    telemetry,
 };
 use rari_error::RariError;
 use rustls::crypto::{CryptoProvider, aws_lc_rs};
@@ -39,12 +42,16 @@ async fn main() -> Result<(), Box<dyn error::Error + Send + Sync>> {
 
     let config = load_configuration(&matches)?;
 
+    telemetry::init();
+
     let server = Server::new(config).await.map_err(|e| {
         tracing::error!("Failed to create server: {}", e);
         e
     })?;
 
-    server.start_with_shutdown(setup_shutdown_signal()).await.map_err(|e| {
+    let result = server.start_with_shutdown(setup_shutdown_signal()).await;
+    telemetry::shutdown();
+    result.map_err(|e| {
         tracing::error!("Server error: {}", e);
         e
     })?;

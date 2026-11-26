@@ -1,0 +1,7 @@
+import './navigator_user_agent_data.ts'
+import './global_scope_window.ts'
+import './errors.ts'
+import './version.ts'
+import './permissions.ts'
+import './tty.ts'
+import './prompt.ts'

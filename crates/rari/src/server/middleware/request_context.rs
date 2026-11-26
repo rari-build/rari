@@ -290,7 +290,9 @@ impl RequestContext {
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
         let cache_relevant_options: FxHashMap<_, _> = options
             .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags"))
+            .filter(|(k, _)| {
+                !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags" | "traceHeaders")
+            })
             .collect();
 
         if cache_relevant_options.is_empty() {
@@ -409,11 +411,13 @@ impl RequestContext {
         let client = get_http_client()?;
         let mut request = client.get(url);
 
-        if let Some(headers_str) = options.get("headers")
-            && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
-        {
-            for (key, value) in pairs {
-                request = request.header(key.as_str(), value.as_str());
+        for option in ["headers", "traceHeaders"] {
+            if let Some(headers_str) = options.get(option)
+                && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
+            {
+                for (key, value) in pairs {
+                    request = request.header(key.as_str(), value.as_str());
+                }
             }
         }
 
@@ -446,7 +450,24 @@ impl RequestContext {
 
 #[cfg(test)]
 mod tests {
+    use std::iter;
+
     use super::*;
+
+    #[test]
+    fn trace_headers_are_not_part_of_the_cache_key() {
+        let headers = ("headers".to_string(), r#"[["accept","text/plain"]]"#.to_string());
+        let plain: FxHashMap<_, _> = iter::once(headers.clone()).collect();
+        let traced: FxHashMap<_, _> =
+            [headers, ("traceHeaders".to_string(), r#"[["traceparent","00-a-b-01"]]"#.to_string())]
+                .into_iter()
+                .collect();
+
+        assert_eq!(
+            RequestContext::generate_cache_key("https://example.com/data", &plain),
+            RequestContext::generate_cache_key("https://example.com/data", &traced)
+        );
+    }
 
     #[test]
     fn test_request_context_creation() {

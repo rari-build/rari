@@ -10,57 +10,6 @@ declare global {
     const args: readonly string[]
     const version: Record<string, string>
 
-    function cron(
-      name: string,
-      schedule: string,
-      handler: () => void | Promise<void>,
-    ): Promise<void>
-
-    function openKv(path?: string): Promise<Kv>
-
-    class AtomicOperation {
-      check(...checks: readonly KvCheck[]): this
-      commit(): Promise<KvCommitResult>
-      delete(key: KvKey): this
-      set(key: KvKey, value: unknown): this
-      sum(key: KvKey, n: bigint): this
-      min(key: KvKey, n: bigint): this
-      max(key: KvKey, n: bigint): this
-    }
-
-    class KvU64 {
-      constructor(value: bigint)
-      readonly value: bigint
-    }
-
-    class KvListIterator implements AsyncIterableIterator<KvEntry> {
-      next(): Promise<IteratorResult<KvEntry>>
-      [Symbol.asyncIterator](): AsyncIterableIterator<KvEntry>
-    }
-
-    interface Kv {
-      get: (key: KvKey) => Promise<KvEntryMaybe>
-      set: (key: KvKey, value: unknown) => Promise<void>
-      delete: (key: KvKey) => Promise<void>
-      list: (selector: KvListSelector) => KvListIterator
-      atomic: () => AtomicOperation
-      close: () => void
-    }
-
-    type KvKey = readonly (string | number | bigint | boolean | Uint8Array)[]
-    interface KvCheck {
-      key: KvKey
-      versionstamp: string | null
-    }
-    type KvCommitResult = { ok: true; versionstamp: string } | { ok: false }
-    interface KvEntry<T = unknown> {
-      key: KvKey
-      value: T
-      versionstamp: string
-    }
-    type KvEntryMaybe<T = unknown> = KvEntry<T> | { key: KvKey; value: null; versionstamp: null }
-    type KvListSelector = { prefix: KvKey } | { start: KvKey; end: KvKey }
-
     function serve(
       handler: (request: Request) => Response | Promise<Response>,
       options?: ServeOptions,
@@ -97,78 +46,6 @@ declare global {
     interface WebSocketUpgrade {
       response: Response
       socket: WebSocket
-    }
-
-    function dlopen(
-      path: string,
-      symbols: Readonly<{ readonly [key: string]: ForeignFunction }>,
-    ): DynamicLibrary
-
-    interface DynamicLibrary {
-      symbols: Record<string, any>
-      close: () => void
-    }
-
-    interface ForeignFunction {
-      parameters: NativeType[]
-      result: NativeType
-      nonblocking?: boolean
-    }
-
-    type NativeType =
-      | 'void'
-      | 'bool'
-      | 'u8'
-      | 'i8'
-      | 'u16'
-      | 'i16'
-      | 'u32'
-      | 'i32'
-      | 'u64'
-      | 'i64'
-      | 'usize'
-      | 'isize'
-      | 'f32'
-      | 'f64'
-      | 'pointer'
-      | 'buffer'
-      | 'function'
-
-    class UnsafeCallback {
-      constructor(definition: UnsafeCallbackDefinition, callback: (...args: readonly any[]) => any)
-      ref: () => void
-      unref: () => void
-      close: () => void
-    }
-
-    interface UnsafeCallbackDefinition {
-      parameters: NativeType[]
-      result: NativeType
-    }
-
-    class UnsafePointer {
-      static of(value: Uint8Array | ArrayBuffer): bigint
-    }
-
-    class UnsafePointerView {
-      constructor(pointer: bigint)
-      getBool(offset?: number): boolean
-      getUint8(offset?: number): number
-      getInt8(offset?: number): number
-      getUint16(offset?: number): number
-      getInt16(offset?: number): number
-      getUint32(offset?: number): number
-      getInt32(offset?: number): number
-      getFloat32(offset?: number): number
-      getFloat64(offset?: number): number
-      getCString(offset?: number): string
-      getArrayBuffer(byteLength: number, offset?: number): ArrayBuffer
-      copyInto(destination: Uint8Array, offset?: number): void
-    }
-
-    class UnsafeFnPointer {
-      constructor(pointer: bigint, definition: ForeignFunction)
-      call: (...args: readonly any[]) => any
     }
 
     function writeFileSync(path: string | URL, data: Uint8Array, options?: WriteFileOptions): void

@@ -14,28 +14,26 @@ categories = { workspace = true }
 [lib]
 crate-type = ["rlib"]
 
-[features]
-default = []
-# Optional Deno leaf extensions
-ext-full = ["dep:deno_webgpu", "dep:deno_kv", "dep:deno_cron", "dep:deno_node_sqlite"]
-
 [dependencies]
+# === rari Crates ===
+rari_ast = { workspace = true, features = ["transpiling", "cjs"] }
+rari_error = { workspace = true }
+rari_runtime = { workspace = true }
+
 # === Core Runtime Dependencies ===
 deno_core = { workspace = true }
 deno_error = { workspace = true }
 deno_features = { workspace = true }
 deno_bundle_runtime = { workspace = true }
-deno_runtime = { workspace = true }
+deno_os = { workspace = true }
 deno_permissions = { workspace = true }
 deno_process = { workspace = true }
 
 # === Essential Web APIs ===
-deno_cache = { workspace = true }
 deno_crypto = { workspace = true }
 deno_fetch = { workspace = true }
 deno_web = { workspace = true }
 deno_webidl = { workspace = true }
-deno_webstorage = { workspace = true }
 
 # === Network & HTTP ===
 deno_http = { workspace = true }
@@ -48,24 +46,20 @@ deno_fs = { workspace = true }
 deno_io = { workspace = true }
 
 # === Advanced Features ===
+deno_signals = { workspace = true }
 deno_telemetry = { workspace = true }
-deno_webgpu = { workspace = true, optional = true }
-deno_kv = { workspace = true, optional = true }
-deno_cron = { workspace = true, optional = true }
 
 # === Node.js Integration ===
 deno_node = { workspace = true }
 deno_node_crypto = { workspace = true }
-deno_node_sqlite = { workspace = true, optional = true }
+deno_node_sqlite = { workspace = true }
 deno_resolver = { workspace = true }
 node_resolver = { workspace = true }
 
 # === FFI & NAPI ===
-deno_ffi = { workspace = true }
 deno_napi = { workspace = true }
 
 # === Deno Tooling ===
-rari_ast = { workspace = true, features = ["transpiling", "cjs"] }
 deno_package_json = { workspace = true }
 deno_semver = { workspace = true }
 
@@ -92,7 +86,6 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # === Error Handling ===
-rari_error = { workspace = true }
 thiserror = { workspace = true }
 
 # === HTTP Client & Server ===

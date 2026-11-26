@@ -112,7 +112,7 @@ declare module 'ext:runtime/98_global_scope_shared.js' {
   export = scope
 }
 
-declare module 'ext:runtime/98_global_scope_window.js' {
+declare module 'ext:runtime/global_scope_window.ts' {
   const scopeWindow: {
     memoizeLazy: <T>(fn: () => T) => () => T
     [key: string]: unknown
@@ -284,12 +284,6 @@ declare module 'ext:deno_http/02_websocket.ts' {
   export const upgradeWebSocket: typeof Deno.upgradeWebSocket
 }
 
-declare module 'ext:deno_cache/01_cache.js' {
-  export function cacheStorage(): globalThis.CacheStorage
-  export const CacheStorage: typeof globalThis.CacheStorage
-  export const Cache: typeof globalThis.Cache
-}
-
 declare module 'ext:deno_crypto/00_crypto.js' {
   export const CryptoKey: typeof globalThis.CryptoKey
   export const crypto: typeof globalThis.crypto
@@ -297,22 +291,8 @@ declare module 'ext:deno_crypto/00_crypto.js' {
   export const SubtleCrypto: typeof globalThis.SubtleCrypto
 }
 
-declare module 'ext:deno_webstorage/01_webstorage.js' {
-  export const Storage: typeof globalThis.Storage
-  export function sessionStorage(): globalThis.Storage
-  export function localStorage(): globalThis.Storage
-}
-
 declare module 'ext:deno_telemetry/telemetry.ts' {
   export function telemetry(enabled: boolean): void
-}
-
-declare module 'ext:deno_ffi/00_ffi.js' {
-  export const dlopen: typeof Deno.dlopen
-  export const UnsafeCallback: typeof Deno.UnsafeCallback
-  export const UnsafePointer: typeof Deno.UnsafePointer
-  export const UnsafePointerView: typeof Deno.UnsafePointerView
-  export const UnsafeFnPointer: typeof Deno.UnsafeFnPointer
 }
 
 declare module 'ext:deno_os/30_os.js' {
@@ -344,34 +324,23 @@ declare module 'ext:deno_process/40_process.js' {
   export const ChildProcess: typeof Deno.ChildProcess
 }
 
-declare module 'ext:runtime/01_errors.js' {
+declare module 'ext:runtime/errors.ts' {
   export const errors: typeof Deno.errors
 }
 
-declare module 'ext:runtime/01_version.ts' {
+declare module 'ext:runtime/version.ts' {
   export const version: typeof Deno.version
 }
 
-declare module 'ext:runtime/10_permissions.js' {
+declare module 'ext:runtime/permissions.ts' {
   export const permissions: typeof Deno.permissions
   export const Permissions: typeof Deno.Permissions
   export const PermissionStatus: typeof Deno.PermissionStatus
 }
 
-declare module 'ext:runtime/40_tty.js' {
+declare module 'ext:runtime/tty.ts' {
   export const isatty: typeof Deno.isatty
   export const consoleSize: typeof Deno.consoleSize
-}
-
-declare module 'ext:deno_kv/01_db.ts' {
-  export const openKv: typeof Deno.openKv
-  export const AtomicOperation: typeof Deno.AtomicOperation
-  export const KvU64: typeof Deno.KvU64
-  export const KvListIterator: typeof Deno.KvListIterator
-}
-
-declare module 'ext:deno_cron/01_cron.ts' {
-  export const cron: typeof Deno.cron
 }
 
 declare module 'ext:deno_io/12_io.js' {

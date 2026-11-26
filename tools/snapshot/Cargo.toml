@@ -9,7 +9,7 @@ publish = false
 deno_core = { workspace = true }
 deno_error = { workspace = true }
 deno_node = { workspace = true }
-rari = { workspace = true, features = ["ext-full"] }
+rari = { workspace = true }
 rari_ast = { workspace = true, features = ["transpiling"] }
 rustc-hash = { workspace = true }
 url = { workspace = true }

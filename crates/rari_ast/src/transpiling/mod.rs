@@ -26,7 +26,6 @@ mod transforms;
 #[derive(Debug, Clone)]
 pub enum TranspileResult {
     /// The `ParsedSource` needed to be cloned in order to transpile.
-    ///
     /// This is a performance issue and you should strive to get an `Owned` result.
     Cloned(EmittedSourceText),
     /// The emit occurred consuming the `ParsedSource` without cloning.
@@ -135,7 +134,6 @@ pub enum DecoratorsTranspileOption {
 }
 
 /// Options which can be adjusted when transpiling a module.
-///
 /// This implements `Hash` so the CLI can use it to bust the emit cache.
 #[derive(Debug, Clone, Hash)]
 pub struct TranspileOptions {
@@ -169,19 +167,16 @@ impl Default for TranspileOptions {
 }
 
 /// Transpile options specific to the module being transpiled.
-///
 /// This is separate from `TranspileOptions` in order for that to
 /// be shared across modules, but this to be changed per module.
 #[derive(Debug, Default, Clone, Hash)]
 pub struct TranspileModuleOptions {
     /// The kind of module being transpiled.
-    ///
     /// Defaults to being derived from the media type of the parsed source.
     pub module_kind: Option<ModuleKind>,
 }
 
 impl<'a> ParsedSource<'a> {
-    /// Transform a TypeScript file into a JavaScript file.
     pub fn transpile(
         &mut self,
         allocator: &'a Allocator,
@@ -200,10 +195,6 @@ impl<'a> ParsedSource<'a> {
         ensure_no_fatal_diagnostics(self.diagnostics.for_module_kind(module_kind))?;
         ensure_supported_decorators(transpile_options)?;
 
-        // A CommonJS module without ES module syntax is transpiled as a script so
-        // that `import x = require()` / `export =` lower to `require` /
-        // `module.exports` and the JSX import source is required instead of
-        // imported.
         if module_kind.is_cjs()
             && program.source_type.is_module()
             && crate::parsed_source::compute_is_script_from_body(&program.body)
@@ -213,9 +204,6 @@ impl<'a> ParsedSource<'a> {
 
         let transpile_options = resolve_transpile_options(self.media_type, transpile_options);
 
-        // If @jsxImportSource pragma is found in comments, switch to automatic
-        // runtime to match SWC/Babel behavior where @jsxImportSource implies
-        // automatic runtime.
         let transpile_options = maybe_upgrade_jsx_for_pragma(
             &transpile_options,
             &self.get_leading_comments().cloned().collect::<Vec<_>>(),
@@ -229,22 +217,17 @@ impl<'a> ParsedSource<'a> {
             transforms::preserve_type_only_imports(&mut program, &scoping, &transpile_options);
         }
 
-        // Apply custom pre-transforms
         if transpile_options.var_decl_imports {
             let mut strip_exports = transforms::StripExports::new(allocator);
             strip_exports.visit_program(&mut program);
 
-            // Transform import declarations to variable declarations before
-            // the TS pass so that the transformer doesn't optimize them away
             let mut import_to_var = transforms::ImportDeclsToVarDecls::new(allocator);
             import_to_var.visit_program(&mut program);
             scoping = build_scoping(&program, &self.specifier, self.text_info_lazy())?;
         }
 
-        // Build OXC TransformOptions
         let transform_options = build_transform_options(&transpile_options, &self.specifier);
 
-        // Run OXC transformer (TS strip, JSX, decorators, etc.)
         let transformer =
             Transformer::new(allocator, Path::new(self.specifier.as_str()), &transform_options);
         let transform_ret = transformer.build_with_scoping(scoping, &mut program);
@@ -252,15 +235,12 @@ impl<'a> ParsedSource<'a> {
 
         transforms::SortClassElementsBySourceOrder.visit_program(&mut program);
 
-        // Apply custom post-transforms: transform any import declarations
-        // inserted by the JSX transform to variable declarations
         let has_jsx_transform = transpile_options.jsx.is_some();
         if transpile_options.var_decl_imports && has_jsx_transform {
             let mut import_to_var = transforms::ImportDeclsToVarDecls::new(allocator);
             import_to_var.visit_program(&mut program);
         }
 
-        // Emit
         let file_name = self.specifier.as_str();
         Ok(emit(&program, self.text.as_ref(), file_name, emit_options)?)
     }
@@ -280,7 +260,6 @@ fn resolve_transpile_options(
     Cow::Borrowed(options)
 }
 
-/// Resolve file-level JSX pragmas before import analysis and transformation.
 fn maybe_upgrade_jsx_for_pragma<'a>(
     options: &Cow<'a, TranspileOptions>,
     comments: &[oxc::ast::ast::Comment],
@@ -383,7 +362,6 @@ fn build_transform_options(
 ) -> TransformOptions {
     let mut typescript = TypeScriptOptions {
         only_remove_type_imports: options.verbatim_module_syntax,
-        // inline `const enum` values like TypeScript does
         optimize_const_enums: true,
         ..Default::default()
     };
@@ -452,7 +430,6 @@ pub enum TransformProgramError {
     Transform(String),
 }
 
-/// Low level function for transforming a program using OXC's transformer.
 pub fn transform_program<'a>(
     allocator: &'a Allocator,
     program: &mut Program<'a>,
@@ -466,7 +443,6 @@ pub fn transform_program<'a>(
 
     let transform_options = build_transform_options(options, specifier);
 
-    // Run semantic analysis
     let semantic_ret = SemanticBuilder::new().with_enum_eval(true).build(program);
     let scoping = semantic_ret.semantic.into_scoping();
     if options.imports_not_used_as_values == ImportsNotUsedAsValues::Error {
@@ -475,7 +451,6 @@ pub fn transform_program<'a>(
         transforms::preserve_type_only_imports(program, &scoping, options);
     }
 
-    // Run transformer
     let transformer =
         Transformer::new(allocator, Path::new(specifier.as_str()), &transform_options);
     let transform_ret = transformer.build_with_scoping(scoping, program);
@@ -629,9 +604,6 @@ mod tests {
         MediaType, ModuleSpecifier, ParseParams, SourceMapOption, parse_module, parse_program,
     };
 
-    /// Compares a source map with the expected one, ignoring the `mappings`
-    /// (which depend on the source map generator) beyond checking that there
-    /// are some.
     #[track_caller]
     fn assert_source_map_eq(actual: &str, expected: &str) {
         let mut actual: serde_json::Value = serde_json::from_str(actual).unwrap();
@@ -641,7 +613,6 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    /// Splits emitted text into the code and the decoded inline source map.
     #[track_caller]
     fn split_inline_source_map(text: &str) -> (&str, serde_json::Value) {
         let prefix = "//# sourceMappingURL=data:application/json;base64,";
@@ -830,7 +801,6 @@ export class A {
                 &EmitOptions::default(),
             )
             .unwrap();
-        // the `using` declaration is left as-is (only reformatted by the emitter)
         let expected_text = r"Deno.test({ permissions: { net: true } }, async function listenerExplicitResourceManagement() {
   let done;
   {
@@ -862,7 +832,7 @@ export class A {
                 media_type: MediaType::Tsx,
                 capture_tokens: false,
                 maybe_source_type: None,
-                scope_analysis: true, // ensure scope analysis doesn't conflict with a second resolver pass
+                scope_analysis: true,
             },
         )
         .unwrap();
@@ -964,7 +934,7 @@ export class A {
                 media_type: MediaType::Tsx,
                 capture_tokens: false,
                 maybe_source_type: None,
-                scope_analysis: true, // ensure scope analysis doesn't conflict with a second resolver pass
+                scope_analysis: true,
             },
         )
         .unwrap();
@@ -1309,9 +1279,8 @@ function App() {
             })),
             ..Default::default()
         };
-        let transpile_module_options = TranspileModuleOptions {
-            module_kind: Some(ModuleKind::Cjs), // notice this
-        };
+        let transpile_module_options =
+            TranspileModuleOptions { module_kind: Some(ModuleKind::Cjs) };
         let code = program
             .transpile(
                 &allocator,
@@ -1363,9 +1332,8 @@ function App() {
             })),
             ..Default::default()
         };
-        let transpile_module_options = TranspileModuleOptions {
-            module_kind: Some(ModuleKind::Cjs), // notice this
-        };
+        let transpile_module_options =
+            TranspileModuleOptions { module_kind: Some(ModuleKind::Cjs) };
         let code = program
             .transpile(
                 &allocator,
@@ -1419,9 +1387,8 @@ export = function App() {
             })),
             ..Default::default()
         };
-        let transpile_module_options = TranspileModuleOptions {
-            module_kind: Some(ModuleKind::Cjs), // notice this
-        };
+        let transpile_module_options =
+            TranspileModuleOptions { module_kind: Some(ModuleKind::Cjs) };
         let code = program
             .transpile(
                 &allocator,
@@ -1849,7 +1816,6 @@ for (let i = 0; i < testVariable >> 1; i++) callCount++;
             },
         ) {
             Ok(parsed_source) => parsed_source,
-            // unrecoverable syntax errors are reported when parsing
             Err(diagnostic) => return diagnostic.to_string(),
         };
         parsed_source
@@ -2300,9 +2266,7 @@ export function formatter(record: Record) {
             )
             .unwrap()
             .text;
-        // type-only import should be removed
         assert!(!code.contains("foo"));
-        // value imports should be preserved
         assert!(code.contains("bar"));
         assert!(code.contains("baz"));
     }

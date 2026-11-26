@@ -63,17 +63,14 @@ impl ParseDiagnostic {
         &self.0.specifier
     }
 
-    /// Span of the diagnostic.
     pub fn span(&self) -> Span {
         self.0.span
     }
 
-    /// The diagnostic message.
     pub fn message(&self) -> &str {
         &self.0.message
     }
 
-    /// Structured diagnostic code, when one is available.
     pub fn diagnostic_code(&self) -> Option<ParseDiagnosticCode<'_>> {
         if self.0.code.is_some() {
             Some(ParseDiagnosticCode {
@@ -89,9 +86,7 @@ impl ParseDiagnostic {
         &self.0.source
     }
 
-    /// Whether this diagnostic is considered fatal for transpilation.
     pub fn is_fatal(&self) -> bool {
-        // All parse errors are considered fatal
         true
     }
 
@@ -138,9 +133,6 @@ impl ParseDiagnostic {
     }
 }
 
-/// The parser reports errors like an unexpected end of file with an empty span
-/// after any trailing whitespace. Point those at the end of the preceding code
-/// instead so the diagnostic shows that code rather than a blank line.
 fn adjust_empty_span_at_trailing_whitespace(span: Span, source: &SourceTextInfo) -> Span {
     if span.start != span.end {
         return span;
@@ -153,7 +145,6 @@ fn adjust_empty_span_at_trailing_whitespace(span: Span, source: &SourceTextInfo)
     if trimmed_len == preceding.len() || trimmed_len == 0 {
         return span;
     }
-    // the span moved across a line, so point at the end of the code
     if source.line_index(trimmed_len) == source.line_index(span.start as usize) {
         return span;
     }
@@ -228,7 +219,6 @@ enum HighlightEntry {
 }
 
 /// Formats highlight entries with line numbers and pipe margins.
-///
 /// Output format:
 /// ```text
 ///   |
@@ -376,10 +366,7 @@ fn get_range_highlight_entries(
             format!(
                 "{}{}",
                 " ".repeat(error_start_char_index),
-                "~".repeat(std::cmp::max(
-                    1, // this means it's the end of the line, so display a single ~
-                    error_end_char_index - error_start_char_index,
-                ))
+                "~".repeat(std::cmp::max(1, error_end_char_index - error_start_char_index,))
             )
         } else {
             String::new()

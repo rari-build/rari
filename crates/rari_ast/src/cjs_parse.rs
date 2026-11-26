@@ -14,9 +14,6 @@ pub type CjsAnalysis = crate::ModuleExportsAndReExports;
 impl ParsedSource<'_> {
     /// Analyzes the script for CommonJS exports and re-exports based on similar
     /// functionality to cjs-module-lexer (https://github.com/nodejs/cjs-module-lexer).
-    ///
-    /// The result describes the source as originally parsed and does not
-    /// represent transpiled output.
     pub fn analyze_cjs(&self) -> CjsAnalysis {
         let scoping =
             oxc::semantic::SemanticBuilder::new().build(&self.program).semantic.into_scoping();
@@ -250,8 +247,6 @@ impl<'a> Visit<'a> for CjsVisitor<'_> {
         }
     }
 }
-
-// --- Helper functions ---
 
 fn is_module_exports_or_exports_obj(
     member: &MemberExpression,
@@ -586,9 +581,7 @@ fn is_supported_object_prop(prop: &ObjectProperty) -> bool {
     if prop.method || prop.shorthand {
         return true;
     }
-    // It's a key-value prop or getter
     if prop.kind == PropertyKind::Get {
-        // getter
         match &prop.value {
             Expression::FunctionExpression(func) => {
                 func.body.as_ref().map(|b| is_non_side_effect_block_stmt(b)).unwrap_or(false)
@@ -602,7 +595,6 @@ fn is_supported_object_prop(prop: &ObjectProperty) -> bool {
 
 fn is_supported_get_prop(prop: &ObjectProperty) -> bool {
     if prop.method {
-        // method shorthand
         match &prop.value {
             Expression::FunctionExpression(func) => {
                 func.body.as_ref().map(|b| is_non_side_effect_block_stmt(b)).unwrap_or(false)
@@ -610,7 +602,6 @@ fn is_supported_get_prop(prop: &ObjectProperty) -> bool {
             _ => false,
         }
     } else {
-        // key-value
         match &prop.value {
             Expression::FunctionExpression(func) => {
                 func.body.as_ref().map(|b| is_non_side_effect_block_stmt(b)).unwrap_or(false)
@@ -1182,7 +1173,7 @@ mod test {
         );
 
         tester.assert_exports(vec![
-            "a", "c", "d", "e", "f", // changed code from cjs-module-lexer tests so it parses
+            "a", "c", "d", "e", "f",
             // added support -- why does cjs-module-lexer match c and d and not b?
             "b",
         ]);
@@ -1422,9 +1413,9 @@ mod test {
             "./styles2",
             "./Accordion",
             // extra values not matched in cjs-module-lexer
-            "not",           // why not?
-            "notexternal16", // might as well match
-            "notexternal17", // might as well match
+            "not",
+            "notexternal16",
+            "notexternal17",
         ]);
     }
 

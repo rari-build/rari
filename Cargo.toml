@@ -25,6 +25,7 @@ parking_lot = "0.13.0"
 rari = { path = "crates/rari" }
 rari_ast = { path = "crates/rari_ast" }
 rari_error = { path = "crates/rari_error" }
+rari_runtime = { path = "crates/rari_runtime" }
 regex = "1.13.2"
 rustc-hash = "2.1.3"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -39,38 +40,34 @@ uuid = { version = "1.29.3", features = ["v4"] }
 
 # Deno ecosystem aligned exact pins; bump as a coordinated set with Deno releases
 deno_bundle_runtime = "=0.47.0"
-deno_cache = "=0.193.0"
 deno_core = "=0.413.0"
-deno_cron = "=0.140.0"
 deno_crypto = "=0.274.0"
 deno_error = "=0.7.1"
 deno_features = "=0.57.0"
-deno_ffi = "=0.247.0"
 deno_fetch = "=0.284.0"
-deno_fs = "=0.170.0"
+deno_fs = { version = "=0.170.0", features = ["sync_fs"] }
 deno_http = "=0.258.0"
 deno_io = "=0.170.0"
-deno_kv = "=0.168.0"
 deno_media_type = "=0.4.0"
 deno_napi = "=0.191.0"
 deno_net = "=0.252.0"
 deno_node = "=0.198.0"
 deno_node_crypto = "=0.30.0"
 deno_node_sqlite = "=0.30.0"
+deno_signals = "=0.51.0"
+deno_os = "=0.77.0"
 deno_package_json = { version = "=0.62.0", default-features = false }
 deno_permissions = "=0.119.0"
 deno_process = "=0.75.0"
-deno_resolver = "=0.91.0"
-deno_runtime = "=0.268.0"
+deno_resolver = { version = "=0.91.0", features = ["sync"] }
 deno_semver = "=0.10.1"
 deno_telemetry = "=0.82.0"
+deno_terminal = "=0.2.3"
 deno_tls = "=0.247.0"
 deno_web = "=0.291.0"
-deno_webgpu = "=0.227.0"
 deno_webidl = "=0.260.0"
-deno_webstorage = "=0.255.0"
 deno_websocket = "=0.265.0"
-node_resolver = "=0.98.0"
+node_resolver = { version = "=0.98.0", features = ["sync"] }
 sys_traits = "=0.1.28"
 
 # Deno-aligned third-party pins; bump with Deno releases

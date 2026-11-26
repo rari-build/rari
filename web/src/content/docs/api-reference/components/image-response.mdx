@@ -90,6 +90,8 @@ interface ImageResponseOptions {
 
 Note: Custom fonts are not currently supported. The system uses built-in Noto Sans and Twemoji fonts.
 
+Chinese and Japanese text uses the full Noto Sans TC font (12 MB), which isn't part of the rari binary. The server downloads it from GitHub the first time an image needs it, verifies its checksum, and caches it in the system's temporary directory. If your server has no outbound network access, set `RARI_OG_CJK_FONT` to the path of a local font file instead. If the font can't be loaded, the image is still generated without those characters, and isn't cached.
+
 ## Options
 
 ### width

@@ -13,7 +13,6 @@ use oxc::{
 
 use crate::{MediaType, ModuleSpecifier, ParseDiagnostic, SourceTextInfo};
 
-/// If the module is an ES module or CommonJs module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModuleKind {
     Esm,
@@ -62,8 +61,6 @@ impl ParseDiagnostics {
 }
 
 /// A parsed source containing an AST, comments, and possibly tokens.
-///
-/// This struct borrows from the allocator used during parsing.
 pub struct ParsedSource<'a> {
     pub(crate) specifier: ModuleSpecifier,
     pub(crate) media_type: MediaType,
@@ -73,9 +70,6 @@ pub struct ParsedSource<'a> {
     pub(crate) module_record: ModuleRecord<'a>,
     pub(crate) tokens: oxc::allocator::Vec<'a, oxc::parser::Token>,
     pub(crate) diagnostics: ParseDiagnostics,
-    /// Scope/symbol information, populated when parsing with
-    /// `scope_analysis: true`. Symbol/reference ids on AST nodes are also set
-    /// during semantic analysis.
     pub(crate) scoping: Option<oxc::semantic::Scoping>,
 }
 
@@ -95,8 +89,6 @@ impl<'a> ParsedSource<'a> {
         &self.text
     }
 
-    /// Gets an object with pre-computed positions for lines and indexes.
-    ///
     /// Note: Prefer using `.text()` over this if able because this is lazily
     /// created.
     pub fn text_info_lazy(&self) -> &SourceTextInfo {
@@ -108,29 +100,22 @@ impl<'a> ParsedSource<'a> {
         &self.program
     }
 
-    /// Gets the ES module record (imports, exports, requested modules, etc.)
-    /// collected by the parser.
     pub fn module_record(&self) -> &ModuleRecord<'a> {
         &self.module_record
     }
 
-    /// Gets the scope/symbol information, if the source was parsed with
-    /// `scope_analysis: true`.
     pub fn scoping(&self) -> Option<&oxc::semantic::Scoping> {
         self.scoping.as_ref()
     }
 
-    /// Takes ownership of the scope/symbol information, if present.
     pub fn take_scoping(&mut self) -> Option<oxc::semantic::Scoping> {
         self.scoping.take()
     }
 
-    /// Gets a mutable reference to the parsed program.
     pub fn program_mut(&mut self) -> &mut Program<'a> {
         &mut self.program
     }
 
-    /// Gets the tokens parsed from the source file.
     pub fn tokens(&self) -> &oxc::allocator::Vec<'a, oxc::parser::Token> {
         &self.tokens
     }
@@ -140,30 +125,23 @@ impl<'a> ParsedSource<'a> {
         &self.program.comments
     }
 
-    /// Gets the top-level statements.
     pub fn body(&self) -> &oxc::allocator::Vec<'a, Statement<'a>> {
         &self.program.body
     }
 
-    /// Gets the span of the program.
     pub fn span(&self) -> Span {
         self.program.span
     }
 
-    /// Gets whether the source was parsed as a module.
     pub fn is_module(&self) -> bool {
         self.program.source_type.is_module()
     }
 
-    /// Gets whether the source was parsed as a script.
     pub fn is_script(&self) -> bool {
         self.program.source_type.is_script()
     }
 
     /// Computes whether this program should be treated as a script.
-    ///
-    /// For TypeScript CJS files, the parser may parse as module but
-    /// we need to detect if it's actually a script (e.g. `import x = require()`).
     pub fn compute_is_script(&self) -> bool {
         if self.media_type.is_typed() {
             compute_is_script_from_body(&self.program.body)
@@ -186,7 +164,6 @@ impl<'a> ParsedSource<'a> {
     /// Get the source's leading comments, where triple slash directives might
     /// be located.
     pub fn get_leading_comments(&self) -> impl Iterator<Item = &oxc::ast::ast::Comment> {
-        // Leading comments are comments that appear before the first statement.
         let first_stmt_start = self
             .program
             .body
@@ -201,9 +178,6 @@ impl<'a> ParsedSource<'a> {
     }
 }
 
-/// A TypeScript module without any ES module syntax (imports/exports) is
-/// treated as a script. TypeScript-specific CommonJS syntax like
-/// `import x = require()` and `export = x` keeps it a script.
 pub(crate) fn compute_is_script_from_body(body: &[Statement<'_>]) -> bool {
     use oxc::ast::ast::*;
     !body.iter().any(|stmt| match stmt {
@@ -212,7 +186,6 @@ pub(crate) fn compute_is_script_from_body(body: &[Statement<'_>]) -> bool {
         | Statement::ExportFromDeclaration(_)
         | Statement::ExportDefaultDeclaration(_)
         | Statement::ExportAllDeclaration(_) => true,
-        // `export import x = ...` is CommonJS syntax
         Statement::ExportDeclaration(decl) => {
             !matches!(decl.declaration, Declaration::TSImportEqualsDeclaration(_))
         }

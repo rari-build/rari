@@ -1,0 +1,27 @@
+[package]
+name = "rari_runtime"
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+publish = false
+
+[dependencies]
+deno_core = { workspace = true }
+deno_error = { workspace = true }
+deno_permissions = { workspace = true }
+deno_terminal = { workspace = true }
+deno_web = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.191"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[lints]
+workspace = true

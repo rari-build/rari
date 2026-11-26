@@ -39,9 +39,7 @@ pub struct NodeData {
 }
 
 impl LayoutEngine {
-    pub fn new() -> Self {
-        let font_context = FontContext::new();
-
+    pub fn new(font_context: FontContext) -> Self {
         Self {
             taffy: TaffyTree::new(),
             measure_context: MeasureContext {

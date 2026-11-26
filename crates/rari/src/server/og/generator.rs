@@ -16,6 +16,7 @@ use super::{
     cache::OgImageCache,
     layout::LayoutEngine,
     rendering::ImageRenderer,
+    resources::{cjk_font, fonts::FontContext},
     types::{JsxChild, JsxElement, OgImageEntry},
 };
 use crate::{
@@ -188,9 +189,14 @@ impl OgImageGenerator {
         let width = entry.width.unwrap_or(1200).min(MAX_OG_WIDTH);
         let height = entry.height.unwrap_or(630).min(MAX_OG_HEIGHT);
 
-        let webp_data = task::spawn_blocking(move || -> Result<Vec<u8>, OgImageError> {
+        let render = move || -> Result<(Vec<u8>, bool), OgImageError> {
+            let needs_cjk_font =
+                serde_json::to_string(&jsx_element).is_ok_and(|json| cjk_font::is_needed(&json));
+            let cjk_font = if needs_cjk_font { cjk_font::load() } else { None };
+            let is_complete = !needs_cjk_font || cjk_font.is_some();
+
             let (computed_layout, font_context) = {
-                let mut layout_engine = LayoutEngine::new();
+                let mut layout_engine = LayoutEngine::new(FontContext::with_cjk_font(cjk_font));
                 let font_context = layout_engine.get_font_context();
                 let computed_layout = layout_engine
                     .layout(&jsx_element, float::u32_to_f32(width), float::u32_to_f32(height))
@@ -203,11 +209,18 @@ impl OgImageGenerator {
                 OgImageError::GenerationError(format!("Image generation failed: {e}"))
             })?;
 
-            Self::encode_webp(&image)
-                .map_err(|e| OgImageError::GenerationError(format!("Failed to encode WebP: {e}")))
-        })
-        .await
-        .map_err(|e| OgImageError::GenerationError(format!("OG generation task failed: {e}")))??;
+            let webp_data = Self::encode_webp(&image).map_err(|e| {
+                OgImageError::GenerationError(format!("Failed to encode WebP: {e}"))
+            })?;
+            Ok((webp_data, is_complete))
+        };
+        let (webp_data, is_complete) = task::spawn_blocking(render).await.map_err(|e| {
+            OgImageError::GenerationError(format!("OG generation task failed: {e}"))
+        })??;
+
+        if !is_complete {
+            return Ok((webp_data, false));
+        }
 
         if let Err(e) = self.cache.insert(route_path.to_string(), webp_data.clone()).await {
             tracing::warn!(error = %e, route_path, "OG cache insert failed");

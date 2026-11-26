@@ -1,3 +1,4 @@
+import { internals } from 'ext:core/mod.js'
 import {
   applyToGlobal,
   lazyExtScript,
@@ -168,6 +169,82 @@ function shouldCache(input: RequestInfo | URL, init: CachedFetchInit, meta?: Req
   return true
 }
 
+interface TelemetrySpan {
+  setAttribute: (key: string, value: string | number | boolean) => unknown
+  setStatus: (status: { code: number; message?: string }) => unknown
+  end: () => void
+}
+
+interface TelemetryInternals {
+  readonly TRACING_ENABLED: boolean
+  readonly PROPAGATORS: readonly {
+    inject: (
+      context: unknown,
+      carrier: Headers,
+      setter: { set: (carrier: Headers, key: string, value: string) => void },
+    ) => void
+  }[]
+  readonly ContextManager: { active: () => unknown }
+  builtinTracer: () => {
+    startSpan: (
+      name: string,
+      options: { kind: number; attributes?: Record<string, string | number> },
+    ) => TelemetrySpan
+  }
+  enterSpan: (span: TelemetrySpan) => unknown
+  exitSpan: (snapshot: unknown) => void
+}
+
+function isTelemetryInternals(value: unknown): value is TelemetryInternals {
+  return typeof value === 'object' && value != null && 'builtinTracer' in value
+}
+
+const SPAN_KIND_CLIENT = 2
+const SPAN_STATUS_ERROR = 2
+
+function startFetchSpan(
+  url: string,
+): { span: TelemetrySpan; traceHeaders: [string, string][] } | null {
+  const telemetry = internals.__telemetry
+  if (!isTelemetryInternals(telemetry) || !telemetry.TRACING_ENABLED) return null
+
+  let attributes: Record<string, string | number> = {
+    'http.request.method': 'GET',
+    'url.full': url,
+  }
+  try {
+    const parsed = new URL(url)
+    attributes = {
+      ...attributes,
+      'server.address': parsed.hostname,
+      'url.scheme': parsed.protocol.slice(0, -1),
+    }
+    if (parsed.port !== '') attributes['server.port'] = Number(parsed.port)
+  } catch {}
+
+  const span = telemetry.builtinTracer().startSpan('GET', { kind: SPAN_KIND_CLIENT, attributes })
+  const snapshot = telemetry.enterSpan(span)
+  const carrier = new Headers()
+  try {
+    const context = telemetry.ContextManager.active()
+    for (const propagator of telemetry.PROPAGATORS) {
+      propagator.inject(context, carrier, {
+        set(headers, key, value) {
+          headers.append(key, value)
+        },
+      })
+    }
+  } finally {
+    telemetry.exitSpan(snapshot)
+  }
+
+  const traceHeaders: [string, string][] = []
+  carrier.forEach((value, key) => {
+    traceHeaders.push([key, value])
+  })
+  return { span, traceHeaders }
+}
+
 async function fetchWithRustCache(
   input: RequestInfo | URL,
   init: CachedFetchInit,
@@ -176,6 +253,9 @@ async function fetchWithRustCache(
   ensureFetchModule()
   const { url, headers } = meta ?? resolveRequestMeta(input, init)
   const options = buildRustFetchOptions(init, headers)
+  const traced = startFetchSpan(url)
+  if (traced && traced.traceHeaders.length > 0)
+    options.traceHeaders = JSON.stringify(traced.traceHeaders)
 
   try {
     const rariGlobal = g['~rari']
@@ -188,9 +268,18 @@ async function fetchWithRustCache(
     if (!result.ok)
       throw new Error(result.error != null && result.error !== '' ? result.error : 'Fetch failed')
 
+    traced?.span.setAttribute('http.response.status_code', result.status)
+    traced?.span.setAttribute('rari.fetch.cached', result.cached)
+    if (result.status >= 400) traced?.span.setStatus({ code: SPAN_STATUS_ERROR })
+    traced?.span.end()
+
     return buildCachedFetchResponse(url, result)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
+    if (traced) {
+      traced.span.setStatus({ code: SPAN_STATUS_ERROR, message })
+      traced.span.end()
+    }
     console.error(
       '[Fetch Cache] Error in fetchWithRustCache, falling back to original fetch:',
       message,
