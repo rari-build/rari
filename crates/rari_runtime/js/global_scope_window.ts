@@ -3,9 +3,6 @@
 import { core, primordials } from 'ext:core/mod.js'
 import { op_bootstrap_language, op_bootstrap_numcpus, op_bootstrap_user_agent } from 'ext:core/ops'
 import { NavigatorUAData, navigatorUAData } from 'ext:runtime/navigator_user_agent_data.ts'
-import { alert, confirm, prompt } from 'ext:runtime/prompt.ts'
-
-const promptModule = { alert, confirm, prompt }
 
 const {
   ObjectDefineProperties,
@@ -15,10 +12,8 @@ const {
   StringPrototypeSlice,
 } = primordials
 
-const location = core.loadExtScript('ext:deno_web/12_location.js')
 const console = core.loadExtScript('ext:deno_web/01_console.js')
 const webidl = core.loadExtScript('ext:deno_webidl/00_webidl.js')
-const globalInterfaces = core.loadExtScript('ext:deno_web/04_global_interfaces.js')
 const loadLocks = core.createLazyLoader<LocksModule>('ext:deno_web/locks.js')
 // `alert`/`confirm`/`prompt` are rarely accessed on the cold-start path. Their
 // implementations come from `lazy_loaded_js` polyfills that we don't want
@@ -52,8 +47,7 @@ function getNavigatorPlatform(arch: string, platform: string): string {
       return 'AIX'
 
     default: {
-      const platformName = platform.length === 0 ? '' : platform
-      return `${StringPrototypeToUpperCase(platformName)}${StringPrototypeSlice(
+      return `${StringPrototypeToUpperCase(StringPrototypeSlice(platform, 0, 1))}${StringPrototypeSlice(
         platform,
         1,
       )} ${arch}`
@@ -172,26 +166,10 @@ ObjectDefineProperties(Navigator.prototype, {
 })
 NavigatorPrototype = Navigator.prototype
 
-const mainRuntimeGlobalProperties = {
-  Location: location.locationConstructorDescriptor,
-  location: location.locationDescriptor,
-  Window: globalInterfaces.windowConstructorDescriptor,
-  self: core.propGetterOnly(() => globalThis),
+ObjectDefineProperties(globalThis, {
   Navigator: core.propNonEnumerable(Navigator),
   navigator: core.propGetterOnly(() => navigator),
   NavigatorUAData: core.propNonEnumerable(NavigatorUAData),
-  alert: core.propWritableLazyLoaded(
-    p => p.alert,
-    () => promptModule,
-  ),
-  confirm: core.propWritableLazyLoaded(
-    p => p.confirm,
-    () => promptModule,
-  ),
-  prompt: core.propWritableLazyLoaded(
-    p => p.prompt,
-    () => promptModule,
-  ),
-}
+})
 
-export { mainRuntimeGlobalProperties, memoizeLazy }
+export { memoizeLazy }

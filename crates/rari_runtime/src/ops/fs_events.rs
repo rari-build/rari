@@ -366,10 +366,13 @@ fn removed_event_matches_watched_paths(
         if canonical_path.as_ref().is_some_and(|cp| event_path == cp.as_path()) {
             return true;
         }
-        // Check if the removed file's parent is within a watched directory.
+        // Check if the removed file's parent is a watched directory (or, for a
+        // recursive watch, anywhere under one). A non-recursive watch only
+        // covers immediate children, so the parent must be the root itself.
         if matches!(
           (&canonical_parent, canonical_path),
-          (Some(cp_event), Some(cp_watched)) if is_within(cp_event, cp_watched, recursive)
+          (Some(cp_event), Some(cp_watched))
+            if if recursive { cp_event.starts_with(cp_watched) } else { cp_event == cp_watched }
         ) {
             return true;
         }
@@ -886,9 +889,14 @@ mod tests {
         assert!(!event_matches_watched_paths(&grandchild, &paths, &canonical, false));
         assert!(event_matches_watched_paths(&grandchild, &paths, &canonical, true));
 
-        let gone = dir.join("child/grandchild/gone.txt");
-        assert!(!removed_event_matches_watched_paths(&gone, &paths, &canonical, false));
-        assert!(removed_event_matches_watched_paths(&gone, &paths, &canonical, true));
+        let child_file = dir.join("gone.txt");
+        let depth_two = dir.join("child/gone.txt");
+        let depth_three = dir.join("child/grandchild/gone.txt");
+        assert!(removed_event_matches_watched_paths(&child_file, &paths, &canonical, false));
+        assert!(!removed_event_matches_watched_paths(&depth_two, &paths, &canonical, false));
+        assert!(!removed_event_matches_watched_paths(&depth_three, &paths, &canonical, false));
+        assert!(removed_event_matches_watched_paths(&depth_two, &paths, &canonical, true));
+        assert!(removed_event_matches_watched_paths(&depth_three, &paths, &canonical, true));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

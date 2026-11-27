@@ -222,7 +222,8 @@ function sanitizeUrlForSpan(url: string): string {
   return parsed.href
 }
 
-const SENSITIVE_QUERY_PARAM_PATTERN = /\b(X-Amz-Signature|X-Amz-Security-Token)=[^&\s"'()<>:,]*/giu
+const SENSITIVE_QUERY_PARAM_PATTERN =
+  /\b(X(?:-|%2D)Amz(?:-|%2D)(?:Signature|Security(?:-|%2D)Token))=[^&\s"'()<>,]*/giu
 const URL_USERINFO_PATTERN = /\b([a-z][a-z\d+.-]*:\/\/)[^/\s@]*@/giu
 
 function sanitizeErrorMessageForSpan(message: string): string {

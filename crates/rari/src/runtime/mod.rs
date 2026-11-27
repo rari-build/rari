@@ -295,9 +295,11 @@ mod tests {
 
     use super::JsExecutionRuntime;
 
-    async fn observe_file_write(api: &str, watch_and_wait: &str) -> serde_json::Value {
+    async fn observe_file_write(api: &str, file: &str, watch_and_wait: &str) -> serde_json::Value {
         let dir = env::temp_dir().join(format!("rari-watch-{api}-{}", Uuid::new_v4()));
-        fs::create_dir_all(&dir).expect("create watch dir");
+        fs::create_dir_all(dir.join(file).parent().expect("file has a parent"))
+            .expect("create watch dirs");
+        let file_json = serde_json::to_string(file).expect("serialize file");
         let dir_json = serde_json::to_string(&dir.to_string_lossy()).expect("serialize dir");
 
         let script = format!(
@@ -309,7 +311,7 @@ mod tests {
                 const observed = (async () => {{ {watch_and_wait} }})();
                 const armed = await Promise.race([watching.then(() => true), observed, timeout]);
                 if (armed !== true) return armed;
-                Deno.writeTextFileSync(dir + "/hello.txt", "hi");
+                Deno.writeTextFileSync(dir + "/" + {file_json}, "hi");
                 return await Promise.race([observed, timeout]);
             }})()"#
         );
@@ -321,9 +323,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn installs_navigator_but_not_browser_only_globals() {
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let globals = runtime
+            .execute_script(
+                "probe_globals".into(),
+                r"({
+                    navigator: typeof navigator,
+                    isNavigator: navigator instanceof Navigator,
+                    userAgentData: typeof navigator.userAgentData?.brands,
+                    platform: navigator.platform,
+                    cpus: navigator.hardwareConcurrency > 0,
+                    self: typeof self,
+                    location: typeof location,
+                    alert: typeof alert,
+                })"
+                .into(),
+            )
+            .await
+            .expect("probe script should run");
+
+        assert_eq!(globals["navigator"], "object");
+        assert_eq!(globals["isNavigator"], true);
+        assert_eq!(globals["userAgentData"], "object");
+        assert!(globals["platform"].as_str().is_some_and(|p| !p.is_empty()), "{globals}");
+        assert_eq!(globals["cpus"], true);
+        for name in ["self", "location", "alert"] {
+            assert_eq!(globals[name], "undefined", "{name} should not be a global");
+        }
+    }
+
+    #[tokio::test]
     async fn deno_watch_fs_reports_file_writes() {
         let result = observe_file_write(
             "deno",
+            "hello.txt",
             r#"
                 const watcher = Deno.watchFs(dir);
                 ready();
@@ -345,9 +379,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn closing_nested_watch_keeps_recursive_coverage() {
+        let result = observe_file_write(
+            "nested",
+            "child/grandchild/deep.txt",
+            r#"
+                const outer = Deno.watchFs(dir);
+                Deno.watchFs(dir + "/child", { recursive: false }).close();
+                ready();
+                try {
+                    for await (const event of outer) {
+                        if (event.paths.some((p) => p.endsWith("deep.txt"))) return event.kind;
+                    }
+                    return "ended";
+                } finally {
+                    outer.close();
+                }
+            "#,
+        )
+        .await;
+        assert!(
+            matches!(result.as_str(), Some("create" | "modify")),
+            "recursive watch lost coverage after nested close: {result}"
+        );
+    }
+
+    #[tokio::test]
     async fn node_fs_watch_reports_file_writes() {
         let result = observe_file_write(
             "node",
+            "hello.txt",
             r#"
                 const { watch } = await import("node:fs");
                 return await new Promise((resolve, reject) => {
