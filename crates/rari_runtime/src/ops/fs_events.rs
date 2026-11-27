@@ -792,7 +792,8 @@ mod tests {
     #[expect(clippy::unwrap_used, clippy::expect_used)]
     fn notify_windows_missing_path_message_matches_constant() {
         let mut watcher: RecommendedWatcher =
-            Watcher::new(|_res: Result<NotifyEvent, NotifyError>| {}, Default::default()).unwrap();
+            Watcher::new(|_res: Result<NotifyEvent, NotifyError>| {}, notify::Config::default())
+                .unwrap();
 
         let missing = PathBuf::from(r"C:\deno-nonexistent\watch\target");
         let err = watcher

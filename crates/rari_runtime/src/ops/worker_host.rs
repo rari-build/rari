@@ -269,13 +269,13 @@ unsafe extern "C" {
 #[cfg(target_os = "linux")]
 fn capture_current_thread_handle() -> u64 {
     // SAFETY: syscall to get the current thread ID.
-    unsafe { libc::syscall(libc::SYS_gettid) as u64 }
+    unsafe { libc::syscall(libc::SYS_gettid) }.cast_unsigned()
 }
 
 #[cfg(target_os = "linux")]
 fn get_thread_cpu_usage_by_handle(handle: u64) -> (f64, f64) {
     let tid = handle as i32;
-    let path = format!("/proc/self/task/{}/stat", tid);
+    let path = format!("/proc/self/task/{tid}/stat");
     if let Ok(contents) = std::fs::read_to_string(&path) {
         // Parse utime and stime after pid(comm)
         if let Some(pos) = contents.rfind(')') {
@@ -284,7 +284,10 @@ fn get_thread_cpu_usage_by_handle(handle: u64) -> (f64, f64) {
             // 0=state 1=ppid ... 11=utime 12=stime
             if fields.len() > 12 {
                 // SAFETY: sysconf call to get clock ticks per second.
-                let ticks_per_sec = unsafe { libc::sysconf(libc::_SC_CLK_TCK) } as f64;
+                let ticks = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
+                // `sysconf` returns -1 on error; fall back to Linux's usual 100 Hz.
+                let ticks_per_sec =
+                    u32::try_from(ticks).ok().filter(|&t| t > 0).map_or(100.0, f64::from);
                 let utime = fields[11].parse::<f64>().unwrap_or(0.0);
                 let stime = fields[12].parse::<f64>().unwrap_or(0.0);
                 let user_us = utime / ticks_per_sec * 1e6;
@@ -299,7 +302,7 @@ fn get_thread_cpu_usage_by_handle(handle: u64) -> (f64, f64) {
 #[cfg(windows)]
 fn capture_current_thread_handle() -> u64 {
     // SAFETY: Returns the thread ID of the calling thread.
-    unsafe { windows_sys::Win32::System::Threading::GetCurrentThreadId() as u64 }
+    u64::from(unsafe { windows_sys::Win32::System::Threading::GetCurrentThreadId() })
 }
 
 #[cfg(windows)]
@@ -345,13 +348,18 @@ fn get_thread_cpu_usage_by_handle(handle: u64) -> (f64, f64) {
     // SAFETY: values are initialized.
     let kernel_time = unsafe { kernel_time.assume_init() };
 
-    // FILETIME is in 100-nanosecond intervals, convert to microseconds.
-    let user_us =
-        ((user_time.dwHighDateTime as u64) << 32 | user_time.dwLowDateTime as u64) as f64 / 10.0;
-    let system_us = ((kernel_time.dwHighDateTime as u64) << 32 | kernel_time.dwLowDateTime as u64)
-        as f64
-        / 10.0;
-    (user_us, system_us)
+    (filetime_to_micros(user_time), filetime_to_micros(kernel_time))
+}
+
+/// FILETIME counts 100-nanosecond intervals; convert to microseconds.
+#[cfg(windows)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "thread CPU times stay far below 2^52 microseconds (~142 years), where f64 starts rounding"
+)]
+fn filetime_to_micros(time: windows_sys::Win32::Foundation::FILETIME) -> f64 {
+    let intervals = (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
+    intervals as f64 / 10.0
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
