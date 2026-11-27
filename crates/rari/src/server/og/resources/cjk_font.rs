@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     env, fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     process,
     time::{Duration, Instant},
@@ -124,7 +124,16 @@ fn write_cache(path: &Path, data: &[u8]) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let partial = path.with_extension(format!("{}.partial", process::id()));
-    fs::write(&partial, data)?;
+    // The cache lives in the shared temp dir, so create the partial file
+    // exclusively: an existing entry, including a planted symlink, makes this
+    // fail instead of being followed or truncated.
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&partial)?;
+    if let Err(error) = file.write_all(data) {
+        drop(file);
+        let _ = fs::remove_file(&partial);
+        return Err(error);
+    }
+    drop(file);
     fs::rename(&partial, path)
 }
 
@@ -148,6 +157,25 @@ mod tests {
     #[test]
     fn rejects_unexpected_data() {
         assert!(!is_expected(b"not a font"));
+    }
+
+    #[test]
+    fn cache_write_refuses_an_existing_partial_file() {
+        let dir = env::temp_dir().join(format!("rari-font-cache-{}", process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let path = dir.join("font.ttf");
+        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        let partial = path.with_extension(format!("{}.partial", process::id()));
+        fs::write(&partial, b"planted").unwrap_or_else(|e| unreachable!("{e}"));
+
+        assert!(write_cache(&path, b"font").is_err());
+        assert_eq!(fs::read(&partial).ok().as_deref(), Some(&b"planted"[..]));
+        assert!(!path.exists());
+
+        fs::remove_file(&partial).unwrap_or_else(|e| unreachable!("{e}"));
+        write_cache(&path, b"font").unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(fs::read(&path).ok().as_deref(), Some(&b"font"[..]));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

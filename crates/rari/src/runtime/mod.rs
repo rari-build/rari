@@ -304,9 +304,11 @@ mod tests {
             r#"(async function() {{
                 const dir = {dir_json};
                 const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 5000));
+                let ready;
+                const watching = new Promise((resolve) => {{ ready = resolve; }});
                 const observed = (async () => {{ {watch_and_wait} }})();
-                // Give the backend a moment to arm before writing.
-                await new Promise((resolve) => setTimeout(resolve, 200));
+                const armed = await Promise.race([watching.then(() => true), observed, timeout]);
+                if (armed !== true) return armed;
                 Deno.writeTextFileSync(dir + "/hello.txt", "hi");
                 return await Promise.race([observed, timeout]);
             }})()"#
@@ -324,6 +326,7 @@ mod tests {
             "deno",
             r#"
                 const watcher = Deno.watchFs(dir);
+                ready();
                 try {
                     for await (const event of watcher) {
                         if (event.paths.some((p) => p.endsWith("hello.txt"))) return event.kind;
@@ -355,6 +358,7 @@ mod tests {
                         }
                     });
                     watcher.on("error", reject);
+                    ready();
                 });
             "#,
         )

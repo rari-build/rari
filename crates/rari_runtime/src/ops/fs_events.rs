@@ -3,7 +3,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::From,
     path::{Path, PathBuf},
     rc::Rc,
@@ -68,27 +68,8 @@ impl Drop for FsEventsResource {
         // Remove this resource's sender from the shared dispatch list so the
         // watcher callback stops trying to deliver events to a dead channel.
         self.inner.senders.lock().retain(|ws| ws.id != self.id);
-
-        // Reference-count the underlying watches: only unwatch when no other
-        // resource still depends on this path. Without this, calling
-        // `Deno.watchFs(path)` repeatedly leaks watches in the shared
-        // `RecommendedWatcher` — on Windows each leaked watch registers a
-        // separate `ReadDirectoryChangesW` request, so the next watcher created
-        // for the same path receives every event N times.
-        let mut watched_paths = self.inner.watched_paths.lock();
-        let mut watcher = self.inner.watcher.lock();
         for (path, mode) in &self.watched {
-            let key = (path.clone(), *mode);
-            let Some(count) = watched_paths.get_mut(&key) else {
-                continue;
-            };
-            *count = count.saturating_sub(1);
-            if *count == 0 {
-                watched_paths.remove(&key);
-                // Best-effort: ignore errors (e.g. the watcher already lost track of
-                // the path because the path was deleted).
-                let _ = watcher.unwatch(path);
-            }
+            release_watch(&self.inner, path, *mode);
         }
     }
 }
@@ -153,6 +134,10 @@ struct WatchSender {
     ignore: Vec<PathBuf>,
     /// Pre-canonicalized versions of `ignore`, mirroring `canonical_paths`.
     canonical_ignore: Vec<Option<PathBuf>>,
+    /// Whether this resource asked for a recursive watch. The backend watch
+    /// for a path is shared, and is recursive if any resource needs it, so a
+    /// non-recursive resource filters out events below its immediate children.
+    recursive: bool,
     sender: mpsc::Sender<Result<FsEvent, NotifyError>>,
     /// See [`FsEventsResource::overflowed`].
     overflowed: Arc<AtomicBool>,
@@ -207,9 +192,15 @@ struct WatcherInner {
     /// The shared `RecommendedWatcher` instance backing every
     /// `Deno.watchFs(...)` call in this OpState.
     watcher: Mutex<RecommendedWatcher>,
-    /// Reference count per (path, recursive_mode) registered with `watcher`.
-    /// When a count drops to zero, the path is unwatched.
-    watched_paths: Mutex<HashMap<(PathBuf, RecursiveMode), usize>>,
+    /// Owners of each backend watch, keyed by path. One backend watch is
+    /// shared by every resource watching that path; see [`acquire_watch`] and
+    /// [`release_watch`].
+    watched_paths: Mutex<HashMap<PathBuf, WatchRefs>>,
+    /// Watched roots that were removed or renamed away, so the backend may
+    /// have dropped their watch. The next [`acquire_watch`] re-arms them
+    /// instead of trusting the owner count. Shared with the notify callback,
+    /// which only ever holds this lock briefly and never with another one.
+    dropped_roots: Arc<Mutex<HashSet<PathBuf>>>,
     /// Monotonic counter for assigning `WatchSender::id`.
     next_id: AtomicU64,
 }
@@ -218,8 +209,110 @@ struct WatcherState {
     inner: Arc<WatcherInner>,
 }
 
+/// Owners of one backend watch.
+#[derive(Default)]
+struct WatchRefs {
+    recursive: usize,
+    non_recursive: usize,
+    /// The mode the backend currently watches the path with, if any.
+    backend_mode: Option<RecursiveMode>,
+}
+
+impl WatchRefs {
+    fn count_mut(&mut self, mode: RecursiveMode) -> &mut usize {
+        if mode == RecursiveMode::Recursive { &mut self.recursive } else { &mut self.non_recursive }
+    }
+
+    fn total(&self) -> usize {
+        self.recursive + self.non_recursive
+    }
+
+    /// Recursive while any owner needs recursion.
+    fn wanted_mode(&self) -> RecursiveMode {
+        if self.recursive > 0 { RecursiveMode::Recursive } else { RecursiveMode::NonRecursive }
+    }
+}
+
+/// Add an owner for `path`, arming or widening the backend watch when needed.
+/// `notify` replaces an existing watch on the same path (including its
+/// recursive mode) rather than duplicating it, so re-watching is safe. The
+/// `watch` call is skipped only when the backend already watches the path in
+/// the wanted mode and the root hasn't been removed since.
+fn acquire_watch(
+    inner: &WatcherInner,
+    path: &Path,
+    mode: RecursiveMode,
+) -> Result<(), NotifyError> {
+    // Released before the other locks are taken; the notify callback takes it.
+    let was_dropped = inner.dropped_roots.lock().remove(path);
+    let mut watched_paths = inner.watched_paths.lock();
+    let mut watcher = inner.watcher.lock();
+    let refs = watched_paths.entry(path.to_path_buf()).or_default();
+    *refs.count_mut(mode) += 1;
+    let wanted = refs.wanted_mode();
+    if !was_dropped && refs.backend_mode == Some(wanted) {
+        return Ok(());
+    }
+    match watcher.watch(path, wanted) {
+        Ok(()) => {
+            refs.backend_mode = Some(wanted);
+            Ok(())
+        }
+        Err(err) => {
+            let count = refs.count_mut(mode);
+            *count = count.saturating_sub(1);
+            if was_dropped {
+                refs.backend_mode = None;
+            }
+            if refs.total() == 0 {
+                watched_paths.remove(path);
+            }
+            Err(err)
+        }
+    }
+}
+
+/// Remove an owner for `path`. The backend watch is narrowed to
+/// non-recursive when its last recursive owner leaves, and unwatched only
+/// when its last owner leaves. Used by both normal close and rollback.
+fn release_watch(inner: &WatcherInner, path: &Path, mode: RecursiveMode) {
+    let unwatched = {
+        let mut watched_paths = inner.watched_paths.lock();
+        let mut watcher = inner.watcher.lock();
+        let Some(refs) = watched_paths.get_mut(path) else {
+            return;
+        };
+        let count = refs.count_mut(mode);
+        *count = count.saturating_sub(1);
+        if refs.total() == 0 {
+            watched_paths.remove(path);
+            // Best-effort: the backend may already have dropped the watch
+            // (e.g. because the path was deleted).
+            let _ = watcher.unwatch(path);
+            true
+        } else {
+            if refs.backend_mode == Some(RecursiveMode::Recursive)
+                && refs.wanted_mode() == RecursiveMode::NonRecursive
+                && watcher.watch(path, RecursiveMode::NonRecursive).is_ok()
+            {
+                refs.backend_mode = Some(RecursiveMode::NonRecursive);
+            }
+            false
+        }
+    };
+    if unwatched {
+        inner.dropped_roots.lock().remove(path);
+    }
+}
+
 fn canonicalize_path(path: &Path) -> Option<PathBuf> {
     path.canonicalize().ok()
+}
+
+/// Whether `path` is `root` or lies under it: anywhere below for a
+/// recursive watch, only an immediate child otherwise.
+fn is_within(path: &Path, root: &Path, recursive: bool) -> bool {
+    if recursive { path.starts_with(root) } else { path == root || path.parent() == Some(root) }
 }
 
 /// Check if `event_path` (or its canonicalized form) matches one of the
@@ -229,6 +322,7 @@ fn event_matches_watched_paths(
     event_path: &Path,
     paths: &[PathBuf],
     canonical_paths: &[Option<PathBuf>],
+    recursive: bool,
 ) -> bool {
     // Canonicalize the event path at most once per call.
     let canonical_event_path = canonicalize_path(event_path);
@@ -238,7 +332,7 @@ fn event_matches_watched_paths(
         }
         if matches!(
           (&canonical_event_path, canonical_path),
-          (Some(ce), Some(cp)) if ce.starts_with(cp)
+          (Some(ce), Some(cp)) if is_within(ce, cp, recursive)
         ) {
             return true;
         }
@@ -256,6 +350,7 @@ fn removed_event_matches_watched_paths(
     event_path: &Path,
     paths: &[PathBuf],
     canonical_paths: &[Option<PathBuf>],
+    recursive: bool,
 ) -> bool {
     if !is_file_removed(event_path) {
         return false;
@@ -274,7 +369,7 @@ fn removed_event_matches_watched_paths(
         // Check if the removed file's parent is within a watched directory.
         if matches!(
           (&canonical_parent, canonical_path),
-          (Some(cp_event), Some(cp_watched)) if cp_event.starts_with(cp_watched)
+          (Some(cp_event), Some(cp_watched)) if is_within(cp_event, cp_watched, recursive)
         ) {
             return true;
         }
@@ -290,11 +385,10 @@ fn is_file_removed(event_path: &Path) -> bool {
     }
 }
 
-// The notify crate's Windows backend reports a missing watch path as a
-// Generic error with this message (see `add_watch` in notify's
-// src/windows.rs), unlike the inotify backend which reports PathNotFound.
-// Normalize it so a watch on a vanished path surfaces as NotFound on all
-// platforms; the node:fs `fs.watch` polyfill relies on this to emit a
+// Older notify Windows backends reported a missing watch path as a Generic
+// error with this message (notify 9 reports PathNotFound, and keeps this
+// message for paths that are neither a file nor a directory). Normalize it
+// so a watch on a vanished path surfaces as NotFound on all platforms; the node:fs `fs.watch` polyfill relies on this to emit a
 // recoverable ENOENT instead of an unrecognized error that kills watchers
 // like chokidar/vite (see denoland/deno#35855).
 const WINDOWS_PATH_NOT_FOUND_MSG: &str = "Input watch path is neither a file nor a directory.";
@@ -331,12 +425,61 @@ fn make_watch_sender(
     id: u64,
     paths: Vec<PathBuf>,
     ignore: Vec<PathBuf>,
+    recursive: bool,
     sender: mpsc::Sender<Result<FsEvent, NotifyError>>,
     overflowed: Arc<AtomicBool>,
 ) -> WatchSender {
     let canonical_paths = paths.iter().map(|p| canonicalize_path(p)).collect();
     let canonical_ignore = ignore.iter().map(|p| canonicalize_path(p)).collect();
-    WatchSender { id, paths, canonical_paths, ignore, canonical_ignore, sender, overflowed }
+    WatchSender {
+        id,
+        paths,
+        canonical_paths,
+        ignore,
+        canonical_ignore,
+        recursive,
+        sender,
+        overflowed,
+    }
+}
+
+impl WatchSender {
+    /// Whether an error about `error_path` concerns this resource: the path is
+    /// inside one of its roots, or is an ancestor of one. Pure path checks,
+    /// since the path may no longer exist.
+    fn is_affected_by_error_path(&self, error_path: &Path) -> bool {
+        self.paths.iter().zip(&self.canonical_paths).any(|(root, canonical)| {
+            error_path.starts_with(root)
+                || root.starts_with(error_path)
+                || canonical.as_ref().is_some_and(|c| error_path.starts_with(c))
+        })
+    }
+
+    /// Record watched roots that `event_path` shows were removed or renamed
+    /// away, so their backend watch is re-armed on the next acquire.
+    fn note_dropped_roots(&self, event_path: &Path, dropped_roots: &Mutex<HashSet<PathBuf>>) {
+        for (root, canonical) in self.paths.iter().zip(&self.canonical_paths) {
+            let is_root = event_path == root || canonical.as_deref() == Some(event_path);
+            if is_root && is_file_removed(root) {
+                dropped_roots.lock().insert(root.clone());
+            }
+        }
+    }
+}
+
+/// Deliver a watcher error to the resources it concerns. An error naming a
+/// path goes only to resources whose roots that path affects; an error the
+/// backend can't scope (no paths, or paths no resource matches) is broadcast
+/// rather than dropped.
+fn dispatch_error(senders: &[WatchSender], err: &NotifyError) {
+    let is_affected =
+        |ws: &WatchSender| err.paths.iter().any(|path| ws.is_affected_by_error_path(path));
+    let scoped = !err.paths.is_empty() && senders.iter().any(is_affected);
+    for ws in senders {
+        if !scoped || is_affected(ws) {
+            ws.send_or_record_overflow(Err(clone_notify_error(err)));
+        }
+    }
 }
 
 fn ensure_watcher(state: &mut OpState) -> Result<Arc<WatcherInner>, FsEventsError> {
@@ -346,69 +489,87 @@ fn ensure_watcher(state: &mut OpState) -> Result<Arc<WatcherInner>, FsEventsErro
 
     let senders: Arc<Mutex<Vec<WatchSender>>> = Arc::new(Mutex::new(Vec::new()));
     let sender_clone = Arc::clone(&senders);
+    let dropped_roots: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
+    let dropped_roots_clone = Arc::clone(&dropped_roots);
     let watcher: RecommendedWatcher = Watcher::new(
         move |res: Result<NotifyEvent, NotifyError>| {
-            let res2 = match res {
+            let event = match res {
                 Ok(event) if is_ignored_notify_event(&event) => return,
-                Ok(event) => Ok(FsEvent::from(event)),
-                Err(e) => Err(e),
+                Ok(event) => FsEvent::from(event),
+                Err(err) => {
+                    dispatch_error(&sender_clone.lock(), &err);
+                    return;
+                }
             };
             for ws in sender_clone.lock().iter() {
-                match &res2 {
-                    // Only send the event if the path matches one of the paths
-                    // that the user is watching.
-                    Ok(event) => {
-                        // Skip events whose paths all fall under one of the ignored
-                        // paths (the `ignore` option). Removed files are checked too so
-                        // deletions inside an ignored directory don't leak through
-                        // (canonicalize/is_same_file fail for paths that no longer
-                        // exist). The `is_empty` guard keeps this off the event-callback
-                        // hot path for the common case where `ignore` is unused.
-                        //
-                        // `all` (not `any`) means an event is dropped only when every
-                        // path is ignored, so a rename out of an ignored dir into a
-                        // watched one (paths = [from, to] with `from` ignored and `to`
-                        // watched) is still delivered. The reverse case (rename into an
-                        // ignored dir) still delivers an event containing the ignored
-                        // `to` path; that is intentional.
-                        if !ws.ignore.is_empty()
-                            && !event.paths.is_empty()
-                            && event.paths.iter().all(|event_path| {
-                                event_matches_watched_paths(
-                                    event_path,
-                                    &ws.ignore,
-                                    &ws.canonical_ignore,
-                                ) || removed_event_matches_watched_paths(
-                                    event_path,
-                                    &ws.ignore,
-                                    &ws.canonical_ignore,
-                                )
-                            })
-                        {
-                            continue;
-                        }
-                        if event.paths.iter().any(|event_path| {
-                            event_matches_watched_paths(event_path, &ws.paths, &ws.canonical_paths)
-                        }) {
-                            ws.send_or_record_overflow(Ok(event.clone()));
-                        } else if event.paths.iter().any(|event_path| {
-                            removed_event_matches_watched_paths(
-                                event_path,
-                                &ws.paths,
-                                &ws.canonical_paths,
-                            )
-                        }) {
-                            let remove_event =
-                                FsEvent { kind: "remove", paths: event.paths.clone(), flag: None };
-                            ws.send_or_record_overflow(Ok(remove_event));
-                        }
-                    }
-                    // Watcher errors are not reliably path-scoped (their `paths` are
-                    // often empty), so deliver them to every watcher rather than
-                    // dropping them on the floor.
-                    Err(err) => {
-                        ws.send_or_record_overflow(Err(clone_notify_error(err)));
-                    }
+                for event_path in &event.paths {
+                    ws.note_dropped_roots(event_path, &dropped_roots_clone);
+                }
+                // A rescan the backend can't attribute to a path (e.g. an
+                // inotify queue overflow) concerns every watch; report it
+                // against this resource's roots so consumers like the
+                // node:fs polyfill have a path to rescan.
+                if event.flag == Some("rescan") && event.paths.is_empty() {
+                    ws.send_or_record_overflow(Ok(FsEvent {
+                        kind: event.kind,
+                        paths: ws.paths.clone(),
+                        flag: event.flag,
+                    }));
+                    continue;
+                }
+                // Skip events whose paths all fall under one of the ignored
+                // paths (the `ignore` option). Removed files are checked too so
+                // deletions inside an ignored directory don't leak through
+                // (canonicalize/is_same_file fail for paths that no longer
+                // exist). The `is_empty` guard keeps this off the event-callback
+                // hot path for the common case where `ignore` is unused.
+                //
+                // `all` (not `any`) means an event is dropped only when every
+                // path is ignored, so a rename out of an ignored dir into a
+                // watched one (paths = [from, to] with `from` ignored and `to`
+                // watched) is still delivered. The reverse case (rename into an
+                // ignored dir) still delivers an event containing the ignored
+                // `to` path; that is intentional.
+                if !ws.ignore.is_empty()
+                    && !event.paths.is_empty()
+                    && event.paths.iter().all(|event_path| {
+                        event_matches_watched_paths(
+                            event_path,
+                            &ws.ignore,
+                            &ws.canonical_ignore,
+                            true,
+                        ) || removed_event_matches_watched_paths(
+                            event_path,
+                            &ws.ignore,
+                            &ws.canonical_ignore,
+                            true,
+                        )
+                    })
+                {
+                    continue;
+                }
+                // Only send the event if the path matches one of the paths
+                // that the user is watching, at the depth they asked for.
+                if event.paths.iter().any(|event_path| {
+                    event_matches_watched_paths(
+                        event_path,
+                        &ws.paths,
+                        &ws.canonical_paths,
+                        ws.recursive,
+                    )
+                }) {
+                    ws.send_or_record_overflow(Ok(event.clone()));
+                } else if event.paths.iter().any(|event_path| {
+                    removed_event_matches_watched_paths(
+                        event_path,
+                        &ws.paths,
+                        &ws.canonical_paths,
+                        ws.recursive,
+                    )
+                }) {
+                    let remove_event =
+                        FsEvent { kind: "remove", paths: event.paths.clone(), flag: None };
+                    ws.send_or_record_overflow(Ok(remove_event));
                 }
             }
         },
@@ -420,6 +581,7 @@ fn ensure_watcher(state: &mut OpState) -> Result<Arc<WatcherInner>, FsEventsErro
         senders,
         watcher: Mutex::new(watcher),
         watched_paths: Mutex::new(HashMap::new()),
+        dropped_roots,
         next_id: AtomicU64::new(0),
     });
 
@@ -489,6 +651,7 @@ fn op_fs_events_open(
         id,
         resolved_paths.clone(),
         ignore_paths,
+        recursive,
         sender,
         Arc::clone(&overflowed),
     ));
@@ -496,34 +659,18 @@ fn op_fs_events_open(
     let recursive_mode =
         if recursive { RecursiveMode::Recursive } else { RecursiveMode::NonRecursive };
 
-    // Register each path with the shared watcher exactly once per
-    // (path, mode) pair. Subsequent resources requesting the same
-    // (path, mode) bump the refcount but skip the `watch` syscall.
-    // This is the core of the duplicate-event fix on Windows (see
-    // denoland/deno#27742): otherwise repeated `watch` calls register
-    // duplicate ReadDirectoryChangesW operations whose callbacks all
-    // fire on every change.
+    // Share one backend watch per path across resources (see
+    // [`acquire_watch`]). Repeated `watch` calls for the same path would
+    // otherwise register duplicate ReadDirectoryChangesW operations on
+    // Windows (see denoland/deno#27742).
     let mut watched = Vec::with_capacity(resolved_paths.len());
-    {
-        let mut watched_paths = inner.watched_paths.lock();
-        let mut watcher = inner.watcher.lock();
-        for path in &resolved_paths {
-            let key = (path.clone(), recursive_mode);
-            let count = watched_paths.entry(key.clone()).or_insert(0);
-            if *count == 0
-                && let Err(e) = watcher.watch(path, recursive_mode)
-            {
-                // Roll back any partial state we accumulated for this call so
-                // a failed open doesn't leave dangling refcounts/senders.
-                watched_paths.remove(&key);
-                drop(watcher);
-                drop(watched_paths);
-                rollback_partial_open(&inner, id, &watched);
-                return Err(FsEventsError::Notify(JsNotifyError(e)));
-            }
-            *count += 1;
-            watched.push((path.clone(), recursive_mode));
+    for path in &resolved_paths {
+        if let Err(e) = acquire_watch(&inner, path, recursive_mode) {
+            // Roll back so a failed open doesn't leave dangling owners/senders.
+            rollback_partial_open(&inner, id, &watched);
+            return Err(FsEventsError::Notify(JsNotifyError(e)));
         }
+        watched.push((path.clone(), recursive_mode));
     }
 
     let resource = FsEventsResource {
@@ -544,18 +691,8 @@ fn op_fs_events_open(
 /// the resource itself was never constructed.
 fn rollback_partial_open(inner: &Arc<WatcherInner>, id: u64, watched: &[(PathBuf, RecursiveMode)]) {
     inner.senders.lock().retain(|ws| ws.id != id);
-
-    let mut watched_paths = inner.watched_paths.lock();
-    let mut watcher = inner.watcher.lock();
     for (path, mode) in watched {
-        let key = (path.clone(), *mode);
-        if let Some(count) = watched_paths.get_mut(&key) {
-            *count = count.saturating_sub(1);
-            if *count == 0 {
-                watched_paths.remove(&key);
-                let _ = watcher.unwatch(path);
-            }
-        }
+        release_watch(inner, path, *mode);
     }
 }
 
@@ -578,7 +715,9 @@ async fn op_fs_events_poll(
     // blocked in `recv()` below always has queued events to wake it, and the
     // flag is checked again on the next poll.
     if resource.overflowed.swap(false, Ordering::Relaxed) {
-        loop {
+        // Drain only what was queued when this poll began: the backend keeps
+        // producing, and an unbounded drain could spin on the event loop.
+        for _ in 0..receiver.len() {
             match receiver.try_recv() {
                 Ok(Ok(_)) => {}
                 Ok(Err(err)) => {
@@ -640,12 +779,11 @@ mod tests {
         assert_eq!(other.get_class(), GENERIC_ERROR);
     }
 
-    // The test above only proves the match arm fires for our own constant. This
-    // drives the real notify backend against a path that does not exist so a
-    // notify upgrade that rewords the Windows missing-path message fails loudly
-    // here instead of silently regressing fs.watch to a non-ENOENT error (see
-    // denoland/deno#35855). notify's `watch_inner` returns this Generic error
-    // synchronously from its is_dir/is_file check, so no real watch is opened.
+    // Drives the real notify backend against a path that does not exist, so a
+    // notify upgrade that stops reporting a missing path as PathNotFound fails
+    // loudly here instead of silently regressing fs.watch to a non-ENOENT
+    // error (see denoland/deno#35855). notify's Windows `add_watch` returns
+    // this synchronously from its metadata check, so no real watch is opened.
     #[cfg(windows)]
     #[test]
     #[expect(clippy::unwrap_used, clippy::expect_used)]
@@ -659,14 +797,128 @@ mod tests {
             .expect_err("watching a nonexistent path should fail");
 
         assert!(
-            matches!(
-              &err.kind,
-              notify::ErrorKind::Generic(msg) if msg == WINDOWS_PATH_NOT_FOUND_MSG
-            ),
-            "notify no longer reports the expected Generic message; got {:?}",
+            matches!(err.kind, notify::ErrorKind::PathNotFound),
+            "notify no longer reports a missing watch path as PathNotFound; got {:?}",
             err.kind,
         );
         assert_eq!(JsNotifyError(err).get_class(), "NotFound");
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("rari-fs-events-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("child/grandchild"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        dir
+    }
+
+    fn test_inner() -> WatcherInner {
+        let watcher: RecommendedWatcher =
+            Watcher::new(|_: Result<NotifyEvent, NotifyError>| {}, notify::Config::default())
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        WatcherInner {
+            senders: Arc::new(Mutex::new(Vec::new())),
+            watcher: Mutex::new(watcher),
+            watched_paths: Mutex::new(HashMap::new()),
+            dropped_roots: Arc::new(Mutex::new(HashSet::new())),
+            next_id: AtomicU64::new(0),
+        }
+    }
+
+    fn backend_mode(inner: &WatcherInner, path: &Path) -> Option<RecursiveMode> {
+        inner.watched_paths.lock().get(path).and_then(|refs| refs.backend_mode)
+    }
+
+    #[test]
+    fn shared_watch_stays_recursive_while_any_owner_needs_it() {
+        let dir = temp_dir("modes");
+        let inner = test_inner();
+
+        acquire_watch(&inner, &dir, RecursiveMode::NonRecursive)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(backend_mode(&inner, &dir), Some(RecursiveMode::NonRecursive));
+        acquire_watch(&inner, &dir, RecursiveMode::Recursive)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(backend_mode(&inner, &dir), Some(RecursiveMode::Recursive));
+
+        // Closing the non-recursive owner must not unwatch the recursive one.
+        release_watch(&inner, &dir, RecursiveMode::NonRecursive);
+        assert_eq!(backend_mode(&inner, &dir), Some(RecursiveMode::Recursive));
+        acquire_watch(&inner, &dir, RecursiveMode::NonRecursive)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+
+        // The last recursive owner leaving narrows the watch; the last owner removes it.
+        release_watch(&inner, &dir, RecursiveMode::Recursive);
+        assert_eq!(backend_mode(&inner, &dir), Some(RecursiveMode::NonRecursive));
+        release_watch(&inner, &dir, RecursiveMode::NonRecursive);
+        assert!(!inner.watched_paths.lock().contains_key(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dropped_root_is_rearmed_on_next_acquire() {
+        let dir = temp_dir("rearm");
+        let inner = test_inner();
+        acquire_watch(&inner, &dir, RecursiveMode::Recursive)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+
+        inner.dropped_roots.lock().insert(dir.clone());
+        acquire_watch(&inner, &dir, RecursiveMode::Recursive)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(!inner.dropped_roots.lock().contains(&dir));
+        assert_eq!(inner.watched_paths.lock().get(&dir).map(|r| r.recursive), Some(2));
+
+        release_watch(&inner, &dir, RecursiveMode::Recursive);
+        release_watch(&inner, &dir, RecursiveMode::Recursive);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn non_recursive_matching_stops_at_immediate_children() {
+        let dir = temp_dir("depth");
+        let paths = vec![dir.clone()];
+        let canonical = vec![canonicalize_path(&dir)];
+        let child = dir.join("child");
+        let grandchild = dir.join("child/grandchild");
+
+        assert!(event_matches_watched_paths(&child, &paths, &canonical, false));
+        assert!(!event_matches_watched_paths(&grandchild, &paths, &canonical, false));
+        assert!(event_matches_watched_paths(&grandchild, &paths, &canonical, true));
+
+        let gone = dir.join("child/grandchild/gone.txt");
+        assert!(!removed_event_matches_watched_paths(&gone, &paths, &canonical, false));
+        assert!(removed_event_matches_watched_paths(&gone, &paths, &canonical, true));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn path_scoped_errors_reach_only_affected_resources() {
+        let (tx_a, mut rx_a) = mpsc::channel(4);
+        let (tx_b, mut rx_b) = mpsc::channel(4);
+        let overflowed = Arc::new(AtomicBool::new(false));
+        let senders = vec![
+            make_watch_sender(
+                0,
+                vec![PathBuf::from("/watched/a")],
+                vec![],
+                true,
+                tx_a,
+                Arc::clone(&overflowed),
+            ),
+            make_watch_sender(1, vec![PathBuf::from("/watched/b")], vec![], true, tx_b, overflowed),
+        ];
+
+        dispatch_error(
+            &senders,
+            &NotifyError::generic("scoped").add_path(PathBuf::from("/watched/a/x")),
+        );
+        assert!(rx_a.try_recv().is_ok());
+        assert!(rx_b.try_recv().is_err());
+
+        dispatch_error(&senders, &NotifyError::generic("unscoped"));
+        assert!(rx_a.try_recv().is_ok());
+        assert!(rx_b.try_recv().is_ok());
     }
 
     #[test]

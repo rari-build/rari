@@ -222,6 +222,15 @@ function sanitizeUrlForSpan(url: string): string {
   return parsed.href
 }
 
+const SENSITIVE_QUERY_PARAM_PATTERN = /\b(X-Amz-Signature|X-Amz-Security-Token)=[^&\s"'()<>:,]*/giu
+const URL_USERINFO_PATTERN = /\b([a-z][a-z\d+.-]*:\/\/)[^/\s@]*@/giu
+
+function sanitizeErrorMessageForSpan(message: string): string {
+  return message
+    .replace(SENSITIVE_QUERY_PARAM_PATTERN, `$1=${REDACTED}`)
+    .replace(URL_USERINFO_PATTERN, `$1${REDACTED}:${REDACTED}@`)
+}
+
 function startFetchSpan(
   url: string,
 ): { span: TelemetrySpan; traceHeaders: [string, string][] } | null {
@@ -297,7 +306,10 @@ async function fetchWithRustCache(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     if (traced) {
-      traced.span.setStatus({ code: SPAN_STATUS_ERROR, message })
+      traced.span.setStatus({
+        code: SPAN_STATUS_ERROR,
+        message: sanitizeErrorMessageForSpan(message),
+      })
       traced.span.end()
     }
     console.error(
