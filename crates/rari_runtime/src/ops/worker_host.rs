@@ -218,6 +218,11 @@ fn get_thread_cpu_usage_by_handle(handle: u64) -> (f64, f64) {
         thread_info(thread_port, THREAD_BASIC_INFO, (&raw mut info).cast::<i32>(), &raw mut count)
     };
 
+    // `mach_thread_self()` hands out a new send right on every call; release
+    // it whether or not the query succeeded so repeated calls don't leak.
+    // SAFETY: `thread_port` is a send right owned by this task.
+    unsafe { mach_port_deallocate(mach_task_self_, thread_port) };
+
     if kr != 0 {
         return (0.0, 0.0);
     }
@@ -250,7 +255,9 @@ struct ThreadBasicInfo {
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
+    static mach_task_self_: u32;
     fn mach_thread_self() -> u32;
+    fn mach_port_deallocate(task: u32, name: u32) -> i32;
     fn thread_info(
         target_act: u32,
         flavor: u32,

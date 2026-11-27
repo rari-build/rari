@@ -13,7 +13,6 @@ pub mod ops;
 pub use bootstrap_options::BootstrapOptions;
 pub use deno_terminal::colors;
 
-// Keeps Deno's extension name: JS in other extensions imports from `ext:runtime/`.
 deno_core::extension!(
     runtime,
     esm_entry_point = "ext:runtime/bootstrap.ts",
@@ -25,6 +24,7 @@ deno_core::extension!(
         "errors.ts",
         "version.ts",
         "permissions.ts",
+        "fs_events.ts",
         "tty.ts",
         "prompt.ts",
     ],

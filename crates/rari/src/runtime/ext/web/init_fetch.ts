@@ -202,6 +202,26 @@ function isTelemetryInternals(value: unknown): value is TelemetryInternals {
 const SPAN_KIND_CLIENT = 2
 const SPAN_STATUS_ERROR = 2
 
+const REDACTED = 'REDACTED'
+const SENSITIVE_QUERY_PARAMS = ['X-Amz-Signature', 'X-Amz-Security-Token']
+
+function sanitizeUrlForSpan(url: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return url
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    parsed.username = REDACTED
+    parsed.password = REDACTED
+  }
+  for (const name of SENSITIVE_QUERY_PARAMS) {
+    if (parsed.searchParams.has(name)) parsed.searchParams.set(name, REDACTED)
+  }
+  return parsed.href
+}
+
 function startFetchSpan(
   url: string,
 ): { span: TelemetrySpan; traceHeaders: [string, string][] } | null {
@@ -210,7 +230,7 @@ function startFetchSpan(
 
   let attributes: Record<string, string | number> = {
     'http.request.method': 'GET',
-    'url.full': url,
+    'url.full': sanitizeUrlForSpan(url),
   }
   try {
     const parsed = new URL(url)

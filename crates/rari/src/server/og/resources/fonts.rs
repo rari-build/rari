@@ -57,6 +57,11 @@ fn guess_font_format(source: &[u8]) -> Result<FontFormat, FontError> {
     }
 }
 
+pub fn has_usable_face(data: &[u8]) -> bool {
+    let mut collection = Collection::new(CollectionOptions { system_fonts: false, shared: false });
+    !collection.register_fonts(Blob::new(Arc::new(data.to_vec())), None).is_empty()
+}
+
 #[derive(Clone)]
 pub struct FontContext {
     pub(crate) inner: ParleyFontContext,
@@ -93,20 +98,21 @@ impl FontContext {
     }
 
     fn load_default_font(&mut self, cjk_font: Option<Blob<u8>>) -> Result<(), FontError> {
-        let blob = match cjk_font {
-            Some(blob) => blob,
-            None => Blob::new(Arc::new(load_font(NOTO_SANS_FONT)?.into_owned())),
-        };
+        let subset = Blob::new(Arc::new(load_font(NOTO_SANS_FONT)?.into_owned()));
+        self.register_sans_serif(subset);
+        if let Some(blob) = cjk_font {
+            self.register_sans_serif(blob);
+        }
+        Ok(())
+    }
 
+    fn register_sans_serif(&mut self, blob: Blob<u8>) {
         let fonts = self.inner.collection.register_fonts(blob, None);
-
         for (family, _) in fonts {
             self.inner
                 .collection
                 .append_generic_families(GenericFamily::SansSerif, iter::once(family));
         }
-
-        Ok(())
     }
 
     fn load_twemoji(&mut self) -> Result<(), FontError> {

@@ -10,7 +10,8 @@ use deno_process::deno_process;
 use rari_runtime::{
     BootstrapOptions, colors,
     ops::{
-        bootstrap::deno_bootstrap, permissions::deno_permissions, worker_host::deno_worker_host,
+        bootstrap::deno_bootstrap, fs_events::deno_fs_events, permissions::deno_permissions,
+        worker_host::deno_worker_host,
     },
     runtime,
 };
@@ -87,6 +88,12 @@ impl ExtensionTrait<()> for deno_permissions {
     }
 }
 
+impl ExtensionTrait<()> for deno_fs_events {
+    fn init((): ()) -> Extension {
+        Self::init()
+    }
+}
+
 impl ExtensionTrait<()> for deno_worker_host {
     fn init((): ()) -> Extension {
         Self::init()
@@ -147,6 +154,7 @@ pub fn extensions(
         &mut lazy_args,
     );
     lazy::register::<(), deno_worker_host>((), is_snapshot, &mut extensions, &mut lazy_args);
+    lazy::register::<(), deno_fs_events>((), is_snapshot, &mut extensions, &mut lazy_args);
     lazy::register::<(), deno_permissions>((), is_snapshot, &mut extensions, &mut lazy_args);
     lazy::register::<(), runtime>((), is_snapshot, &mut extensions, &mut lazy_args);
     lazy::register::<(), init_console>((), is_snapshot, &mut extensions, &mut lazy_args);

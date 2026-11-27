@@ -12,6 +12,7 @@ import { op_bootstrap_user_agent } from 'ext:core/ops'
 const {
   ArrayPrototypeMap,
   ObjectFreeze,
+  ObjectHasOwn,
   ObjectPrototypeIsPrototypeOf,
   PromiseResolve,
   SafeArrayIterator,
@@ -141,6 +142,7 @@ class NavigatorUAData {
     }
 
     for (const hint of new SafeArrayIterator(convertedHints)) {
+      if (!ObjectHasOwn(highEntropyValues, hint)) continue
       const getter = highEntropyValues[hint]
       if (getter !== undefined) {
         result[hint] = getter()

@@ -152,10 +152,10 @@ function isValidDescriptor(desc: unknown): desc is Deno.PermissionDescriptor {
 function formDescriptor(desc: Deno.PermissionDescriptor): Deno.PermissionDescriptor {
   if (desc.name === 'read' || desc.name === 'write' || desc.name === 'ffi') {
     if (desc.path !== undefined) {
-      return { ...desc, path: pathFromURL(desc.path) }
+      return { ...desc, name: desc.name, path: pathFromURL(desc.path) }
     }
   } else if (desc.name === 'run' && desc.command !== undefined) {
-    return { ...desc, command: pathFromURL(desc.command) }
+    return { ...desc, name: desc.name, command: pathFromURL(desc.command) }
   }
   return desc
 }
@@ -180,8 +180,9 @@ class Permissions {
       throw new TypeError('The provided value is not a valid permission name')
     }
 
-    const status = op_query_permission(formDescriptor(desc))
-    return cache(desc, status)
+    const normalized = formDescriptor(desc)
+    const status = op_query_permission(normalized)
+    return cache(normalized, status)
   }
 
   async revoke(desc: unknown): Promise<PermissionStatus> {
@@ -197,8 +198,9 @@ class Permissions {
       throw new TypeError('The provided value is not a valid permission name')
     }
 
-    const status = op_revoke_permission(formDescriptor(desc))
-    return cache(desc, status)
+    const normalized = formDescriptor(desc)
+    const status = op_revoke_permission(normalized)
+    return cache(normalized, status)
   }
 
   async request(desc: unknown): Promise<PermissionStatus> {
@@ -214,8 +216,9 @@ class Permissions {
       throw new TypeError('The provided value is not a valid permission name.')
     }
 
-    const status = op_request_permission(formDescriptor(desc))
-    return cache(desc, status)
+    const normalized = formDescriptor(desc)
+    const status = op_request_permission(normalized)
+    return cache(normalized, status)
   }
 }
 

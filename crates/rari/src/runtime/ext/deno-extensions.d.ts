@@ -338,6 +338,10 @@ declare module 'ext:runtime/permissions.ts' {
   export const PermissionStatus: typeof Deno.PermissionStatus
 }
 
+declare module 'ext:runtime/fs_events.ts' {
+  export const watchFs: typeof Deno.watchFs
+}
+
 declare module 'ext:runtime/tty.ts' {
   export const isatty: typeof Deno.isatty
   export const consoleSize: typeof Deno.consoleSize

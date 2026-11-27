@@ -12,7 +12,7 @@ use parley::fontique::Blob;
 use reqwest::blocking::{Client, Response};
 use sha2::{Digest, Sha256};
 
-use super::fonts::load_font;
+use super::fonts::{has_usable_face, load_font};
 
 const FONT_PATH_ENV: &str = "RARI_OG_CJK_FONT";
 
@@ -74,8 +74,13 @@ pub fn load() -> Option<Blob<u8>> {
 
 fn resolve() -> Result<Vec<u8>, String> {
     if let Some(path) = env::var_os(FONT_PATH_ENV).filter(|path| !path.is_empty()) {
-        let data = fs::read(&path).map_err(|e| format!("{}: {e}", Path::new(&path).display()))?;
-        return load_font(&data).map(Cow::into_owned).map_err(|e| e.to_string());
+        let display = Path::new(&path).display();
+        let data = fs::read(&path).map_err(|e| format!("{display}: {e}"))?;
+        let data = load_font(&data).map(Cow::into_owned).map_err(|e| format!("{display}: {e}"))?;
+        if !has_usable_face(&data) {
+            return Err(format!("{display}: no usable font face"));
+        }
+        return Ok(data);
     }
 
     let cache_path = cache_path();
@@ -143,5 +148,10 @@ mod tests {
     #[test]
     fn rejects_unexpected_data() {
         assert!(!is_expected(b"not a font"));
+    }
+
+    #[test]
+    fn rejects_local_font_without_faces() {
+        assert!(!has_usable_face(&[0x00, 0x01, 0x00, 0x00, 0, 0, 0, 0]));
     }
 }

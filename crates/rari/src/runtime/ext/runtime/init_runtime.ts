@@ -9,6 +9,7 @@ import {
   readOnly,
 } from 'ext:init_utilities/utilities.ts'
 import { errors } from 'ext:runtime/errors.ts'
+import { watchFs } from 'ext:runtime/fs_events.ts'
 import * as scopeWindow from 'ext:runtime/global_scope_window.ts'
 import { permissions, Permissions, PermissionStatus } from 'ext:runtime/permissions.ts'
 import { consoleSize, isatty } from 'ext:runtime/tty.ts'
@@ -55,9 +56,11 @@ applyToDeno({
   consoleSize: nonEnumerable(consoleSize),
 
   memoryUsage: nonEnumerable(() => ({})),
-  version: nonEnumerable(version.version),
+  version: nonEnumerable(version),
   build: nonEnumerable(core.build),
   errors: nonEnumerable(errors),
+
+  watchFs: nonEnumerable(watchFs),
 
   permissions: nonEnumerable(permissions),
   Permissions: nonEnumerable(Permissions),

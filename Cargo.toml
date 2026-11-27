@@ -34,6 +34,8 @@ sha2 = "0.11.1"
 smallvec = "1.16.6"
 thiserror = "2.0.21"
 tokio = "1.54.1"
+notify = "9.0.0"
+same-file = "1.0.6"
 tracing = "0.1.44"
 url = "2.5.8"
 uuid = { version = "1.29.3", features = ["v4"] }
@@ -58,6 +60,7 @@ deno_signals = "=0.51.0"
 deno_os = "=0.77.0"
 deno_package_json = { version = "=0.62.0", default-features = false }
 deno_permissions = "=0.119.0"
+deno_path_util = "=0.6.4"
 deno_process = "=0.75.0"
 deno_resolver = { version = "=0.91.0", features = ["sync"] }
 deno_semver = "=0.10.1"

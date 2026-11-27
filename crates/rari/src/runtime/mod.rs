@@ -284,14 +284,86 @@ impl JsExecutionRuntime {
 #[expect(clippy::expect_used)]
 mod tests {
     use std::{
+        env, fs,
         sync::Arc,
         time::{Duration, Instant},
     };
 
     use rari_error::RariError;
     use tokio::sync::mpsc;
+    use uuid::Uuid;
 
     use super::JsExecutionRuntime;
+
+    async fn observe_file_write(api: &str, watch_and_wait: &str) -> serde_json::Value {
+        let dir = env::temp_dir().join(format!("rari-watch-{api}-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).expect("create watch dir");
+        let dir_json = serde_json::to_string(&dir.to_string_lossy()).expect("serialize dir");
+
+        let script = format!(
+            r#"(async function() {{
+                const dir = {dir_json};
+                const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 5000));
+                const observed = (async () => {{ {watch_and_wait} }})();
+                // Give the backend a moment to arm before writing.
+                await new Promise((resolve) => setTimeout(resolve, 200));
+                Deno.writeTextFileSync(dir + "/hello.txt", "hi");
+                return await Promise.race([observed, timeout]);
+            }})()"#
+        );
+
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let result = runtime.execute_script(format!("watch_{api}"), script).await;
+        let _ = fs::remove_dir_all(&dir);
+        result.expect("watch script should run")
+    }
+
+    #[tokio::test]
+    async fn deno_watch_fs_reports_file_writes() {
+        let result = observe_file_write(
+            "deno",
+            r#"
+                const watcher = Deno.watchFs(dir);
+                try {
+                    for await (const event of watcher) {
+                        if (event.paths.some((p) => p.endsWith("hello.txt"))) return event.kind;
+                    }
+                    return "ended";
+                } finally {
+                    watcher.close();
+                }
+            "#,
+        )
+        .await;
+        assert!(
+            matches!(result.as_str(), Some("create" | "modify")),
+            "unexpected watchFs result: {result}"
+        );
+    }
+
+    #[tokio::test]
+    async fn node_fs_watch_reports_file_writes() {
+        let result = observe_file_write(
+            "node",
+            r#"
+                const { watch } = await import("node:fs");
+                return await new Promise((resolve, reject) => {
+                    const watcher = watch(dir, (eventType, filename) => {
+                        if (filename === "hello.txt") {
+                            watcher.close();
+                            resolve(eventType);
+                        }
+                    });
+                    watcher.on("error", reject);
+                });
+            "#,
+        )
+        .await;
+        assert!(
+            matches!(result.as_str(), Some("rename" | "change")),
+            "unexpected fs.watch result: {result}"
+        );
+    }
 
     #[tokio::test]
     async fn overlapping_streams_on_one_isolate_finish_near_max_delay() {

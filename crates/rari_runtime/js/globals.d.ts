@@ -13,6 +13,12 @@ declare namespace Deno {
   }
 }
 
+interface FsEvent {
+  readonly kind: 'any' | 'access' | 'create' | 'modify' | 'rename' | 'remove' | 'other'
+  readonly paths: string[]
+  readonly flag?: 'rescan' | null
+}
+
 interface SafeArrayIteratorConstructor {
   new <T>(values: readonly T[]): IterableIterator<T>
 }
@@ -39,6 +45,7 @@ interface Primordials {
   MapPrototypeHas: <K, V>(map: Map<K, V>, key: K) => boolean
   MapPrototypeSet: <K, V>(map: Map<K, V>, key: K, value: V) => Map<K, V>
   ObjectFreeze: <T extends object>(value: T) => Readonly<T>
+  ObjectHasOwn: (value: object, key: PropertyKey) => boolean
   ObjectDefineProperties: (target: object, properties: object) => object
   ObjectPrototypeIsPrototypeOf: (prototype: object, value: object) => boolean
   PromiseReject: <T = never>(reason?: unknown) => Promise<T>
@@ -52,6 +59,8 @@ interface Primordials {
   StringPrototypeStartsWith: (value: string, search: string) => boolean
   StringPrototypeToUpperCase: (value: string) => string
   Symbol: typeof Symbol
+  SymbolAsyncIterator: typeof Symbol.asyncIterator
+  SymbolDispose: typeof Symbol.dispose
   SymbolFor: (key: string) => symbol
   TypeError: TypeErrorConstructor
   Uint8Array: typeof Uint8Array
@@ -141,10 +150,21 @@ interface Core {
       state: Deno.PermissionState
       partial: boolean
     }
+    op_fs_events_open: (
+      recursive: boolean,
+      ignore: readonly string[],
+      paths: readonly string[],
+    ) => number
+    op_fs_events_poll: (rid: number) => Promise<FsEvent | null>
     op_read_line_prompt: (prompt: string, defaultValue: string) => string
     op_console_size: (size: Uint32Array) => void
   }
   BadResource: { new (message?: unknown, options?: unknown): Error }
+  BadResourcePrototype: Error
+  InterruptedPrototype: Error
+  refOpPromise: (promise: Promise<unknown>) => void
+  unrefOpPromise: (promise: Promise<unknown>) => void
+  tryClose: (rid: number) => void
   Interrupted: { new (message?: unknown, options?: unknown): Error }
   NotCapable: { new (message?: unknown, options?: unknown): Error }
   isTerminal: (rid: number) => boolean

@@ -30,6 +30,13 @@ use crate::{
     utils::{float, path::path_to_file_url},
 };
 
+#[non_exhaustive]
+pub struct GeneratedOgImage {
+    pub data: Vec<u8>,
+    pub cache_hit: bool,
+    pub is_complete: bool,
+}
+
 pub struct OgImageGenerator {
     runtime: Arc<JsExecutionRuntime>,
     cache: OgImageCache,
@@ -168,12 +175,12 @@ impl OgImageGenerator {
     }
 
     #[expect(clippy::missing_errors_doc)]
-    pub async fn generate(&self, route_path: &str) -> Result<(Vec<u8>, bool), OgImageError> {
+    pub async fn generate(&self, route_path: &str) -> Result<GeneratedOgImage, OgImageError> {
         const MAX_OG_WIDTH: u32 = 2400;
         const MAX_OG_HEIGHT: u32 = 1260;
 
         if let Some(cached) = self.cache.get(route_path).await {
-            return Ok((cached, true));
+            return Ok(GeneratedOgImage { data: cached, cache_hit: true, is_complete: true });
         }
 
         let manifest = self.manifest.read().await;
@@ -190,8 +197,7 @@ impl OgImageGenerator {
         let height = entry.height.unwrap_or(630).min(MAX_OG_HEIGHT);
 
         let render = move || -> Result<(Vec<u8>, bool), OgImageError> {
-            let needs_cjk_font =
-                serde_json::to_string(&jsx_element).is_ok_and(|json| cjk_font::is_needed(&json));
+            let needs_cjk_font = Self::text_needs_cjk_font(&jsx_element);
             let cjk_font = if needs_cjk_font { cjk_font::load() } else { None };
             let is_complete = !needs_cjk_font || cjk_font.is_some();
 
@@ -218,15 +224,20 @@ impl OgImageGenerator {
             OgImageError::GenerationError(format!("OG generation task failed: {e}"))
         })??;
 
-        if !is_complete {
-            return Ok((webp_data, false));
-        }
-
-        if let Err(e) = self.cache.insert(route_path.to_string(), webp_data.clone()).await {
+        if is_complete
+            && let Err(e) = self.cache.insert(route_path.to_string(), webp_data.clone()).await
+        {
             tracing::warn!(error = %e, route_path, "OG cache insert failed");
         }
 
-        Ok((webp_data, false))
+        Ok(GeneratedOgImage { data: webp_data, cache_hit: false, is_complete })
+    }
+
+    fn text_needs_cjk_font(element: &JsxElement) -> bool {
+        element.children.iter().any(|child| match child {
+            JsxChild::Text(text) => cjk_font::is_needed(text),
+            JsxChild::Element(child) => Self::text_needs_cjk_font(child),
+        })
     }
 
     fn find_matching_entry<'a>(
@@ -407,6 +418,30 @@ mod tests {
             extract_component_id("app/blog/[slug]/opengraph-image.tsx").unwrap(),
             "app/blog/_slug_/opengraph-image_2ade8d39"
         );
+    }
+
+    #[test]
+    fn cjk_detection_ignores_props_and_reads_nested_text() {
+        let element = |props: Value, children: Vec<JsxChild>| JsxElement {
+            element_type: "div".to_string(),
+            props,
+            children,
+        };
+
+        let props_only = element(
+            serde_json::json!({ "data-label": "漢字" }),
+            vec![JsxChild::Text("Hello".to_string())],
+        );
+        assert!(!OgImageGenerator::text_needs_cjk_font(&props_only));
+
+        let nested = element(
+            Value::Object(Map::default()),
+            vec![JsxChild::Element(Box::new(element(
+                Value::Object(Map::default()),
+                vec![JsxChild::Text("世界".to_string())],
+            )))],
+        );
+        assert!(OgImageGenerator::text_needs_cjk_font(&nested));
     }
 
     #[tokio::test]
