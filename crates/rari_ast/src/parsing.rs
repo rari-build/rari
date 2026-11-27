@@ -22,9 +22,7 @@ pub struct ParseParams {
     pub media_type: MediaType,
     /// Whether to capture tokens or not.
     pub capture_tokens: bool,
-    /// Whether to apply scope analysis.
     pub scope_analysis: bool,
-    /// Source type override. If `None`, will be derived from media type.
     pub maybe_source_type: Option<SourceType>,
 }
 
@@ -58,23 +56,20 @@ fn parse(
     params: ParseParams,
     force_module: Option<bool>,
 ) -> Result<ParsedSource<'_>, ParseDiagnostic> {
-    let source = strip_bom_from_arc(params.text, /* panic in debug */ true);
+    let source = strip_bom_from_arc(params.text, true);
     let specifier = params.specifier;
     let media_type = params.media_type;
 
     let source_type = params.maybe_source_type.unwrap_or_else(|| get_source_type(media_type));
 
-    // Apply force_module override
     let source_type = match force_module {
         Some(true) => source_type.with_module(true),
         Some(false) => source_type.with_script(true),
         None => {
-            // Refine based on media type
             match media_type {
                 MediaType::Cjs => source_type.with_script(true),
                 MediaType::Cts => {
                     // cts files can contain module declarations like
-                    // `import x = require("./x.ts");`, so parse as module
                     source_type.with_module(true)
                 }
                 MediaType::Mjs | MediaType::Mts => source_type.with_module(true),
@@ -85,18 +80,15 @@ fn parse(
 
     let parse_options = ParseOptions { parse_regular_expression: false, ..Default::default() };
 
-    // Allocate source text in the arena so it lives for 'a
     let source_in_arena = allocator.alloc_str(source.as_ref());
 
     let parser = Parser::new(allocator, source_in_arena, source_type).with_options(parse_options);
-    // oxc only collects tokens when the parser is configured with the tokens config.
     let ret = if params.capture_tokens {
         parser.with_config(oxc::parser::config::TokensParserConfig).parse()
     } else {
         parser.parse()
     };
 
-    // Check for fatal parse errors
     if ret.fatal_error {
         let source_text_info = SourceTextInfo::new(Arc::clone(&source));
         if let Some(error) = ret.diagnostics.into_iter().next() {
@@ -110,10 +102,6 @@ fn parse(
         ));
     }
 
-    // When the lexer hits a character it cannot lex (e.g. a Markdown file),
-    // oxc stops parsing, reports the lexer error as a regular diagnostic and
-    // leaves `fatal_error` unset, returning whatever was parsed so far. Treat an
-    // incomplete parse as a parse error.
     if !ret.diagnostics.is_empty()
         && let Some(unparsed_start) = unparsed_source_start(&ret.program, source_in_arena)
     {
@@ -130,9 +118,6 @@ fn parse(
         ));
     }
 
-    // A script (e.g. a CommonJS module) cannot use `import`/`export` statements.
-    // OXC parses these without erroring but records `has_module_syntax`, so
-    // surface the error here rather than silently accepting the module syntax.
     if source_type.is_script() && ret.module_record.has_module_syntax {
         let span =
             first_module_decl_span(&ret.program).unwrap_or_else(|| oxc::span::Span::new(0, 0));
@@ -144,7 +129,6 @@ fn parse(
         ));
     }
 
-    // Collect non-fatal diagnostics
     let diagnostics = if ret.diagnostics.is_empty() {
         ParseDiagnostics::default()
     } else {
@@ -159,9 +143,6 @@ fn parse(
         ParseDiagnostics { diagnostics: diags, script_module_diagnostics: Vec::new() }
     };
 
-    // Run semantic analysis to assign scope-aware symbol/reference ids.
-    // This is what lets consumers distinguish same-named identifiers in
-    // different scopes.
     let scoping = if params.scope_analysis {
         let semantic_ret = oxc::semantic::SemanticBuilder::new().build(&ret.program);
         Some(semantic_ret.semantic.into_scoping())
@@ -182,10 +163,6 @@ fn parse(
     })
 }
 
-/// Returns the offset of the first non-whitespace character after everything
-/// the parser consumed (statements, directives, the hashbang and comments), or
-/// `None` when the whole source was parsed. A successful parse covers the
-/// whole source, so trailing non-trivia means the parser stopped early.
 fn unparsed_source_start(program: &oxc::ast::ast::Program, source: &str) -> Option<u32> {
     use oxc::span::GetSpan;
     let parsed_end = program
@@ -204,14 +181,11 @@ fn unparsed_source_start(program: &oxc::ast::ast::Program, source: &str) -> Opti
         .map(|(i, _)| parsed_end + i as u32)
 }
 
-/// Finds the span of the first `import`/`export` statement in a program, used
-/// to point at module syntax that appears in a script.
 fn first_module_decl_span(program: &oxc::ast::ast::Program) -> Option<oxc::span::Span> {
     use oxc::span::GetSpan;
     program.body.iter().find_map(|stmt| stmt.as_module_declaration().map(GetSpan::span))
 }
 
-/// Gets the default `SourceType` used by `rari_ast` for the provided media type.
 pub fn get_source_type(media_type: MediaType) -> SourceType {
     match media_type {
         MediaType::TypeScript | MediaType::Mts | MediaType::Cts => SourceType::ts(),
@@ -286,8 +260,6 @@ mod test {
 
     #[test]
     fn should_error_when_lexer_stops_early() {
-        // oxc's lexer stops at a character it cannot lex without flagging a
-        // fatal error; the result must still be a parse error like swc produced.
         for (text, expected_line) in [
             ("# Some Markdown\n\n**bold**", 1),
             ("const a = 1;\n# not js\nconst b = 2;", 2),
@@ -310,7 +282,6 @@ mod test {
             assert_eq!(err.display_position().line_number, expected_line, "{text:?}");
         }
 
-        // trailing comments and whitespace after the last statement are fine
         let allocator = Allocator::default();
         let program = parse_module(
             &allocator,
@@ -484,8 +455,6 @@ mod test {
         );
     }
 
-    /// Gets a diagnostic from the source - either a fatal parse error
-    /// or a non-fatal diagnostic found after parsing.
     fn get_any_diagnostic(text: &str) -> ParseDiagnostic {
         let allocator = Allocator::default();
         match parse_module(

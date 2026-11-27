@@ -284,14 +284,201 @@ impl JsExecutionRuntime {
 #[expect(clippy::expect_used)]
 mod tests {
     use std::{
+        env, fs,
         sync::Arc,
         time::{Duration, Instant},
     };
 
     use rari_error::RariError;
     use tokio::sync::mpsc;
+    use uuid::Uuid;
 
     use super::JsExecutionRuntime;
+
+    async fn observe_file_write(api: &str, file: &str, watch_and_wait: &str) -> serde_json::Value {
+        let dir = env::temp_dir().join(format!("rari-watch-{api}-{}", Uuid::new_v4()));
+        fs::create_dir_all(dir.join(file).parent().expect("file has a parent"))
+            .expect("create watch dirs");
+        let file_json = serde_json::to_string(file).expect("serialize file");
+        let dir_json = serde_json::to_string(&dir.to_string_lossy()).expect("serialize dir");
+
+        let script = format!(
+            r#"(async function() {{
+                const dir = {dir_json};
+                const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 5000));
+                let ready;
+                const watching = new Promise((resolve) => {{ ready = resolve; }});
+                const observed = (async () => {{ {watch_and_wait} }})();
+                const armed = await Promise.race([watching.then(() => true), observed, timeout]);
+                if (armed !== true) return armed;
+                Deno.writeTextFileSync(dir + "/" + {file_json}, "hi");
+                return await Promise.race([observed, timeout]);
+            }})()"#
+        );
+
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let result = runtime.execute_script(format!("watch_{api}"), script).await;
+        let _ = fs::remove_dir_all(&dir);
+        result.expect("watch script should run")
+    }
+
+    #[tokio::test]
+    async fn installs_navigator_but_not_browser_only_globals() {
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let globals = runtime
+            .execute_script(
+                "probe_globals".into(),
+                r"({
+                    navigator: typeof navigator,
+                    isNavigator: navigator instanceof Navigator,
+                    userAgentData: typeof navigator.userAgentData?.brands,
+                    platform: navigator.platform,
+                    cpus: navigator.hardwareConcurrency > 0,
+                    self: typeof self,
+                    location: typeof location,
+                    alert: typeof alert,
+                })"
+                .into(),
+            )
+            .await
+            .expect("probe script should run");
+
+        assert_eq!(globals["navigator"], "object");
+        assert_eq!(globals["isNavigator"], true);
+        assert_eq!(globals["userAgentData"], "object");
+        assert!(globals["platform"].as_str().is_some_and(|p| !p.is_empty()), "{globals}");
+        assert_eq!(globals["cpus"], true);
+        for name in ["self", "location", "alert"] {
+            assert_eq!(globals[name], "undefined", "{name} should not be a global");
+        }
+    }
+
+    #[tokio::test]
+    async fn cached_fetch_handles_null_body_status_without_refetching() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind test server");
+        let addr = listener.local_addr().expect("server address");
+        let hits = Arc::new(AtomicUsize::new(0));
+        let server_hits = Arc::clone(&hits);
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                server_hits.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 4096];
+                let _ = socket.read(&mut buf).await;
+                let _ =
+                    socket.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n").await;
+            }
+        });
+
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let result = runtime
+            .execute_script(
+                "fetch_204".into(),
+                format!(
+                    r#"(async () => {{
+                        const res = await fetch("http://{addr}/empty");
+                        return {{
+                            status: res.status,
+                            body: await res.text(),
+                            contentType: res.headers.get("content-type"),
+                        }};
+                    }})()"#
+                ),
+            )
+            .await
+            .expect("fetch script should run");
+
+        assert_eq!(result["status"], 204, "{result}");
+        assert_eq!(result["body"], "", "{result}");
+        assert!(
+            result["contentType"].is_null(),
+            "no Content-Type for a bodiless response: {result}"
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "the request was sent again by the fallback");
+    }
+
+    #[tokio::test]
+    async fn deno_watch_fs_reports_file_writes() {
+        let result = observe_file_write(
+            "deno",
+            "hello.txt",
+            r#"
+                const watcher = Deno.watchFs(dir);
+                ready();
+                try {
+                    for await (const event of watcher) {
+                        if (event.paths.some((p) => p.endsWith("hello.txt"))) return event.kind;
+                    }
+                    return "ended";
+                } finally {
+                    watcher.close();
+                }
+            "#,
+        )
+        .await;
+        assert!(
+            matches!(result.as_str(), Some("create" | "modify")),
+            "unexpected watchFs result: {result}"
+        );
+    }
+
+    #[tokio::test]
+    async fn closing_nested_watch_keeps_recursive_coverage() {
+        let result = observe_file_write(
+            "nested",
+            "child/grandchild/deep.txt",
+            r#"
+                const outer = Deno.watchFs(dir);
+                Deno.watchFs(dir + "/child", { recursive: false }).close();
+                ready();
+                try {
+                    for await (const event of outer) {
+                        if (event.paths.some((p) => p.endsWith("deep.txt"))) return event.kind;
+                    }
+                    return "ended";
+                } finally {
+                    outer.close();
+                }
+            "#,
+        )
+        .await;
+        assert!(
+            matches!(result.as_str(), Some("create" | "modify")),
+            "recursive watch lost coverage after nested close: {result}"
+        );
+    }
+
+    #[tokio::test]
+    async fn node_fs_watch_reports_file_writes() {
+        let result = observe_file_write(
+            "node",
+            "hello.txt",
+            r#"
+                const { watch } = await import("node:fs");
+                return await new Promise((resolve, reject) => {
+                    const watcher = watch(dir, (eventType, filename) => {
+                        if (filename === "hello.txt") {
+                            watcher.close();
+                            resolve(eventType);
+                        }
+                    });
+                    watcher.on("error", reject);
+                    ready();
+                });
+            "#,
+        )
+        .await;
+        assert!(
+            matches!(result.as_str(), Some("rename" | "change")),
+            "unexpected fs.watch result: {result}"
+        );
+    }
 
     #[tokio::test]
     async fn overlapping_streams_on_one_isolate_finish_near_max_delay() {

@@ -18,10 +18,6 @@ pub struct ModuleExportsAndReExports {
 
 impl ParsedSource<'_> {
     /// Analyzes the ES runtime exports for require ESM.
-    ///
-    /// The result describes the source as originally parsed and does not
-    /// represent transpiled output.
-    ///
     /// This is used during CJS export analysis when a CJS module
     /// re-exports an ESM module and the original CJS module needs
     /// to know the exports of the ESM module so it can create its
@@ -65,8 +61,6 @@ impl ParsedSource<'_> {
         let scoping = SemanticBuilder::new().build(self.program()).semantic.into_scoping();
         let mut result = ModuleExportsAndReExports::default();
 
-        // Type-only exports (`export type { A }`, `export interface B {}`,
-        // `export declare const c`) do not exist at runtime.
         let mut entries: Vec<&ExportEntry<'_>> = module_record
             .local_export_entries
             .iter()
@@ -76,8 +70,6 @@ impl ParsedSource<'_> {
                     && !is_local_non_runtime(entry, &scoping)
             })
             .collect();
-        // The module record groups entries by kind, so sort them back into
-        // source order.
         entries.sort_by_key(|entry| entry.span.start);
         for entry in entries {
             match &entry.export_name {

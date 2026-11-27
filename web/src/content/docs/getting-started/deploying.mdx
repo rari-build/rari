@@ -43,6 +43,34 @@ The server binds to `127.0.0.1:3000` by default. On supported platforms (Railway
 
 `PORT` takes precedence over `RSC_PORT`. Most hosting platforms set `PORT` automatically.
 
+## OpenTelemetry
+
+rari can export traces, metrics, and logs from your server code to any [OpenTelemetry](https://opentelemetry.io) collector. It's off by default, and turns on when you set an OTLP endpoint:
+
+```terminal
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_SERVICE_NAME=my-app rari start
+```
+
+When it's on:
+
+- Outgoing `fetch` calls, including cached ones, and `node:http` servers record spans. `fetch` adds a `traceparent` header so downstream services join the same trace. A cached response has the `rari.fetch.cached` attribute set to `true`.
+- `console` output is also exported as log records.
+- `@opentelemetry/api` reports to the same exporter, so you can add your own spans and metrics.
+
+| Variable                      | Description                                                                                                                                | Default                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector URL. Setting it turns export on.                                                                                                 | off                    |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf`, `http/json`, or `grpc`. `console` prints to stdout instead, for local debugging, and turns export on without an endpoint. | `http/protobuf`        |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | Headers sent to the collector, such as an API key (`key=value,key2=value2`)                                                                |                        |
+| `OTEL_SERVICE_NAME`           | Service name attached to everything rari exports                                                                                           |                        |
+| `OTEL_PROPAGATORS`            | Trace context formats `fetch` sends and reads (`tracecontext`, `baggage`, `none`)                                                          | `tracecontext,baggage` |
+| `RARI_OTEL_CONSOLE`           | `capture` exports `console` output and also prints it, `replace` only exports it, `ignore` leaves it alone                                 | `capture`              |
+| `OTEL_SDK_DISABLED`           | Set to `true` to turn export off even when an endpoint is set                                                                              |                        |
+
+The other standard `OTEL_*` variables, such as `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_TRACES_SAMPLER`, work too.
+
+Spans from one request aren't yet grouped under a span for the request itself, so each outgoing call starts its own trace unless the code making it is already inside a span.
+
 ## Railway
 
 rari has built-in support for [Railway](https://railway.app). Run the deploy command to generate the configuration:

@@ -17,7 +17,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 pub use cache::OgImageCache;
-pub use generator::OgImageGenerator;
+pub use generator::{GeneratedOgImage, OgImageGenerator};
 use rari_error::RariError;
 pub use types::{OgImageEntry, OgImageParams, OgImageResult};
 
@@ -35,11 +35,13 @@ pub async fn og_image_handler(
         };
 
         match og_generator.generate(&normalized_path).await {
-            Ok((image_data, cache_hit)) => {
+            Ok(GeneratedOgImage { data: image_data, cache_hit, is_complete }) => {
                 let is_production =
                     env::var("NODE_ENV").map(|v| v == "production").unwrap_or(false);
 
-                let cache_header = if is_production {
+                let cache_header = if !is_complete {
+                    "no-store"
+                } else if is_production {
                     "public, max-age=31536000, immutable"
                 } else {
                     "public, max-age=0, must-revalidate"

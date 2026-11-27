@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use bytes::Bytes;
 use dashmap::DashMap;
 use lru::LruCache;
@@ -290,7 +290,9 @@ impl RequestContext {
     fn generate_cache_key(url: &str, options: &FxHashMap<String, String>) -> String {
         let cache_relevant_options: FxHashMap<_, _> = options
             .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags"))
+            .filter(|(k, _)| {
+                !matches!(k.as_str(), "cacheTTLMs" | "timeout" | "tags" | "traceHeaders")
+            })
             .collect();
 
         if cache_relevant_options.is_empty() {
@@ -402,20 +404,43 @@ impl RequestContext {
         .map_err(|e| RariError::internal(format!("fetch singleflight join failed: {e}")))?
     }
 
+    fn parse_header_pairs(
+        options: &FxHashMap<String, String>,
+        option: &str,
+    ) -> Vec<(HeaderName, HeaderValue)> {
+        options
+            .get(option)
+            .and_then(|s| serde_json::from_str::<Vec<(String, String)>>(s).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(key, value)| {
+                Some((HeaderName::try_from(key).ok()?, HeaderValue::try_from(value).ok()?))
+            })
+            .collect()
+    }
+
+    fn build_request_headers(options: &FxHashMap<String, String>) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        for (name, value) in Self::parse_header_pairs(options, "headers") {
+            headers.append(name, value);
+        }
+
+        let trace_headers = Self::parse_header_pairs(options, "traceHeaders");
+        for (name, _) in &trace_headers {
+            headers.remove(name);
+        }
+        for (name, value) in trace_headers {
+            headers.append(name, value);
+        }
+        headers
+    }
+
     async fn perform_fetch_standalone(
         url: &str,
         options: &FxHashMap<String, String>,
     ) -> Result<CachedFetchResult, RariError> {
         let client = get_http_client()?;
-        let mut request = client.get(url);
-
-        if let Some(headers_str) = options.get("headers")
-            && let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(headers_str)
-        {
-            for (key, value) in pairs {
-                request = request.header(key.as_str(), value.as_str());
-            }
-        }
+        let mut request = client.get(url).headers(Self::build_request_headers(options));
 
         let timeout = options.get("timeout").and_then(|t| t.parse::<u64>().ok()).unwrap_or(5000);
 
@@ -446,7 +471,43 @@ impl RequestContext {
 
 #[cfg(test)]
 mod tests {
+    use std::iter;
+
     use super::*;
+
+    #[test]
+    fn trace_headers_are_not_part_of_the_cache_key() {
+        let headers = ("headers".to_string(), r#"[["accept","text/plain"]]"#.to_string());
+        let plain: FxHashMap<_, _> = iter::once(headers.clone()).collect();
+        let traced: FxHashMap<_, _> =
+            [headers, ("traceHeaders".to_string(), r#"[["traceparent","00-a-b-01"]]"#.to_string())]
+                .into_iter()
+                .collect();
+
+        assert_eq!(
+            RequestContext::generate_cache_key("https://example.com/data", &plain),
+            RequestContext::generate_cache_key("https://example.com/data", &traced)
+        );
+    }
+
+    #[test]
+    fn trace_headers_replace_caller_propagation_headers() {
+        let options: FxHashMap<_, _> = [
+            (
+                "headers".to_string(),
+                r#"[["traceparent","caller"],["accept","a"],["accept","b"]]"#.to_string(),
+            ),
+            ("traceHeaders".to_string(), r#"[["traceparent","generated"]]"#.to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let headers = RequestContext::build_request_headers(&options);
+        let traceparent: Vec<_> = headers.get_all("traceparent").iter().collect();
+        assert_eq!(traceparent, ["generated"]);
+        let accept: Vec<_> = headers.get_all("accept").iter().collect();
+        assert_eq!(accept, ["a", "b"]);
+    }
 
     #[test]
     fn test_request_context_creation() {

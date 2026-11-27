@@ -7,7 +7,6 @@ use deno_error::JsErrorBox;
 use deno_fs::FileSystemRc;
 use deno_permissions::CheckedPathBuf;
 use deno_resolver::npm::DenoInNpmPackageChecker;
-use deno_runtime::deno_fs;
 use node_resolver::{
     DenoIsBuiltInNodeModuleChecker,
     analyze::{self, CjsAnalysis as ExtNodeCjsAnalysis, CjsAnalysisExports, EsmAnalysisMode},

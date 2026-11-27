@@ -32,8 +32,6 @@ pub struct EmitOptions {
     pub inline_sources: bool,
     /// Whether to remove comments in the output. Defaults to `false`.
     pub remove_comments: bool,
-    /// Whether to escape non-ASCII characters in the output as `\uXXXX`.
-    /// Defaults to `false`.
     pub ascii_only: bool,
 }
 
@@ -69,7 +67,6 @@ pub enum EmitError {
     SourceMapEncode(#[from] base64::EncodeSliceError),
 }
 
-/// Emits the program as a string of JavaScript code with optional source map.
 pub fn emit(
     program: &Program<'_>,
     source_text: &str,
@@ -107,7 +104,6 @@ pub fn emit(
     let mut map: Option<Vec<u8>> = None;
 
     if need_source_map && let Some(mut source_map) = codegen_ret.map {
-        // Apply source_map_base: make source urls relative to the base url
         if let Some(base) = &emit_options.source_map_base {
             debug_assert!(base.as_str().ends_with('/'), "source map base should end with a slash");
             let new_sources: Vec<Option<String>> = source_map
@@ -125,7 +121,6 @@ pub fn emit(
             source_map.set_sources(new_sources);
         }
 
-        // Apply source_map_file
         if let Some(ref file) = emit_options.source_map_file {
             source_map.set_file(file.as_str());
         }

@@ -88,18 +88,17 @@ build-addon-dev:
 # Run all tests (Rust + Node.js)
 test: test-rust test-node
 
-# Snapshot was built with ext-full; runtime tests need the same feature set.
 # Run Rust tests with nextest
 test-rust:
-    cargo nextest run --workspace --features rari/ext-full
+    cargo nextest run --workspace
 
 # Run Rust tests with standard test runner
 test-rust-standard:
-    cargo test --workspace --features rari/ext-full
+    cargo test --workspace
 
 # Run Rust doc tests
 test-rust-doc:
-    cargo test --workspace --doc --features rari/ext-full
+    cargo test --workspace --doc
 
 # Run all Rust tests (nextest + doc tests)
 test-rust-all: test-rust test-rust-doc
@@ -115,7 +114,7 @@ test-coverage:
 
 # Run specific test with nextest
 test-filter filter:
-    cargo nextest run --workspace --features rari/ext-full {{ filter }}
+    cargo nextest run --workspace {{ filter }}
 
 # --- Lint commands ---
 

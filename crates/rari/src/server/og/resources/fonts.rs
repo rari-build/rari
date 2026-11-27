@@ -7,7 +7,7 @@ use parley::{
 use thiserror::Error;
 
 const TWEMOJI_FONT: &[u8] = include_bytes!("fonts/TwemojiMozilla-colr.woff2");
-const NOTO_SANS_FONT: &[u8] = include_bytes!("fonts/NotoSansTC-VariableFont_wght.woff2");
+const NOTO_SANS_FONT: &[u8] = include_bytes!("fonts/NotoSansTC-Subset-VariableFont_wght.woff2");
 
 #[derive(Debug, Error)]
 pub enum FontError {
@@ -57,6 +57,11 @@ fn guess_font_format(source: &[u8]) -> Result<FontFormat, FontError> {
     }
 }
 
+pub fn has_usable_face(data: &[u8]) -> bool {
+    let mut collection = Collection::new(CollectionOptions { system_fonts: false, shared: false });
+    !collection.register_fonts(Blob::new(Arc::new(data.to_vec())), None).is_empty()
+}
+
 #[derive(Clone)]
 pub struct FontContext {
     pub(crate) inner: ParleyFontContext,
@@ -70,6 +75,10 @@ impl Default for FontContext {
 
 impl FontContext {
     pub fn new() -> Self {
+        Self::with_cjk_font(None)
+    }
+
+    pub fn with_cjk_font(cjk_font: Option<Blob<u8>>) -> Self {
         let inner = ParleyFontContext {
             collection: Collection::new(CollectionOptions { system_fonts: false, shared: false }),
             source_cache: SourceCache::default(),
@@ -81,26 +90,29 @@ impl FontContext {
             eprintln!("Warning: Failed to load Twemoji font: {e:?}");
         }
 
-        if let Err(e) = ctx.load_default_font() {
+        if let Err(e) = ctx.load_default_font(cjk_font) {
             eprintln!("Warning: Failed to load default font: {e:?}");
         }
 
         ctx
     }
 
-    fn load_default_font(&mut self) -> Result<(), FontError> {
-        let font_data = load_font(NOTO_SANS_FONT)?;
-        let blob = Blob::new(Arc::new(font_data.into_owned()));
+    fn load_default_font(&mut self, cjk_font: Option<Blob<u8>>) -> Result<(), FontError> {
+        let subset = Blob::new(Arc::new(load_font(NOTO_SANS_FONT)?.into_owned()));
+        self.register_sans_serif(subset);
+        if let Some(blob) = cjk_font {
+            self.register_sans_serif(blob);
+        }
+        Ok(())
+    }
 
+    fn register_sans_serif(&mut self, blob: Blob<u8>) {
         let fonts = self.inner.collection.register_fonts(blob, None);
-
         for (family, _) in fonts {
             self.inner
                 .collection
                 .append_generic_families(GenericFamily::SansSerif, iter::once(family));
         }
-
-        Ok(())
     }
 
     fn load_twemoji(&mut self) -> Result<(), FontError> {
@@ -126,7 +138,7 @@ impl FontContext {
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::print_stdout)]
 mod tests {
-    use parley::PositionedLayoutItem::GlyphRun;
+    use parley::PositionedLayoutItem::{GlyphRun, InlineBox};
     use swash::scale::StrikeWith::BestFit;
 
     use super::*;
@@ -246,5 +258,42 @@ mod tests {
         assert!(matches!(guess_font_format(b"OTTO"), Ok(FontFormat::Otf)));
         assert!(matches!(guess_font_format(b"invalid"), Err(FontError::UnsupportedFormat)));
         assert!(matches!(guess_font_format(b"abc"), Err(FontError::UnsupportedFormat)));
+    }
+
+    fn has_missing_glyphs(ctx: FontContext, text: &str) -> bool {
+        use parley::{LayoutContext, TextStyle};
+
+        let mut font_ctx = ctx.inner;
+        let mut layout_cx: LayoutContext<[u8; 4]> = LayoutContext::new();
+        let mut builder = layout_cx.tree_builder(&mut font_ctx, 1.0, true, &TextStyle::default());
+        builder.push_text(text);
+        let (mut layout, _text) = builder.build();
+        layout.break_all_lines(None);
+
+        layout.lines().any(|line| {
+            line.items().any(|item| match item {
+                GlyphRun(run) => run.positioned_glyphs().any(|glyph| glyph.id == 0),
+                InlineBox(_) => false,
+            })
+        })
+    }
+
+    #[test]
+    fn embedded_subset_covers_non_cjk_text() {
+        for text in ["Hello, world", "Ünïcödé", "Привет", "Ελληνικά", "a → b", "🎉"]
+        {
+            assert!(!has_missing_glyphs(FontContext::new(), text), "{text}");
+        }
+        assert!(has_missing_glyphs(FontContext::new(), "漢字"));
+    }
+
+    #[test]
+    #[ignore = "downloads the full font"]
+    fn cjk_font_covers_cjk_text() {
+        let font = super::super::cjk_font::load().expect("font should load");
+        for text in ["漢字", "ひらがな", "カタカナ", "Hello 世界"] {
+            let ctx = FontContext::with_cjk_font(Some(font.clone()));
+            assert!(!has_missing_glyphs(ctx, text), "{text}");
+        }
     }
 }

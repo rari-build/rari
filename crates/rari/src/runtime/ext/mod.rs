@@ -1,10 +1,9 @@
-use std::{borrow::Cow::Borrowed, option::Option::None, path::PathBuf, sync::Arc};
+use std::{borrow::Cow::Borrowed, option::Option::None, sync::Arc};
 
 use ::deno_bundle_runtime::{BundleProvider, deno_bundle_runtime};
 use deno_core::{Extension, ExtensionArguments};
 use deno_fs::{FileSystemRc, RealFs, sync::MaybeArc};
 use deno_io::Stdio;
-use deno_web::InMemoryBroadcastChannel;
 pub use node::{
     cjs_translator::NodeCodeTranslator,
     resolvers::{NpmPackageFolderResolverImpl, Resolver},
@@ -61,10 +60,8 @@ pub trait ExtensionTrait<A> {
     }
 }
 
-mod cache;
 mod crypto;
 mod fetch;
-mod ffi;
 mod fs;
 mod http;
 mod io;
@@ -72,22 +69,13 @@ mod lazy;
 mod napi;
 mod node;
 mod node_crypto;
+mod node_sqlite;
 mod rari;
 mod runtime;
 mod utilities;
 mod web;
 mod webidl;
 mod websocket;
-mod webstorage;
-
-#[cfg(feature = "ext-full")]
-mod cron;
-#[cfg(feature = "ext-full")]
-mod kv;
-#[cfg(feature = "ext-full")]
-mod node_sqlite;
-#[cfg(feature = "ext-full")]
-mod webgpu;
 
 impl ExtensionTrait<Option<Arc<dyn BundleProvider>>> for deno_bundle_runtime {
     const LAZY_INIT: bool = true;
@@ -110,14 +98,9 @@ impl ExtensionTrait<Option<Arc<dyn BundleProvider>>> for deno_bundle_runtime {
 pub struct ExtensionOptions {
     pub web: WebOptions,
     pub io_pipes: Option<Stdio>,
-    pub cache: Option<()>,
     pub filesystem: FileSystemRc,
     pub crypto_seed: Option<u64>,
     pub node_resolver: Arc<Resolver>,
-    pub broadcast_channel: InMemoryBroadcastChannel,
-    pub webstorage_origin_storage_dir: Option<PathBuf>,
-    #[cfg(feature = "ext-full")]
-    pub kv_store: kv::KvStore,
 }
 
 impl Default for ExtensionOptions {
@@ -125,14 +108,9 @@ impl Default for ExtensionOptions {
         Self {
             web: WebOptions::default(),
             io_pipes: Some(Stdio::default()),
-            cache: Some(()),
             filesystem: MaybeArc::new(RealFs),
             crypto_seed: None,
             node_resolver: Arc::new(Resolver::default()),
-            broadcast_channel: InMemoryBroadcastChannel::default(),
-            webstorage_origin_storage_dir: None,
-            #[cfg(feature = "ext-full")]
-            kv_store: kv::KvStore::default(),
         }
     }
 }
@@ -153,7 +131,6 @@ pub fn extensions_with_lazy_args(
     lazy::merge(&mut extensions, &mut lazy_args, web::extensions(options.web.clone(), is_snapshot));
     lazy::merge(&mut extensions, &mut lazy_args, rari::extensions(is_snapshot));
     lazy::merge(&mut extensions, &mut lazy_args, rari::cache::extensions(is_snapshot));
-    lazy::merge(&mut extensions, &mut lazy_args, cache::extensions(options.cache, is_snapshot));
     lazy::merge(
         &mut extensions,
         &mut lazy_args,
@@ -172,41 +149,12 @@ pub fn extensions_with_lazy_args(
     lazy::merge(
         &mut extensions,
         &mut lazy_args,
-        webstorage::extensions(options.webstorage_origin_storage_dir.clone(), is_snapshot),
-    );
-    lazy::merge(
-        &mut extensions,
-        &mut lazy_args,
         websocket::extensions(options.web.clone(), is_snapshot),
     );
     lazy::merge(&mut extensions, &mut lazy_args, http::extensions((), is_snapshot));
     lazy::merge(&mut extensions, &mut lazy_args, fetch::extensions(is_snapshot, None));
-    lazy::merge(&mut extensions, &mut lazy_args, ffi::extensions(is_snapshot));
-    #[cfg(feature = "ext-full")]
-    lazy::merge(
-        &mut extensions,
-        &mut lazy_args,
-        kv::extensions(options.kv_store.clone(), is_snapshot),
-    );
-    #[cfg(feature = "ext-full")]
-    lazy::merge(&mut extensions, &mut lazy_args, webgpu::extensions(is_snapshot));
-    #[cfg(feature = "ext-full")]
-    {
-        use deno_runtime::deno_canvas::deno_canvas;
-
-        let mut canvas_ext = deno_canvas::init();
-        if is_snapshot {
-            canvas_ext.js_files = Borrowed(&[]);
-            canvas_ext.esm_files = Borrowed(&[]);
-            canvas_ext.esm_entry_point = None;
-        }
-        extensions.push(canvas_ext);
-    }
-    #[cfg(feature = "ext-full")]
-    lazy::merge(&mut extensions, &mut lazy_args, cron::extensions(is_snapshot));
     lazy::merge(&mut extensions, &mut lazy_args, napi::extensions(is_snapshot));
     lazy::merge(&mut extensions, &mut lazy_args, node_crypto::extensions(is_snapshot));
-    #[cfg(feature = "ext-full")]
     lazy::merge(&mut extensions, &mut lazy_args, node_sqlite::extensions(is_snapshot));
     lazy::merge(
         &mut extensions,
@@ -223,7 +171,7 @@ pub fn extensions_with_lazy_args(
         bundle_ext.esm_files = Borrowed(&[]);
         bundle_ext.esm_entry_point = None;
     }
-    lazy::merge(&mut extensions, &mut lazy_args, runtime::extensions(options, None, is_snapshot));
+    lazy::merge(&mut extensions, &mut lazy_args, runtime::extensions(options, is_snapshot));
 
     (extensions, lazy_args)
 }

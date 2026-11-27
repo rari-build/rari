@@ -2,6 +2,7 @@ pub mod rendering;
 pub mod rsc;
 pub mod runtime;
 pub mod server;
+pub mod telemetry;
 mod utils;
 pub use ::async_trait;
 pub use rendering::{

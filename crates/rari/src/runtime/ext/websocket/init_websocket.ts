@@ -1,13 +1,13 @@
 import {
   applyToGlobal,
-  lazyExtScript,
+  lazyExtModule,
   propNonEnumerableLazyLoaded,
 } from 'ext:init_utilities/utilities.ts'
 
-const lazyWebsocket = lazyExtScript<{ WebSocket: typeof WebSocket }>(
+const lazyWebsocket = lazyExtModule<{ WebSocket: typeof WebSocket }>(
   'ext:deno_websocket/01_websocket.js',
 )
-const lazyWebsocketStream = lazyExtScript<{ WebSocketStream: typeof WebSocketStream }>(
+const lazyWebsocketStream = lazyExtModule<{ WebSocketStream: typeof WebSocketStream }>(
   'ext:deno_websocket/02_websocketstream.js',
 )
 

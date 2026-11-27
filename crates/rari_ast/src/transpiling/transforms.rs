@@ -32,14 +32,12 @@ impl<'a> VisitMut<'a> for ImportDeclsToVarDecls<'a> {
             match stmt {
                 Statement::ImportDeclaration(import_decl) => {
                     if import_decl.import_kind.is_type() {
-                        // type-only import - remove entirely
                         continue;
                     }
 
                     let source_value = import_decl.source.value.to_str_lossy();
                     let with_clause = import_decl.with_clause.as_deref();
 
-                    // Side-effect only import: `import "./mod.ts"` -> `await import("./mod.ts")`
                     if import_decl.specifiers.as_ref().is_none_or(|s| s.is_empty()) {
                         let import_expr = self.create_await_import_expr(&source_value, with_clause);
                         new_stmts.push(Statement::new_expression_statement(
@@ -53,7 +51,6 @@ impl<'a> VisitMut<'a> for ImportDeclsToVarDecls<'a> {
                     #[expect(clippy::unwrap_used)]
                     let specifiers = import_decl.specifiers.as_ref().unwrap();
 
-                    // Collect named/default imports for destructuring
                     let mut props = ArenaVec::new_in(&self.ast);
                     let mut namespace_name: Option<&str> = None;
 
@@ -136,7 +133,6 @@ impl<'a> VisitMut<'a> for ImportDeclsToVarDecls<'a> {
         }
         *stmts = new_stmts;
 
-        // Visit children
         walk_mut::walk_statements(self, stmts);
     }
 }
@@ -271,9 +267,7 @@ impl<'a> VisitMut<'a> for StripExports<'a> {
                 Statement::ExportDeclaration(export_decl) => {
                     new_stmts.push(Statement::from(export_decl.unbox().declaration));
                 }
-                Statement::ExportNamedDeclaration(_) => {
-                    // `export { test }` -> remove entirely
-                }
+                Statement::ExportNamedDeclaration(_) => {}
                 Statement::ExportDefaultDeclaration(export_default) => {
                     match export_default.unbox().declaration {
                         ExportDefaultDeclarationKind::FunctionDeclaration(func) => {
@@ -286,13 +280,8 @@ impl<'a> VisitMut<'a> for StripExports<'a> {
                                 new_stmts.push(Statement::ClassDeclaration(class));
                             }
                         }
-                        ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {
-                            // type only - discard
-                        }
+                        ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {}
                         kind => {
-                            // `export default <expr>` -> `<expr>;`
-                            // ExportDefaultDeclarationKind inherits Expression variants,
-                            // so all remaining variants are expressions.
                             if kind.is_expression() {
                                 let expr = kind.into_expression();
                                 new_stmts.push(Statement::new_expression_statement(
@@ -308,7 +297,6 @@ impl<'a> VisitMut<'a> for StripExports<'a> {
             }
         }
         *stmts = new_stmts;
-        // Don't recurse into nested scopes - only strip top-level exports
     }
 }
 
@@ -322,8 +310,6 @@ impl<'a> StripExports<'a> {
     }
 }
 
-/// Creates `await import("<source>")`, carrying over any import attributes as
-/// the dynamic import's `{ with: { ... } }` options object.
 fn create_await_import_expr<'a>(
     ast: &AstBuilder<'a>,
     source: &str,
@@ -372,16 +358,6 @@ fn create_await_import_expr<'a>(
     Expression::new_await_expression(SPAN, import_call, ast)
 }
 
-/// Converts the module declarations that are allowed in a CommonJS script
-/// (`export import x = ...` and `export = ...`) so that the program can be
-/// transformed as a script:
-///
-/// - `export import x = require("./x")` -> `import x = require("./x"); exports.x = x;`
-///   (the import equals is then lowered to `const x = require("./x")` by the
-///   TypeScript transform)
-///
-/// `export = x` is lowered to `module.exports = x` by the TypeScript transform
-/// when the program is a script, so it is left alone.
 pub struct CjsScriptExports<'a> {
     ast: AstBuilder<'a>,
 }
@@ -411,7 +387,6 @@ impl<'a> CjsScriptExports<'a> {
                     let name = import_equals.id.name;
                     new_stmts.push(Statement::TSImportEqualsDeclaration(import_equals));
                     if !is_type {
-                        // exports.name = name;
                         let exports_member = Expression::new_static_member_expression(
                             SPAN,
                             Expression::new_identifier(SPAN, "exports", &self.ast),
@@ -476,8 +451,6 @@ mod test {
         let output = output.trim_end();
         assert_eq!(output, expected_output);
     }
-
-    // === ImportDeclsToVarDecls tests ===
 
     #[test]
     fn test_downlevel_imports_type_only() {
@@ -545,8 +518,6 @@ mod test {
             r#"const { default: data } = await import("./mod.json", { with: { type: "json" } });"#,
         );
     }
-
-    // === StripExports tests ===
 
     #[test]
     fn test_strip_exports_export_all() {
