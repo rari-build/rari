@@ -58,7 +58,7 @@ pub const PROMISE_SETUP_SCRIPT: &str = r#"
         globalThis['~promises'].resolvedValue = null;
         globalThis['~promises'].resolutionComplete = false;
 
-        promise.then(function(resolvedValue) {
+        return Promise.resolve(promise).then(function(resolvedValue) {
             globalThis['~promises'].resolvedValue = resolvedValue;
             globalThis['~promises'].resolutionComplete = true;
         }).catch(function(error) {

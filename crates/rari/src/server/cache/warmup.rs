@@ -20,7 +20,7 @@ use crate::{
     server::{
         ServerState,
         cache::response,
-        compression::compress_all_encodings,
+        compression::{CompressionProfile, compress_all_encodings},
         middleware::request_context::RequestContext,
         routing::{
             AppRouteMatch, AppRouter,
@@ -180,7 +180,7 @@ async fn warm_route(
         let body_bytes = bytes::Bytes::from(html);
 
         let (compressed_gzip, compressed_zstd, compressed_br) =
-            compress_all_encodings(body_bytes.clone()).await;
+            compress_all_encodings(body_bytes.clone(), CompressionProfile::Precompressed).await;
 
         response::insert_static_fast_cache(
             &state.static_fast_cache,

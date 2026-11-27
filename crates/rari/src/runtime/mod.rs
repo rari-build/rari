@@ -323,6 +323,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn async_scripts_return_as_soon_as_they_settle() {
+        const CALLS: u32 = 20;
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        runtime
+            .execute_script(
+                "keep_event_loop_busy".into(),
+                "(async () => { globalThis.__busy = new MessageChannel(); \
+                 globalThis.__busy.port1.onmessage = () => {}; })()"
+                    .into(),
+            )
+            .await
+            .expect("setup script should run");
+
+        let start = Instant::now();
+        for i in 0..CALLS {
+            let value = runtime
+                .execute_script(
+                    format!("settles_fast_{i}"),
+                    format!("(async () => {{ await new Promise((r) => setTimeout(r, 0)); return {i}; }})()"),
+                )
+                .await
+                .expect("async script should run");
+            assert_eq!(value.as_u64(), Some(u64::from(i)));
+        }
+        let per_call = start.elapsed() / CALLS;
+        assert!(per_call < Duration::from_millis(5), "each call took {per_call:?}");
+    }
+
+    #[tokio::test]
+    async fn never_settling_script_still_times_out() {
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let error = runtime
+            .execute_script("never_settles".into(), "new Promise(() => {})".into())
+            .await
+            .expect_err("a promise that never settles should time out");
+        assert!(
+            error.to_string().contains("Promise resolution timeout"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
     async fn installs_navigator_but_not_browser_only_globals() {
         let runtime = JsExecutionRuntime::with_pool_size(None, 1);
         let globals = runtime

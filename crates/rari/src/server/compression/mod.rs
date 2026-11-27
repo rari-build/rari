@@ -4,11 +4,21 @@ pub mod stream;
 
 use bytes::Bytes;
 use futures::{StreamExt, stream::once};
-pub use stream::{CompressionEncoding, compress_stream};
+pub use stream::{
+    CompressionEncoding, CompressionProfile, compress_stream, compress_stream_with_profile,
+};
 
 pub async fn compress_body(
     body: Bytes,
     encoding: CompressionEncoding,
+) -> (Bytes, CompressionEncoding) {
+    compress_body_with_profile(body, encoding, CompressionProfile::PerRequest).await
+}
+
+pub async fn compress_body_with_profile(
+    body: Bytes,
+    encoding: CompressionEncoding,
+    profile: CompressionProfile,
 ) -> (Bytes, CompressionEncoding) {
     if matches!(encoding, CompressionEncoding::Identity) || body.is_empty() {
         return (body, CompressionEncoding::Identity);
@@ -16,7 +26,7 @@ pub async fn compress_body(
 
     let body_clone = body.clone();
     let input_stream = once(async move { Ok::<Bytes, Error>(body_clone) });
-    let mut compressed_stream = compress_stream(input_stream, encoding);
+    let mut compressed_stream = compress_stream_with_profile(input_stream, encoding, profile);
 
     let mut compressed = Vec::new();
     while let Some(chunk) = compressed_stream.next().await {
@@ -33,11 +43,14 @@ pub async fn compress_body(
     }
 }
 
-pub async fn compress_all_encodings(body: Bytes) -> (Option<Bytes>, Option<Bytes>, Option<Bytes>) {
+pub async fn compress_all_encodings(
+    body: Bytes,
+    profile: CompressionProfile,
+) -> (Option<Bytes>, Option<Bytes>, Option<Bytes>) {
     let ((gz, gz_enc), (zs, zs_enc), (br, br_enc)) = tokio::join!(
-        compress_body(body.clone(), CompressionEncoding::Gzip),
-        compress_body(body.clone(), CompressionEncoding::Zstd),
-        compress_body(body, CompressionEncoding::Brotli),
+        compress_body_with_profile(body.clone(), CompressionEncoding::Gzip, profile),
+        compress_body_with_profile(body.clone(), CompressionEncoding::Zstd, profile),
+        compress_body_with_profile(body, CompressionEncoding::Brotli, profile),
     );
     (
         matches!(gz_enc, CompressionEncoding::Gzip).then_some(gz),
