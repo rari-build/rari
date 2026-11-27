@@ -368,11 +368,12 @@ function buildCachedFetchResponse(
     }
   }
 
-  if (!responseHeaders.has('content-type')) {
-    responseHeaders.set('content-type', detectContentType(url, result.body))
+  const body = NULL_BODY_STATUSES.has(result.status) ? null : result.body
+
+  if (body != null && !responseHeaders.has('content-type')) {
+    responseHeaders.set('content-type', detectContentType(url, body))
   }
 
-  const body = NULL_BODY_STATUSES.has(result.status) ? null : result.body
   return new Response(body, {
     status: result.status,
     statusText:

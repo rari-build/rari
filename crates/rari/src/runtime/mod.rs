@@ -383,7 +383,11 @@ mod tests {
                 format!(
                     r#"(async () => {{
                         const res = await fetch("http://{addr}/empty");
-                        return {{ status: res.status, body: await res.text() }};
+                        return {{
+                            status: res.status,
+                            body: await res.text(),
+                            contentType: res.headers.get("content-type"),
+                        }};
                     }})()"#
                 ),
             )
@@ -392,6 +396,10 @@ mod tests {
 
         assert_eq!(result["status"], 204, "{result}");
         assert_eq!(result["body"], "", "{result}");
+        assert!(
+            result["contentType"].is_null(),
+            "no Content-Type for a bodiless response: {result}"
+        );
         assert_eq!(hits.load(Ordering::SeqCst), 1, "the request was sent again by the fallback");
     }
 
