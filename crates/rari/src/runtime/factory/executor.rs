@@ -13,8 +13,8 @@ use crate::{
                 create_already_evaluated_response, create_already_loaded_response,
             },
             v8::{
-                is_promise, run_event_loop_with_error_handling,
-                run_event_loop_with_promise_timeout, v8_to_json,
+                is_promise, run_event_loop_until_settled, run_event_loop_with_error_handling,
+                v8_to_json,
             },
         },
         module_loader::RariModuleLoader,
@@ -345,8 +345,8 @@ async fn handle_promise_result(
     let setup_script = PROMISE_SETUP_SCRIPT;
 
     match runtime.execute_script(format!("{script_name}_promise_setup"), setup_script.to_string()) {
-        Ok(_) => {
-            run_event_loop_with_promise_timeout(runtime, script_name, promise_timeout_ms).await?;
+        Ok(settled) => {
+            run_event_loop_until_settled(runtime, script_name, settled, promise_timeout_ms).await?;
 
             let extract_script = PROMISE_EXTRACT_SCRIPT;
 

@@ -3,12 +3,13 @@
     reason = "V8 utility functions return Result for API consistency with error-handling variants"
 )]
 
-use std::{
-    cmp, panic,
-    time::{Duration, Instant},
-};
+use std::{cmp, panic, time::Duration};
 
-use deno_core::{JsRuntime, PollEventLoopOptions, serde_v8, v8};
+use deno_core::{
+    JsRuntime, PollEventLoopOptions,
+    error::{CoreError, CoreErrorKind},
+    serde_v8, v8,
+};
 use rari_error::RariError;
 use serde_json::Value;
 use tokio::time;
@@ -45,21 +46,21 @@ pub async fn run_event_loop_with_error_handling(
 ) -> Result<(), RariError> {
     match runtime.run_event_loop(PollEventLoopOptions::default()).await {
         Ok(()) => Ok(()),
-        Err(e) => {
-            let error_str = e.to_string();
+        Err(e) => classify_event_loop_error(&e, context),
+    }
+}
 
-            if error_str.contains("Illegal invocation") && error_str.contains("dispatchEvent") {
-                return Ok(());
-            }
+fn classify_event_loop_error(error: &CoreError, context: &str) -> Result<(), RariError> {
+    let error_str = error.to_string();
 
-            if error_str.contains("assertion") || error_str.contains("panicked") {
-                Err(RariError::js_runtime(format!(
-                    "Critical runtime error in {context}: {error_str}"
-                )))
-            } else {
-                Err(RariError::js_execution(format!("Event loop error in {context}: {error_str}")))
-            }
-        }
+    if error_str.contains("Illegal invocation") && error_str.contains("dispatchEvent") {
+        return Ok(());
+    }
+
+    if error_str.contains("assertion") || error_str.contains("panicked") {
+        Err(RariError::js_runtime(format!("Critical runtime error in {context}: {error_str}")))
+    } else {
+        Err(RariError::js_execution(format!("Event loop error in {context}: {error_str}")))
     }
 }
 
@@ -273,69 +274,32 @@ pub fn is_promise(scope: &mut v8::PinScope, value: v8::Local<v8::Value>) -> bool
     false
 }
 
-fn check_promise_completion(runtime: &mut JsRuntime) -> Result<bool, RariError> {
-    let check_script = r"
-        (function() {
-            if (!globalThis['~promises']) globalThis['~promises'] = {};
-            return globalThis['~promises'].resolutionComplete === true;
-        })()
-    ";
+const IDLE_RECHECK_INTERVAL: Duration = Duration::from_millis(10);
 
-    match runtime.execute_script("promise_completion_check", check_script.to_string()) {
-        Ok(result_val) => {
-            let context = runtime.main_context();
-            let result = {
-                v8::scope_with_context!(scope, runtime.v8_isolate(), context);
-                let local_v8_val = v8::Local::new(scope, result_val);
-                let boolean_val = local_v8_val.to_boolean(scope);
-                boolean_val.is_true()
-            };
-            Ok(result)
-        }
-        Err(_) => Ok(false),
-    }
-}
-
-pub async fn run_event_loop_with_promise_timeout(
+pub async fn run_event_loop_until_settled(
     runtime: &mut JsRuntime,
     script_name: &str,
+    settled: v8::Global<v8::Value>,
     timeout_ms: u64,
 ) -> Result<(), RariError> {
-    let timeout_duration = Duration::from_millis(timeout_ms);
-    let start_time = Instant::now();
-    let poll_interval = Duration::from_millis(10);
-
-    while start_time.elapsed() < timeout_duration {
-        match time::timeout(
-            poll_interval,
-            run_event_loop_with_error_handling(
-                runtime,
-                &format!("promise resolution for '{script_name}'"),
-            ),
-        )
-        .await
-        {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => {
-                return Err(e);
+    let context = format!("promise resolution for '{script_name}'");
+    let wait = async {
+        loop {
+            let resolution = runtime.resolve(settled.clone());
+            match runtime.with_event_loop_promise(resolution, PollEventLoopOptions::default()).await
+            {
+                Ok(_) => return Ok(()),
+                Err(e) if matches!(*e.0, CoreErrorKind::PendingPromiseResolution) => {
+                    time::sleep(IDLE_RECHECK_INTERVAL).await;
+                }
+                Err(e) => classify_event_loop_error(&e, &context)?,
             }
-            Err(_elapsed) => {}
         }
+    };
 
-        if let Ok(is_complete) = check_promise_completion(runtime)
-            && is_complete
-        {
-            return Ok(());
-        }
-
-        let remaining = timeout_duration.saturating_sub(start_time.elapsed());
-        let sleep_duration = cmp::min(poll_interval, remaining);
-        if sleep_duration > Duration::ZERO {
-            time::sleep(sleep_duration).await;
-        }
-    }
-
-    Err(RariError::js_execution(format!(
-        "Promise resolution timeout ({timeout_ms}ms) for '{script_name}'"
-    )))
+    time::timeout(Duration::from_millis(timeout_ms), wait).await.map_err(|_| {
+        RariError::js_execution(format!(
+            "Promise resolution timeout ({timeout_ms}ms) for '{script_name}'"
+        ))
+    })?
 }
