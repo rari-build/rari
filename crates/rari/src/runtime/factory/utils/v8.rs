@@ -283,10 +283,12 @@ pub async fn run_event_loop_until_settled(
     timeout_ms: u64,
 ) -> Result<(), RariError> {
     let context = format!("promise resolution for '{script_name}'");
+    let mut resolution = runtime.resolve(settled);
     let wait = async {
         loop {
-            let resolution = runtime.resolve(settled.clone());
-            match runtime.with_event_loop_promise(resolution, PollEventLoopOptions::default()).await
+            match runtime
+                .with_event_loop_promise(&mut resolution, PollEventLoopOptions::default())
+                .await
             {
                 Ok(_) => return Ok(()),
                 Err(e) if matches!(*e.0, CoreErrorKind::PendingPromiseResolution) => {

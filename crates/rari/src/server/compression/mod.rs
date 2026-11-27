@@ -43,8 +43,10 @@ pub async fn compress_body_with_profile(
     }
 }
 
-pub async fn compress_all_encodings(body: Bytes) -> (Option<Bytes>, Option<Bytes>, Option<Bytes>) {
-    let profile = CompressionProfile::Precompressed;
+pub async fn compress_all_encodings(
+    body: Bytes,
+    profile: CompressionProfile,
+) -> (Option<Bytes>, Option<Bytes>, Option<Bytes>) {
     let ((gz, gz_enc), (zs, zs_enc), (br, br_enc)) = tokio::join!(
         compress_body_with_profile(body.clone(), CompressionEncoding::Gzip, profile),
         compress_body_with_profile(body.clone(), CompressionEncoding::Zstd, profile),

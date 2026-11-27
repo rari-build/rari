@@ -37,7 +37,9 @@ use crate::{
         ServerState,
         actions::parse_action_form_state_from_cookie,
         cache::{merge_page_cache_tags, response},
-        compression::{CompressionEncoding, compress_all_encodings, compress_body},
+        compression::{
+            CompressionEncoding, CompressionProfile, compress_all_encodings, compress_body,
+        },
         document::utils::inject_assets_into_html,
         error_response,
         host::{
@@ -798,6 +800,8 @@ pub async fn handle_app_route(
             // cache, and the response body, the page was previously cloned
             // in full for the cache and again for the body.
             let final_html = Bytes::from(final_html);
+            let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
+            let mut response_body: Option<(Bytes, CompressionEncoding)> = None;
 
             if for_response_cache {
                 let response_cache_tags =
@@ -805,7 +809,19 @@ pub async fn handle_app_route(
                 let body_bytes = final_html.clone();
 
                 let (compressed_gzip, compressed_zstd, compressed_br) =
-                    compress_all_encodings(body_bytes.clone()).await;
+                    compress_all_encodings(body_bytes.clone(), CompressionProfile::PerRequest)
+                        .await;
+
+                let for_client = match encoding {
+                    CompressionEncoding::Gzip => compressed_gzip.as_ref(),
+                    CompressionEncoding::Zstd => compressed_zstd.as_ref(),
+                    CompressionEncoding::Brotli => compressed_br.as_ref(),
+                    CompressionEncoding::Identity => None,
+                };
+                response_body = Some(match for_client {
+                    Some(bytes) => (bytes.clone(), encoding),
+                    None => (body_bytes.clone(), CompressionEncoding::Identity),
+                });
 
                 if can_use_static_fast_cache(cookie_header) {
                     let fast_key = response::ResponseCache::generate_static_fast_cache_key(
@@ -850,9 +866,10 @@ pub async fn handle_app_route(
             }
 
             {
-                use crate::server::compression::{CompressionEncoding, compress_body};
-                let encoding = CompressionEncoding::from_accept_encoding(accept_encoding);
-                let (body_bytes, actual_encoding) = compress_body(final_html, encoding).await;
+                let (body_bytes, actual_encoding) = match response_body {
+                    Some(prepared) => prepared,
+                    None => compress_body(final_html, encoding).await,
+                };
 
                 if let Some(encoding_header) = actual_encoding.as_header_value() {
                     response_builder = response_builder.header("content-encoding", encoding_header);

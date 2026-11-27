@@ -409,7 +409,24 @@ mod tests {
         out
     }
 
+    const LARGE_PAGE_ENCODINGS: [CompressionEncoding; 3] =
+        [CompressionEncoding::Brotli, CompressionEncoding::Gzip, CompressionEncoding::Zstd];
+
     #[tokio::test]
+    async fn per_request_compression_round_trips_a_large_page() {
+        let page = large_html_page();
+
+        for encoding in LARGE_PAGE_ENCODINGS {
+            let (compressed, used) = compress_body(page.clone(), encoding).await;
+
+            assert_eq!(used, encoding);
+            assert!(compressed.len() < page.len() / 4, "{encoding:?} barely compressed");
+            assert_eq!(decompress(encoding, &compressed).await, page);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "timing-sensitive; run on a quiet machine with --ignored"]
     async fn per_request_compression_of_a_large_page_stays_fast() {
         let budget = if cfg!(debug_assertions) {
             Duration::from_millis(300)
@@ -418,16 +435,11 @@ mod tests {
         };
         let page = large_html_page();
 
-        for encoding in
-            [CompressionEncoding::Brotli, CompressionEncoding::Gzip, CompressionEncoding::Zstd]
-        {
+        for encoding in LARGE_PAGE_ENCODINGS {
             let start = Instant::now();
-            let (compressed, used) = compress_body(page.clone(), encoding).await;
+            let _ = compress_body(page.clone(), encoding).await;
             let elapsed = start.elapsed();
 
-            assert_eq!(used, encoding);
-            assert!(compressed.len() < page.len() / 4, "{encoding:?} barely compressed");
-            assert_eq!(decompress(encoding, &compressed).await, page);
             assert!(elapsed < budget, "{encoding:?} took {elapsed:?} (budget {budget:?})");
         }
     }
