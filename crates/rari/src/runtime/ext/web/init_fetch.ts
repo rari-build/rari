@@ -301,9 +301,9 @@ async function fetchWithRustCache(
     traced?.span.setAttribute('http.response.status_code', result.status)
     traced?.span.setAttribute('rari.fetch.cached', result.cached)
     if (result.status >= 400) traced?.span.setStatus({ code: SPAN_STATUS_ERROR })
+    const response = buildCachedFetchResponse(url, result)
     traced?.span.end()
-
-    return buildCachedFetchResponse(url, result)
+    return response
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     if (traced) {
@@ -348,6 +348,9 @@ function buildRustFetchOptions(
   return options
 }
 
+// https://fetch.spec.whatwg.org/#null-body-status
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304])
+
 function buildCachedFetchResponse(
   url: string,
   result: {
@@ -369,7 +372,8 @@ function buildCachedFetchResponse(
     responseHeaders.set('content-type', detectContentType(url, result.body))
   }
 
-  return new Response(result.body, {
+  const body = NULL_BODY_STATUSES.has(result.status) ? null : result.body
+  return new Response(body, {
     status: result.status,
     statusText:
       result.statusText != null && result.statusText !== ''

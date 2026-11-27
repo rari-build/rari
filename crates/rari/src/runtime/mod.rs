@@ -354,6 +354,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cached_fetch_handles_null_body_status_without_refetching() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind test server");
+        let addr = listener.local_addr().expect("server address");
+        let hits = Arc::new(AtomicUsize::new(0));
+        let server_hits = Arc::clone(&hits);
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                server_hits.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 4096];
+                let _ = socket.read(&mut buf).await;
+                let _ =
+                    socket.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n").await;
+            }
+        });
+
+        let runtime = JsExecutionRuntime::with_pool_size(None, 1);
+        let result = runtime
+            .execute_script(
+                "fetch_204".into(),
+                format!(
+                    r#"(async () => {{
+                        const res = await fetch("http://{addr}/empty");
+                        return {{ status: res.status, body: await res.text() }};
+                    }})()"#
+                ),
+            )
+            .await
+            .expect("fetch script should run");
+
+        assert_eq!(result["status"], 204, "{result}");
+        assert_eq!(result["body"], "", "{result}");
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "the request was sent again by the fallback");
+    }
+
+    #[tokio::test]
     async fn deno_watch_fs_reports_file_writes() {
         let result = observe_file_write(
             "deno",
