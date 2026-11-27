@@ -157,8 +157,11 @@ signal-hook = { version = "0.4.6", features = ["iterator"] }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
   "Win32_Foundation",
+  "Win32_Security",
   "Win32_Storage_FileSystem",
   "Win32_System_Console",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
 ] }
 
